@@ -11,8 +11,13 @@ import pandas as pd
 import torch
 
 import jlens
-from llm_bias.data import calibration_prompts, load_pairs, load_saved_pairs, save_pairs
-from llm_bias.interventions import next_logits, patched_next_logits, record_residuals
+from llm_bias.data import Pair, calibration_prompts, load_pairs, load_saved_pairs, save_pairs
+from llm_bias.interventions import (
+    next_logits,
+    normalized_span_mapping,
+    patched_next_logits,
+    record_residuals,
+)
 from llm_bias.model import DEFAULT_MODEL, load_model
 
 
@@ -31,6 +36,44 @@ def normalized_transfer(
 def _tokenizer_input(tokenizer: Any, text: str, device: torch.device) -> torch.Tensor:
     encoded = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
     return encoded.input_ids.to(device)
+
+
+def _last_non_entity_position(
+    *, entity_start: int, entity_end: int, sequence_length: int
+) -> int:
+    """Choose a non-entity control position, preferring the final token."""
+    for position in range(sequence_length - 1, -1, -1):
+        if not entity_start <= position < entity_end:
+            return position
+    raise ValueError("entity span covers the entire prompt")
+
+
+def _span_readout_difference(
+    model: Any,
+    lens: Any,
+    source_residual: torch.Tensor,
+    target_residual: torch.Tensor,
+    layer: int,
+    pair: Pair,
+) -> float:
+    """Compare lens logits on the entity token ids across full spans."""
+    source_logits = model.unembed(
+        lens.transport(source_residual.float(), layer)
+    ).float().cpu()
+    target_logits = model.unembed(
+        lens.transport(target_residual.float(), layer)
+    ).float().cpu()
+    source_ids = pair.source_entity_token_ids or [pair.source_entity_token]
+    target_ids = pair.target_entity_token_ids or [pair.target_entity_token]
+    source_score = sum(
+        float(source_logits[index, token_id])
+        for index, token_id in enumerate(source_ids)
+    ) / len(source_ids)
+    target_score = sum(
+        float(target_logits[index, token_id])
+        for index, token_id in enumerate(target_ids)
+    ) / len(target_ids)
+    return target_score - source_score
 
 
 def fit_lens(
@@ -92,33 +135,38 @@ def run_patch(
     for pair_index, pair in enumerate(pairs, start=1):
         source_ids = _tokenizer_input(tokenizer, pair.source_prompt, device)
         target_ids = _tokenizer_input(tokenizer, pair.target_prompt, device)
-        if source_ids.shape != target_ids.shape:
-            continue
         source_residuals = record_residuals(model, source_ids, layers)
         target_residuals = record_residuals(model, target_ids, layers)
         source_logits = next_logits(model, source_ids)
         target_logits = next_logits(model, target_ids)
         source_margin = float(source_logits[pair.answer_target_token] - source_logits[pair.answer_source_token])
         target_margin = float(target_logits[pair.answer_target_token] - target_logits[pair.answer_source_token])
+        source_span = (pair.source_entity_start, pair.source_entity_end)
+        target_span = (pair.target_entity_start, pair.target_entity_end)
+        source_control_position = _last_non_entity_position(
+            entity_start=pair.source_entity_start,
+            entity_end=pair.source_entity_end,
+            sequence_length=source_ids.shape[1],
+        )
+        target_control_position = _last_non_entity_position(
+            entity_start=pair.target_entity_start,
+            entity_end=pair.target_entity_end,
+            sequence_length=target_ids.shape[1],
+        )
         for layer in layers[:-1]:
             patched_logits = patched_next_logits(
                 model,
                 source_ids,
                 layer=layer,
-                position=pair.source_entity_start,
-                replacement=target_residuals[layer][0, pair.target_entity_start, :],
-            )
-            control_position = max(
-                index
-                for index in range(source_ids.shape[1] - 1)
-                if index != pair.source_entity_start
+                source_span=source_span,
+                replacement=target_residuals[layer][0, target_span[0] : target_span[1], :],
             )
             control_logits = patched_next_logits(
                 model,
                 source_ids,
                 layer=layer,
-                position=control_position,
-                replacement=target_residuals[layer][0, control_position, :],
+                position=source_control_position,
+                replacement=target_residuals[layer][0, target_control_position, :],
             )
             patched_margin = float(
                 patched_logits[pair.answer_target_token]
@@ -143,21 +191,29 @@ def run_patch(
                 "transfer": normalized_transfer(patched_margin, source_margin, target_margin),
                 "control_margin": control_margin,
                 "control_transfer": normalized_transfer(control_margin, source_margin, target_margin),
+                "source_entity_span": list(source_span),
+                "target_entity_span": list(target_span),
+                "span_mapping": normalized_span_mapping(
+                    source_span[1] - source_span[0], target_span[1] - target_span[0]
+                ),
+                "span_mapping_strategy": "normalized_nearest",
+                "source_control_position": source_control_position,
+                "target_control_position": target_control_position,
                 "source_answer_rank": int((source_logits > source_logits[pair.answer_source_token]).sum()) + 1,
                 "target_answer_rank": int((target_logits > target_logits[pair.answer_target_token]).sum()) + 1,
                 "source_target_answer_rank": int((source_logits > source_logits[pair.answer_target_token]).sum()) + 1,
                 "target_source_answer_rank": int((target_logits > target_logits[pair.answer_source_token]).sum()) + 1,
             }
             if lens is not None and layer in lens.jacobians:
-                source_entity_logits = model.unembed(
-                    lens.transport(source_residuals[layer][0, pair.source_entity_start].float(), layer)
-                ).float().cpu()
-                target_entity_logits = model.unembed(
-                    lens.transport(target_residuals[layer][0, pair.target_entity_start].float(), layer)
-                ).float().cpu()
                 row["entity_target_minus_source_readout"] = float(
-                    target_entity_logits[pair.target_entity_token]
-                    - source_entity_logits[pair.source_entity_token]
+                    _span_readout_difference(
+                        model,
+                        lens,
+                        source_residuals[layer][0, source_span[0] : source_span[1]],
+                        target_residuals[layer][0, target_span[0] : target_span[1]],
+                        layer,
+                        pair,
+                    )
                 )
                 source_answer_logits = model.unembed(
                     lens.transport(source_residuals[layer][0, -1].float(), layer)

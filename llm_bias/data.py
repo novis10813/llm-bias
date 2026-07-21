@@ -27,6 +27,31 @@ class Pair:
     target_entity_token: int
     answer_source_token: int
     answer_target_token: int
+    source_entity_token_ids: list[int] | None = None
+    target_entity_token_ids: list[int] | None = None
+
+    def __post_init__(self) -> None:
+        """Normalize legacy single-token pairs to the span representation."""
+        if not self.source_entity_token_ids:
+            object.__setattr__(self, "source_entity_token_ids", [self.source_entity_token])
+        else:
+            object.__setattr__(
+                self, "source_entity_token_ids", list(self.source_entity_token_ids)
+            )
+        if not self.target_entity_token_ids:
+            object.__setattr__(self, "target_entity_token_ids", [self.target_entity_token])
+        else:
+            object.__setattr__(
+                self, "target_entity_token_ids", list(self.target_entity_token_ids)
+            )
+        if len(self.source_entity_token_ids) != (
+            self.source_entity_end - self.source_entity_start
+        ):
+            raise ValueError("source_entity_token_ids must match the source entity span")
+        if len(self.target_entity_token_ids) != (
+            self.target_entity_end - self.target_entity_start
+        ):
+            raise ValueError("target_entity_token_ids must match the target entity span")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -77,11 +102,12 @@ def load_pairs(
     spec_path: str | Path | None = None,
     max_pairs: int | None = None,
 ) -> list[Pair]:
-    """Load aligned source/target pairs from the upstream factual spec.
+    """Load source/target pairs from the upstream factual spec.
 
-    Pairs are retained only when source and target prompts have identical
-    token lengths, the entity occupies the same single-token span, and both
-    expected answers are single-token continuations.
+    Pairs are retained when both entities occupy contiguous token spans and
+    both expected answers are single-token continuations. Source and target
+    prompts may have different token lengths; span patching maps the two
+    entity spans separately.
     """
     path = Path(spec_path) if spec_path else default_spec_path()
     with path.open(encoding="utf-8") as handle:
@@ -120,16 +146,20 @@ def load_pairs(
                     if (
                         source_span is None
                         or target_span is None
-                        or source_span != target_span
-                        or source_span[1] - source_span[0] != 1
-                        or len(tokenizer(source_prompt).input_ids)
-                        != len(tokenizer(target_prompt).input_ids)
                         or source_answer_token is None
                         or target_answer_token is None
                         or source_entity_token is None
                         or target_entity_token is None
                     ):
                         continue
+                    source_entity_token_ids = [
+                        int(token_id)
+                        for token_id in source_input_ids[source_span[0] : source_span[1]]
+                    ]
+                    target_entity_token_ids = [
+                        int(token_id)
+                        for token_id in target_input_ids[target_span[0] : target_span[1]]
+                    ]
                     pair = Pair(
                         pair_id=f"{category_name}-{function['name']}-{source}-to-{target}",
                         category=category_name,
@@ -148,6 +178,8 @@ def load_pairs(
                         target_entity_token=target_entity_token,
                         answer_source_token=source_answer_token,
                         answer_target_token=target_answer_token,
+                        source_entity_token_ids=source_entity_token_ids,
+                        target_entity_token_ids=target_entity_token_ids,
                     )
                     pairs.append(pair)
                     if max_pairs is not None and len(pairs) >= max_pairs:

@@ -193,10 +193,18 @@ def read_counterfactual(
     source_ids = model.encode(pair.source_prompt, max_length=256)
     target_ids = model.encode(pair.target_prompt, max_length=256)
     if source_ids.shape != target_ids.shape:
-        raise ValueError("source and target prompts are not token-aligned")
-    position = pair.source_entity_start if patch_position is None else patch_position
-    if position >= source_ids.shape[1]:
-        raise ValueError(f"patch_position {position} is outside the prompt")
+        raise ValueError(
+            "interactive visualization currently requires equal-length source and target prompts"
+        )
+    if patch_position is None:
+        source_span = (pair.source_entity_start, pair.source_entity_end)
+    else:
+        source_span = (patch_position, patch_position + 1)
+    if source_span[1] > source_ids.shape[1]:
+        raise ValueError(f"patch span {source_span} is outside the prompt")
+    target_span = (pair.target_entity_start, pair.target_entity_end)
+    if target_span[1] > target_ids.shape[1]:
+        raise ValueError(f"target entity span {target_span} is outside the prompt")
 
     layers = sorted(set(lens.source_layers) | {model.n_layers - 1})
     record_layers = sorted(set(layers) | {patch_layer})
@@ -207,8 +215,8 @@ def read_counterfactual(
         source_ids,
         layers=record_layers,
         patch_layer=patch_layer,
-        position=position,
-        replacement=target_acts[patch_layer][0, pair.target_entity_start, :],
+        source_span=source_span,
+        replacement=target_acts[patch_layer][0, target_span[0] : target_span[1], :],
     )
     pinned_ids = [
         pair.source_entity_token,
@@ -233,8 +241,11 @@ def read_counterfactual(
         "pair": pair.to_dict(),
         "patch": {
             "layer": patch_layer,
-            "position": position,
-            "replacement_position": pair.target_entity_start,
+            "position": source_span[0],
+            "source_span": list(source_span),
+            "replacement_position": target_span[0],
+            "target_span": list(target_span),
+            "span_mapping_strategy": "normalized_nearest",
             "replacement": "target entity residual",
         },
         "source": source,
