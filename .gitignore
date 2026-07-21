@@ -1,0 +1,19 @@
+# Python and uv
+__pycache__/
+*.py[cod]
+build/
+dist/
+wheels/
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+
+# External research package checkouts
+third_party/*
+
+# Downloaded models and experiment artifacts
+.cache/
+artifacts/*
+!artifacts/.gitkeep

@@ -1,0 +1,45 @@
+[project]
+name = "llm-bias"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "huggingface-hub>=1.24.0",
+    "jlens",
+    "jspace-viz",
+    "fastapi>=0.115.0",
+    "matplotlib>=3.11.1",
+    "numpy>=2.5.1",
+    "pandas>=3.0.3",
+    "pytest>=9.1.1",
+    "torch==2.9.1",
+    "transformers>=5.14.1",
+    "uvicorn>=0.34.0",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["llm_bias*"]
+
+[tool.setuptools.package-data]
+llm_bias = ["static/*"]
+
+[tool.uv.workspace]
+members = [
+    "third_party/jacobian-lens",
+    "third_party/jspace-viz",
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+jlens = { workspace = true, editable = true }
+torch = { index = "pytorch" }
+jspace-viz = { workspace = true, editable = true }

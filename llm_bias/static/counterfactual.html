@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entity Bias · J-space</title>
+    <link rel="stylesheet" href="/static/counterfactual.css?v=topk-tooltip-2" />
+  </head>
+  <body>
+    <header>
+      <div><h1>Entity Bias · J-space</h1><p id="status">Loading model metadata…</p></div>
+      <div id="model-info" class="chip"></div>
+    </header>
+    <main>
+      <section class="controls">
+        <label>Counterfactual pair<select id="pair"></select></label>
+        <label>Patch layer<input id="layer" type="range" min="0" max="14" value="4" /><output id="layer-value">4</output></label>
+        <label>Readout<select id="mode"><option value="jlens">J-lens</option><option value="logit">Logit lens</option></select></label>
+        <label>Top-k<input id="top-k" type="number" min="1" max="32" value="5" /></label>
+        <button id="read">Read counterfactual</button>
+      </section>
+      <section id="metrics" class="metrics"></section>
+      <section class="prompts">
+        <article><h2>Source</h2><pre id="source-prompt"></pre></article>
+        <article><h2>Target</h2><pre id="target-prompt"></pre></article>
+        <article><h2>Patched</h2><pre id="patched-prompt"></pre></article>
+      </section>
+      <section class="legend"><span>Each cell = one token position × one readout layer.</span><span class="swatch source-swatch"></span> source <span class="swatch target-swatch"></span> target <span class="swatch patched-swatch"></span> patched</section>
+      <section id="grids" class="grids"></section>
+      <section><h2>Layer × entity-position top-1 comparison</h2><div id="comparison" class="comparison"></div></section>
+    </main>
+    <div id="tooltip" hidden></div>
+    <script src="/static/counterfactual.js?v=topk-tooltip-2"></script>
+  </body>
+</html>
