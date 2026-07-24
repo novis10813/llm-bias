@@ -33,6 +33,34 @@ nohup uv run hf download unsloth/Llama-3.2-1B-Instruct \
   > artifacts/llama_download.log 2>&1 &
 ```
 
+Qwen3.5-4B is also available as a local model. It is a multimodal
+conditional-generation checkpoint, so the project loader selects the matching
+Transformers class automatically:
+
+```bash
+uv run hf download Qwen/Qwen3.5-4B \
+  --local-dir .cache/models/qwen3.5-4b \
+  > artifacts/qwen3.5_download.log 2>&1
+```
+
+Fit a separate lens for Qwen because its residual width and layer count differ
+from Llama, then pass the same model and Qwen lens to the patch/dashboard
+commands:
+
+```bash
+uv run python -m llm_bias fit-lens \
+  --model .cache/models/qwen3.5-4b \
+  --output artifacts/qwen3.5_entity_control/jacobian_lens.pt
+uv run python -m llm_bias run-patch \
+  --model .cache/models/qwen3.5-4b \
+  --lens artifacts/qwen3.5_entity_control/jacobian_lens.pt \
+  --output artifacts/qwen3.5_entity_control/patch_results.jsonl
+uv run python -m llm_bias serve-viz \
+  --model .cache/models/qwen3.5-4b \
+  --lens artifacts/qwen3.5_entity_control/jacobian_lens.pt \
+  --pairs artifacts/entity_control/pairs.jsonl
+```
+
 ## Run
 
 ```bash

@@ -11,6 +11,14 @@ import jlens
 
 
 DEFAULT_MODEL = ".cache/models/llama-3.2-1b-instruct"
+QWEN35_MODEL = ".cache/models/qwen3.5-4b"
+
+
+def _is_conditional_generation_checkpoint(name: str) -> bool:
+    """Return whether a checkpoint uses a multimodal conditional LM class."""
+    config = transformers.AutoConfig.from_pretrained(name, trust_remote_code=False)
+    architectures = getattr(config, "architectures", None) or ()
+    return any("ForConditionalGeneration" in architecture for architecture in architectures)
 
 
 def resolve_model_name(model: str) -> str:
@@ -21,6 +29,11 @@ def resolve_model_name(model: str) -> str:
         raise FileNotFoundError(
             f"Local model is not ready at {path}. Check artifacts/llama_download.log "
             "or pass --model with a HuggingFace model id."
+        )
+    if model == QWEN35_MODEL:
+        raise FileNotFoundError(
+            f"Local model is not ready at {path}. Check artifacts/qwen3.5_download.log "
+            "or pass --model Qwen/Qwen3.5-4B."
         )
     return model
 
@@ -33,7 +46,15 @@ def load_model(model: str = DEFAULT_MODEL) -> tuple[Any, Any, torch.device]:
     dtype = torch.bfloat16 if use_cuda else torch.float32
     print(f"Loading {name} on {device} with {dtype} (transformers {transformers.__version__})")
     tokenizer = transformers.AutoTokenizer.from_pretrained(name, use_fast=True)
-    hf_model = transformers.AutoModelForCausalLM.from_pretrained(
+    auto_model = transformers.AutoModelForCausalLM
+    if _is_conditional_generation_checkpoint(name):
+        auto_model = getattr(transformers, "AutoModelForMultimodalLM", None)
+        if auto_model is None:
+            raise RuntimeError(
+                "This checkpoint requires transformers.AutoModelForMultimodalLM, "
+                "which is unavailable in the installed Transformers version."
+            )
+    hf_model = auto_model.from_pretrained(
         name,
         dtype=dtype,
         low_cpu_mem_usage=True,

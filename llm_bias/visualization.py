@@ -17,10 +17,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from jspace_viz.lens import JacobianLens
-from jspace_viz.model import WrappedModel, load_model as load_jspace_model
+from jspace_viz.model import WrappedModel
 
 from llm_bias.data import Pair, load_saved_pairs
 from llm_bias.interventions import patched_residuals, record_residuals
+from llm_bias.model import load_model as load_lens_model
 
 LOGGER = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
@@ -271,7 +272,8 @@ def build_app(
 ) -> FastAPI:
     """Build a local app while keeping the model resident in memory."""
     _record_dependency_versions()
-    model = load_jspace_model(model_name, dtype="auto")
+    lens_model, tokenizer, _device = load_lens_model(model_name)
+    model = WrappedModel(lens_model._hf_model, tokenizer)
     lens = JacobianLens.load(lens_path)
     if lens.d_model != model.d_model:
         raise ValueError(f"lens d_model={lens.d_model} does not match model d_model={model.d_model}")
