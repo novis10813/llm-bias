@@ -19,8 +19,7 @@ READOUT_BATCH_SIZE="${READOUT_BATCH_SIZE:-32}"
 READOUT_MAX_SEQ_LEN="${READOUT_MAX_SEQ_LEN:-256}"
 TOP_K="${TOP_K:-15}"
 ATTR_SAMPLE_PER_CONDITION="${ATTR_SAMPLE_PER_CONDITION:-32}"
-ATTR_MAX_NEW_TOKENS="${ATTR_MAX_NEW_TOKENS:-16}"
-ATTR_INPUT_TOP_K="${ATTR_INPUT_TOP_K:-15}"
+ATTR_MAX_NEW_TOKENS="${ATTR_MAX_NEW_TOKENS:-64}"
 SESSION="${SESSION:-qwen_jspace_experiment}"
 RUN_IN_TMUX="${RUN_IN_TMUX:-1}"
 
@@ -45,7 +44,7 @@ if [[ "${RUN_IN_TMUX}" == "1" && -z "${TMUX:-}" ]]; then
         "READOUT_MAX_SEQ_LEN=${READOUT_MAX_SEQ_LEN}" "TOP_K=${TOP_K}"
         "ATTR_SAMPLE_PER_CONDITION=${ATTR_SAMPLE_PER_CONDITION}"
         "ATTR_MAX_NEW_TOKENS=${ATTR_MAX_NEW_TOKENS}"
-        "ATTR_INPUT_TOP_K=${ATTR_INPUT_TOP_K}" "SESSION=${SESSION}"
+        "SESSION=${SESSION}"
         "RUN_IN_TMUX=0"
     )
     command=(env)
@@ -92,7 +91,6 @@ uv run python -m llm_bias analyze-generated-attribution \
     --input "${INPUT_CSV}" \
     --sample-per-condition "${ATTR_SAMPLE_PER_CONDITION}" \
     --max-new-tokens "${ATTR_MAX_NEW_TOKENS}" \
-    --input-top-k "${ATTR_INPUT_TOP_K}" \
     --max-seq-len "${READOUT_MAX_SEQ_LEN}" \
     --output-dir "${RUN_ROOT}/generated_attribution"
 

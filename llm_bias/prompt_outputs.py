@@ -241,6 +241,11 @@ def _analyze_column(
             residual = activations[layer][batch_indices, final_positions].float()
             if layer != final_layer and layer in lens.jacobians:
                 residual = lens.transport(residual, layer)
+            normalized_hidden = model._final_norm(
+                residual.to(model._lm_head.weight.dtype)
+            ).float()
+            effective_inverse_temperature = normalized_hidden.norm(dim=-1)
+            effective_temperature = effective_inverse_temperature.reciprocal().clamp_min(1e-12)
             logits = model.unembed(residual).float()
             probabilities = logits.softmax(dim=-1)
             batch_sum = probabilities.sum(dim=0).double().cpu()
@@ -295,9 +300,22 @@ def _analyze_column(
                             "perplexity": float(torch.exp(entropy[batch_index])),
                             "top1_probability": float(probabilities[batch_index].max()),
                             "topk_mass": float(topk_mass[batch_index]),
+                            "effective_inverse_temperature": float(
+                                effective_inverse_temperature[batch_index]
+                            ),
+                            "effective_temperature": float(
+                                effective_temperature[batch_index]
+                            ),
                         }
                     )
-            del residual, logits, probabilities
+            del (
+                residual,
+                normalized_hidden,
+                effective_inverse_temperature,
+                effective_temperature,
+                logits,
+                probabilities,
+            )
 
         if prompt_output is not None:
             for (row_index, date, _prompt), readouts in zip(
@@ -947,6 +965,12 @@ def analyze_prompt_outputs(
         "use_chat_template": use_chat_template,
         "enable_thinking": enable_thinking,
         "distribution_aggregation": "arithmetic_mean_of_full_vocabulary_softmax",
+        "uncertainty_measurement": {
+            "primary": "temperature_scope",
+            "effective_inverse_temperature": "l2_norm_of_final_norm_hidden_state",
+            "effective_temperature": "reciprocal_of_effective_inverse_temperature",
+            "entropy": "retained_as_categorical_distribution_comparison",
+        },
         "condition_counts": condition_counts,
         "saved_prompt_layer_topk": save_prompt_topk,
         "saved_prompt_layer_uncertainty": save_prompt_uncertainty,

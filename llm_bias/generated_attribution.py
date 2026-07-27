@@ -1,4 +1,4 @@
-"""Sampled generated-token attribution to prompt input tokens."""
+"""Sampled generated-token Semantic Scope attribution."""
 
 from __future__ import annotations
 
@@ -47,6 +47,15 @@ def _find_subsequence(sequence: list[int], target: list[int]) -> tuple[int, int]
     return 0, len(sequence)
 
 
+def _semantic_scope_scores(gradient: torch.Tensor) -> torch.Tensor:
+    """Return one Semantic Scope influence score per input position."""
+    if gradient.ndim != 3:
+        raise ValueError(
+            f"expected [batch, sequence, hidden] gradient, got {gradient.shape}"
+        )
+    return torch.linalg.vector_norm(gradient.float(), ord=2, dim=-1)
+
+
 def _read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -62,7 +71,7 @@ def _attribute_generated_token(
     prompt_ids: torch.Tensor,
     generated_prefix: torch.Tensor,
     target_id: int,
-    input_top_k: int,
+    input_top_k: int | None,
     input_span: tuple[int, int],
 ) -> dict[str, Any]:
     full_ids = torch.cat([prompt_ids, generated_prefix], dim=1)
@@ -85,21 +94,23 @@ def _attribute_generated_token(
             )
             residual = recorder.activations[final_layer][0, -1].float()
         logits = model.unembed(residual).float()
+        target_logit = logits[target_id]
         log_probability = logits.log_softmax(dim=-1)[target_id]
         embedding = embedding_box["value"]
-        gradient = torch.autograd.grad(log_probability, embedding)[0]
+        gradient = torch.autograd.grad(target_logit, embedding)[0]
     finally:
         handle.remove()
 
     input_start, input_end = input_span
-    contribution = (
-        gradient.float() * embedding.detach().float()
-    ).abs().sum(dim=-1)[0, input_start:input_end]
-    contribution = contribution / contribution.sum().clamp_min(1e-12)
-    top = contribution.topk(min(input_top_k, input_end - input_start))
+    contribution = _semantic_scope_scores(gradient)[0, input_start:input_end]
+    top_k = input_end - input_start if input_top_k is None else min(
+        input_top_k, input_end - input_start
+    )
+    top = contribution.topk(top_k)
     return {
         "token_id": target_id,
         "token": _decode_token(model.tokenizer, target_id),
+        "logit": float(target_logit.detach()),
         "log_probability": float(log_probability.detach()),
         "top_input_tokens": [
             {
@@ -141,13 +152,16 @@ def analyze_generated_attribution(
     model_name: str = QWEN35_MODEL,
     output_dir: str = DEFAULT_OUTPUT_DIR,
     sample_per_condition: int = 32,
-    max_new_tokens: int = 16,
-    input_top_k: int = 15,
+    max_new_tokens: int = 64,
+    input_top_k: int | None = None,
     max_seq_len: int = 256,
     prompt_columns: Iterable[str] | None = None,
+    dates: Iterable[str] | None = None,
 ) -> Path:
-    if sample_per_condition < 1 or max_new_tokens < 1 or input_top_k < 1:
-        raise ValueError("sample_per_condition, max_new_tokens, and input_top_k must be positive")
+    if sample_per_condition < 1 or max_new_tokens < 1:
+        raise ValueError("sample_per_condition and max_new_tokens must be positive")
+    if input_top_k is not None and input_top_k < 1:
+        raise ValueError("input_top_k must be positive when provided")
     if max_seq_len < 1:
         raise ValueError("max_seq_len must be positive")
 
@@ -156,6 +170,7 @@ def analyze_generated_attribution(
         raise FileNotFoundError(source)
     fieldnames, rows = _read_rows(source)
     columns = discover_prompt_columns(fieldnames, prompt_columns)
+    selected_dates = set(dates or ())
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
     if tokenizer.pad_token_id is None:
@@ -169,10 +184,13 @@ def analyze_generated_attribution(
     total = 0
     with temporary.open("w", encoding="utf-8") as handle:
         for column in columns:
-            sampled = _sample_rows(
-                [row for row in rows if (row.get(column.name) or "").strip()],
-                sample_per_condition,
-            )
+            candidates = [
+                row
+                for row in rows
+                if (row.get(column.name) or "").strip()
+                and (not selected_dates or row.get("Date", "") in selected_dates)
+            ]
+            sampled = candidates if selected_dates else _sample_rows(candidates, sample_per_condition)
             for sample_index, row in enumerate(sampled):
                 prompt = (row.get(column.name) or "").strip()
                 formatted = _prepare_prompt(
@@ -242,12 +260,14 @@ def analyze_generated_attribution(
         "model": model_name,
         "prompt_columns": [column.name for column in columns],
         "sample_per_condition": sample_per_condition,
+        "selected_dates": sorted(selected_dates),
         "max_new_tokens": max_new_tokens,
         "input_top_k": input_top_k,
+        "input_attribution_storage": "all_input_tokens" if input_top_k is None else "top_k",
         "max_seq_len": max_seq_len,
         "generation": "greedy",
         "thinking": False,
-        "method": "absolute_gradient_x_input_embedding_of_generated_token_log_probability",
+        "method": "semantic_scope_target_logit_gradient_l2_norm",
         "batch_size": 1,
         "attribution_scope": "raw_user_message_tokens_inside_chat_formatted_prompt",
     }

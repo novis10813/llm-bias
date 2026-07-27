@@ -125,9 +125,10 @@ For a quick integration check, add `--max-rows 2`. The command writes:
   for every fitted layer and the output layer.
 - `prompt_layer_topk.jsonl`: compact per-prompt/per-layer top-k text; omit it
   with `--no-save-prompt-topk`.
-- `prompt_layer_uncertainty.jsonl`: per-date/per-layer entropy, normalized
-  entropy, perplexity, top-1 probability, and top-k probability mass; omit it
-  with `--no-save-prompt-uncertainty`.
+- `prompt_layer_uncertainty.jsonl`: per-date/per-layer Temperature Scope
+  effective inverse temperature, effective temperature, plus entropy,
+  normalized entropy, perplexity, top-1 probability, and top-k probability
+  mass; omit it with `--no-save-prompt-uncertainty`.
 - `input_token_attribution.png` and `.jsonl`: for every mean output top-k
   token, the most influential input token identities and end-aligned input
   positions.
@@ -173,3 +174,68 @@ foreground. The script resumes lens fitting from its checkpoint if interrupted.
 For very large models, choose `FIT_DIM_BATCH` conservatively for available
 GPU memory; the model loader still needs to be adapted separately if the model
 does not fit on the selected device.
+
+## Qwen result visualizations
+
+After the six per-date uncertainty files and sampled generated-token
+attribution have been produced, create the final-layer uncertainty plots and the
+standalone interactive attribution dashboard:
+
+```bash
+uv run python -m llm_bias visualize-qwen-results \
+  --uncertainty-root artifacts \
+  --attribution artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl \
+  --prices sp500_r1k_r2k_entityBiasPrompt.csv \
+  --output-dir artifacts/qwen_result_visualization
+```
+
+The command writes two final-layer Temperature Scope uncertainty time-series
+PNGs (`final_layer_effective_temperature_*.png`). Each PNG has one independent
+panel per index so the three series are not overlaid, plus entropy comparison
+PNGs, `final_layer_uncertainty.csv` containing both measures, and
+`attribution_dashboard.html`. Open the HTML
+directly in a browser; it has no server or model inference dependency, although
+the tokenizer is loaded once while constructing the HTML so every actual CSV
+prompt token can be displayed. Choose one of the selected dates, then hover a
+Qwen output token to color the complete SP500 input prompt by its attribution.
+The generated-token attribution uses the paper's Semantic Scope objective:
+for each generated token, it differentiates that token's target logit with
+respect to each input embedding and uses the gradient L2 norm as the token
+influence. It is a local first-order sensitivity score; it is not attention or
+a standalone causal claim. The default is 64 new tokens so the JSON answer and
+confidence/evidence fields are included when Qwen emits them.
+
+For a selected-date dashboard with longer generated JSON outputs, first run
+attribution only for the dates used by the dashboard:
+
+```bash
+uv run python -m llm_bias analyze-generated-attribution \
+  --input sp500_r1k_r2k_entityBiasPrompt.csv \
+  --model .cache/models/qwen3.5-4b \
+  --date 2010-07-16 \
+  --date 2014-04-10 \
+  --date 2024-05-30 \
+  --max-new-tokens 64 \
+  --output-dir artifacts/qwen_generated_attribution_semantic_scope_full_selected
+```
+
+Then pass
+`artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl`
+as `--attribution` to the visualization command.
+
+When `--input-top-k` is omitted, the generated-token Semantic Scope run saves
+the score for every raw input-prompt token. Providing `--input-top-k` enables a
+smaller storage-only top-k export.
+
+To validate the Semantic Scope ranking with zero-vector input ablations and a
+deterministic random baseline:
+
+```bash
+uv run python -m llm_bias validate-semantic-scope \
+  --attribution artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl \
+  --model .cache/models/qwen3.5-4b \
+  --output-dir artifacts/qwen_semantic_scope_validation_selected
+```
+
+Pass the resulting `semantic_scope_aopc.jsonl` with `--validation` when
+rebuilding the dashboard to show per-output-token AOPC values.

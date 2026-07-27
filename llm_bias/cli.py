@@ -14,6 +14,16 @@ from llm_bias.prompt_outputs import (
     analyze_prompt_outputs,
 )
 from llm_bias.generated_attribution import analyze_generated_attribution
+from llm_bias.semantic_scope_validation import evaluate_semantic_scope
+from llm_bias.result_visualization import (
+    DEFAULT_ATTRIBUTION,
+    DEFAULT_VALIDATION,
+    DEFAULT_INPUT as RESULT_DEFAULT_INPUT,
+    DEFAULT_OUTPUT_DIR as RESULT_DEFAULT_OUTPUT_DIR,
+    DEFAULT_TOKENIZER,
+    uncertainty_paths_from_root,
+    visualize_qwen_results,
+)
 
 
 def _common(parser: argparse.ArgumentParser) -> None:
@@ -82,10 +92,50 @@ def build_parser() -> argparse.ArgumentParser:
     generated.add_argument("--input", default=DEFAULT_INPUT)
     generated.add_argument("--output-dir", default="artifacts/qwen_generated_attribution")
     generated.add_argument("--sample-per-condition", type=int, default=32)
-    generated.add_argument("--max-new-tokens", type=int, default=16)
-    generated.add_argument("--input-top-k", type=int, default=15)
+    generated.add_argument("--max-new-tokens", type=int, default=64)
+    generated.add_argument(
+        "--input-top-k",
+        type=int,
+        default=None,
+        help="optional input-token cap; omit to save all input-token scores",
+    )
     generated.add_argument("--max-seq-len", type=int, default=256)
     generated.add_argument("--prompt-column", action="append", dest="prompt_columns")
+    generated.add_argument(
+        "--date",
+        action="append",
+        dest="dates",
+        help="attribute this date only; repeat for a selected-date run",
+    )
+
+    validation = commands.add_parser(
+        "validate-semantic-scope",
+        help="evaluate Semantic Scope with input ablation and AOPC",
+    )
+    validation.add_argument(
+        "--attribution",
+        default="artifacts/qwen_generated_attribution_semantic_scope_full_selected/"
+        "generated_token_attribution.jsonl",
+    )
+    validation.add_argument("--model", default=QWEN35_MODEL)
+    validation.add_argument(
+        "--output-dir",
+        default="artifacts/qwen_semantic_scope_validation_selected",
+    )
+    validation.add_argument("--seed", type=int, default=0)
+
+    result_visual = commands.add_parser(
+        "visualize-qwen-results",
+        help="plot final-layer uncertainty and build an interactive attribution dashboard",
+    )
+    result_visual.add_argument("--uncertainty-root", default="artifacts")
+    result_visual.add_argument("--attribution", default=DEFAULT_ATTRIBUTION)
+    result_visual.add_argument("--validation", default=DEFAULT_VALIDATION)
+    result_visual.add_argument("--prices", default=RESULT_DEFAULT_INPUT)
+    result_visual.add_argument("--output-dir", default=RESULT_DEFAULT_OUTPUT_DIR)
+    result_visual.add_argument("--input-top-k", type=int, default=15)
+    result_visual.add_argument("--tokenizer", default=DEFAULT_TOKENIZER)
+    result_visual.add_argument("--max-seq-len", type=int, default=256)
     prompt_outputs.add_argument(
         "--no-save-prompt-topk",
         action="store_false",
@@ -188,6 +238,25 @@ def main() -> None:
             input_top_k=args.input_top_k,
             max_seq_len=args.max_seq_len,
             prompt_columns=args.prompt_columns,
+            dates=args.dates,
+        )
+    elif args.command == "validate-semantic-scope":
+        evaluate_semantic_scope(
+            attribution_path=args.attribution,
+            model_name=args.model,
+            output_dir=args.output_dir,
+            seed=args.seed,
+        )
+    elif args.command == "visualize-qwen-results":
+        visualize_qwen_results(
+            uncertainty_paths=uncertainty_paths_from_root(args.uncertainty_root),
+            attribution_path=args.attribution,
+            validation_path=args.validation,
+            prices_path=args.prices,
+            output_dir=args.output_dir,
+            input_top_k=args.input_top_k,
+            tokenizer_path=args.tokenizer,
+            max_seq_len=args.max_seq_len,
         )
     elif args.command == "serve-viz":
         from llm_bias.visualization import build_app
