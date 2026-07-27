@@ -1,0 +1,259 @@
+"""Sampled generated-token attribution to prompt input tokens."""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import json
+from pathlib import Path
+from typing import Any, Iterable
+
+import torch
+
+from jspace_viz.hooks import ActivationRecorder
+from jspace_viz.model import WrappedModel
+
+from llm_bias.model import QWEN35_MODEL, load_model as load_lens_model
+from llm_bias.prompt_outputs import (
+    DEFAULT_INPUT,
+    _decode_token,
+    _prepare_prompt,
+    discover_prompt_columns,
+)
+
+DEFAULT_OUTPUT_DIR = "artifacts/qwen_generated_attribution"
+
+
+def _sample_rows(rows: list[dict[str, str]], count: int) -> list[dict[str, str]]:
+    if count < 1:
+        raise ValueError("sample count must be positive")
+    if len(rows) <= count:
+        return rows
+    indices = [
+        round(index * (len(rows) - 1) / (count - 1))
+        for index in range(count)
+    ] if count > 1 else [0]
+    return [rows[index] for index in indices]
+
+
+def _find_subsequence(sequence: list[int], target: list[int]) -> tuple[int, int]:
+    """Find raw user-message IDs inside the chat-formatted prompt."""
+    if not target:
+        return 0, len(sequence)
+    width = len(target)
+    for start in range(len(sequence) - width + 1):
+        if sequence[start : start + width] == target:
+            return start, start + width
+    return 0, len(sequence)
+
+
+def _read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"{path} has no header")
+        return reader.fieldnames, list(reader)
+
+
+@torch.enable_grad()
+def _attribute_generated_token(
+    *,
+    model: WrappedModel,
+    prompt_ids: torch.Tensor,
+    generated_prefix: torch.Tensor,
+    target_id: int,
+    input_top_k: int,
+    input_span: tuple[int, int],
+) -> dict[str, Any]:
+    full_ids = torch.cat([prompt_ids, generated_prefix], dim=1)
+    attention_mask = torch.ones_like(full_ids)
+    embedding_box: dict[str, torch.Tensor] = {}
+
+    def root_embedding(_module: Any, _inputs: Any, output: torch.Tensor) -> torch.Tensor:
+        rooted = output.detach().requires_grad_(True)
+        embedding_box["value"] = rooted
+        return rooted
+
+    final_layer = model.n_layers - 1
+    handle = model._embed.register_forward_hook(root_embedding)
+    try:
+        with ActivationRecorder(model.layers, at=[final_layer]) as recorder:
+            model._decoder(
+                input_ids=full_ids,
+                attention_mask=attention_mask,
+                use_cache=False,
+            )
+            residual = recorder.activations[final_layer][0, -1].float()
+        logits = model.unembed(residual).float()
+        log_probability = logits.log_softmax(dim=-1)[target_id]
+        embedding = embedding_box["value"]
+        gradient = torch.autograd.grad(log_probability, embedding)[0]
+    finally:
+        handle.remove()
+
+    input_start, input_end = input_span
+    contribution = (
+        gradient.float() * embedding.detach().float()
+    ).abs().sum(dim=-1)[0, input_start:input_end]
+    contribution = contribution / contribution.sum().clamp_min(1e-12)
+    top = contribution.topk(min(input_top_k, input_end - input_start))
+    return {
+        "token_id": target_id,
+        "token": _decode_token(model.tokenizer, target_id),
+        "log_probability": float(log_probability.detach()),
+        "top_input_tokens": [
+            {
+                "rank": rank,
+                "position": input_start + int(position),
+                "prompt_position": int(position),
+                "token_id": int(prompt_ids[0, input_start + position]),
+                "token": _decode_token(
+                    model.tokenizer, int(prompt_ids[0, input_start + position])
+                ),
+                "attribution": float(value),
+            }
+            for rank, (position, value) in enumerate(
+                zip(top.indices.tolist(), top.values.tolist(), strict=True),
+                start=1,
+            )
+        ],
+    }
+
+
+@torch.no_grad()
+def _greedy_generate(
+    model: WrappedModel,
+    prompt_ids: torch.Tensor,
+    max_new_tokens: int,
+) -> torch.Tensor:
+    return model.hf_model.generate(
+        prompt_ids,
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+        use_cache=True,
+        pad_token_id=model.tokenizer.eos_token_id,
+    )
+
+
+def analyze_generated_attribution(
+    *,
+    input_path: str = DEFAULT_INPUT,
+    model_name: str = QWEN35_MODEL,
+    output_dir: str = DEFAULT_OUTPUT_DIR,
+    sample_per_condition: int = 32,
+    max_new_tokens: int = 16,
+    input_top_k: int = 15,
+    max_seq_len: int = 256,
+    prompt_columns: Iterable[str] | None = None,
+) -> Path:
+    if sample_per_condition < 1 or max_new_tokens < 1 or input_top_k < 1:
+        raise ValueError("sample_per_condition, max_new_tokens, and input_top_k must be positive")
+    if max_seq_len < 1:
+        raise ValueError("max_seq_len must be positive")
+
+    source = Path(input_path)
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    fieldnames, rows = _read_rows(source)
+    columns = discover_prompt_columns(fieldnames, prompt_columns)
+    lens_model, tokenizer, _device = load_lens_model(model_name)
+    model = WrappedModel(lens_model._hf_model, tokenizer)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    output_path = destination / "generated_token_attribution.jsonl"
+    temporary = output_path.with_suffix(output_path.suffix + ".tmp")
+    total = 0
+    with temporary.open("w", encoding="utf-8") as handle:
+        for column in columns:
+            sampled = _sample_rows(
+                [row for row in rows if (row.get(column.name) or "").strip()],
+                sample_per_condition,
+            )
+            for sample_index, row in enumerate(sampled):
+                prompt = (row.get(column.name) or "").strip()
+                formatted = _prepare_prompt(
+                    tokenizer, prompt, use_chat_template=True, enable_thinking=False
+                )
+                encoded = tokenizer(
+                    formatted,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=max_seq_len,
+                )
+                prompt_ids = encoded.input_ids.to(model.device)
+                raw_encoded = tokenizer(
+                    prompt,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=max_seq_len,
+                )
+                input_span = _find_subsequence(
+                    prompt_ids[0].tolist(), raw_encoded.input_ids[0].tolist()
+                )
+                with torch.no_grad():
+                    generated = _greedy_generate(model, prompt_ids, max_new_tokens)
+                generated_ids = generated[:, prompt_ids.shape[1] :]
+                token_records = []
+                for position, target_id in enumerate(generated_ids[0].tolist()):
+                    prefix = generated_ids[:, :position]
+                    token_records.append(
+                        {
+                            "position": position,
+                            **_attribute_generated_token(
+                                model=model,
+                                prompt_ids=prompt_ids,
+                                generated_prefix=prefix,
+                                target_id=int(target_id),
+                                input_top_k=input_top_k,
+                                input_span=input_span,
+                            ),
+                        }
+                    )
+                handle.write(
+                    json.dumps(
+                        {
+                            "sample_index": sample_index,
+                            "date": row.get("Date", ""),
+                            "prompt_column": column.name,
+                            "index": column.index,
+                            "context": column.context,
+                            "prompt": prompt,
+                            "generated_text": tokenizer.decode(
+                                generated_ids[0].tolist(), skip_special_tokens=False
+                            ),
+                            "generated_tokens": token_records,
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    + "\n"
+                )
+                total += 1
+                if total % 8 == 0 or total == len(columns) * min(sample_per_condition, len(rows)):
+                    print(f"processed sampled prompts: {total}", flush=True)
+    temporary.replace(output_path)
+    metadata = {
+        "input": str(source),
+        "input_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "model": model_name,
+        "prompt_columns": [column.name for column in columns],
+        "sample_per_condition": sample_per_condition,
+        "max_new_tokens": max_new_tokens,
+        "input_top_k": input_top_k,
+        "max_seq_len": max_seq_len,
+        "generation": "greedy",
+        "thinking": False,
+        "method": "absolute_gradient_x_input_embedding_of_generated_token_log_probability",
+        "batch_size": 1,
+        "attribution_scope": "raw_user_message_tokens_inside_chat_formatted_prompt",
+    }
+    (destination / "metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Wrote generated-token attribution to {destination}", flush=True)
+    return destination

@@ -81,7 +81,17 @@ def fit_lens(
     output: str = "artifacts/entity_control/jacobian_lens.pt",
     calibration_count: int = 16,
     layer_stride: int = 2,
+    dim_batch: int = 16,
+    max_seq_len: int = 128,
+    skip_first: int = 0,
 ) -> Path:
+    if dim_batch < 1:
+        raise ValueError("dim_batch must be positive")
+    if max_seq_len < 1:
+        raise ValueError("max_seq_len must be positive")
+    if skip_first < 0:
+        raise ValueError("skip_first must be non-negative")
+    jlens.configure_logging()
     model, _tokenizer, _device = load_model(model_name)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     layers = list(range(0, model.n_layers - 1, layer_stride))
@@ -89,9 +99,9 @@ def fit_lens(
         model,
         calibration_prompts(calibration_count),
         source_layers=layers,
-        dim_batch=16,
-        max_seq_len=128,
-        skip_first=0,
+        dim_batch=dim_batch,
+        max_seq_len=max_seq_len,
+        skip_first=skip_first,
         checkpoint_path=output + ".checkpoint.pt",
         checkpoint_every=1,
     )

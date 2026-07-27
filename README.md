@@ -70,6 +70,7 @@ uv run python -m llm_bias prepare-data
 uv run python -m llm_bias fit-lens --calibration-prompts 16 --layer-stride 4
 uv run python -m llm_bias run-patch --lens artifacts/entity_control/jacobian_lens.pt
 uv run python -m llm_bias visualize
+uv run python -m llm_bias analyze-prompt-outputs
 uv run python -m llm_bias serve-viz --lens artifacts/entity_control/jacobian_lens.pt
 ```
 
@@ -85,3 +86,90 @@ numbers. Results are written under `artifacts/entity_control/`.
 
 The visualization command writes the corrected transfer curve,
 `patch_transfer_heatmap.png`, and `jacobian_readout_heatmap.png`.
+
+## Average prompt-output distributions
+
+`analyze-prompt-outputs` reads every `prompt_with_context_*` and
+`prompt_without_context_*` column in
+`sp500_r1k_r2k_entityBiasPrompt.csv`. For each prompt it reads the next-token
+distribution at the final, non-padding prompt position. Fitted intermediate
+layers use the Jacobian transport; the final layer is the model's actual
+output distribution. The default `k` is 15. CSV prompts are wrapped as a user
+message with the tokenizer's chat template. Qwen thinking mode is disabled by
+default so the requested JSON output is the first generated distribution; use
+`--enable-thinking` to restore it or `--raw-prompt` for an unformatted
+base-model read.
+
+The aggregate is computed by averaging the complete vocabulary softmax for
+each condition before selecting its top-k. This is different from averaging
+only the per-prompt top-k entries, which would bias the result. Use the
+stride-1 lens to retain every intermediate layer:
+
+```bash
+uv run python -m llm_bias analyze-prompt-outputs \
+  --input sp500_r1k_r2k_entityBiasPrompt.csv \
+  --model .cache/models/qwen3.5-4b \
+  --lens artifacts/qwen3.5_entity_control/stride1/jacobian_lens.pt \
+  --top-k 15 \
+  --batch-size 32 \
+  --attribution-batch-size 8 \
+  --attribution-output-top-k 1 \
+  --output-dir artifacts/sp500_r1k_r2k_jspace
+```
+
+For a quick integration check, add `--max-rows 2`. The command writes:
+
+- `output_topk_distribution.png`: six output-layer average distributions
+  (three indices by with/without context).
+- `average_layer_topk.jsonl` and `.csv`: average top-k text and probabilities
+  for every fitted layer and the output layer.
+- `prompt_layer_topk.jsonl`: compact per-prompt/per-layer top-k text; omit it
+  with `--no-save-prompt-topk`.
+- `prompt_layer_uncertainty.jsonl`: per-date/per-layer entropy, normalized
+  entropy, perplexity, top-1 probability, and top-k probability mass; omit it
+  with `--no-save-prompt-uncertainty`.
+- `input_token_attribution.png` and `.jsonl`: for every mean output top-k
+  token, the most influential input token identities and end-aligned input
+  positions.
+- `metadata.json`: exact aggregation semantics, layer coverage, empty-prompt
+  counts, input hash, and third-party checkout revisions.
+
+Only token IDs, decoded text, probabilities, and provenance are saved; raw
+activations are never written.
+
+Input influence uses the absolute gradient × input-embedding attribution of
+each output token's log probability. Scores are normalized across positions
+within each prompt, aligned from the final prompt token, then averaged by
+condition. This is a local sensitivity attribution, not an attention map or a
+claim of standalone causal effect. Attribution is the expensive part of the
+run; `--attribution-output-top-k 1` is a quick focus on the mean top-1 output,
+and `--attribution-max-rows 128 --attribution-batch-size 1` gives a
+deterministic date-spread sample that fits large Qwen models. Use
+`--no-input-attribution` to skip it entirely.
+
+## Portable Qwen runner
+
+The complete workflow is also available as a tmux-backed shell runner:
+
+```bash
+bash scripts/run_qwen_jspace_experiment.sh
+```
+
+It fits a stride-1 lens, saves per-date/per-layer top-k and uncertainty for all
+six prompt columns, and runs sampled generated-token attribution. Override
+settings with environment variables when moving to another model or machine:
+
+```bash
+MODEL=.cache/models/qwen3.5-27b \
+RUN_ROOT=artifacts/qwen27b_jspace \
+FIT_DIM_BATCH=2 \
+ATTR_SAMPLE_PER_CONDITION=32 \
+bash scripts/run_qwen_jspace_experiment.sh
+```
+
+The default detached session is `qwen_jspace_experiment`; attach with
+`tmux attach -t qwen_jspace_experiment`. Set `RUN_IN_TMUX=0` to run in the
+foreground. The script resumes lens fitting from its checkpoint if interrupted.
+For very large models, choose `FIT_DIM_BATCH` conservatively for available
+GPU memory; the model loader still needs to be adapted separately if the model
+does not fit on the selected device.
