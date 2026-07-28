@@ -33,11 +33,22 @@ DEFAULT_UNCERTAINTY_FILES = {
 
 
 def uncertainty_paths_from_root(root: str | Path = "artifacts") -> dict[tuple[str, str], Path]:
-    """Resolve six uncertainty inputs, preferring one combined artifact."""
+    """Resolve six uncertainty inputs, preferring one combined artifact.
+
+    ``analyze-prompt-outputs`` writes a combined file directly below its
+    output directory. Support both the historical named directory and the
+    portable runner's ``per_date`` directory so callers do not need to create
+    compatibility symlinks.
+    """
     root_path = Path(root)
-    combined = root_path / "qwen3.5_temperature_scope_per_date" / "prompt_layer_uncertainty.jsonl"
-    if combined.is_file():
-        return {key: combined for key in DEFAULT_UNCERTAINTY_FILES}
+    combined_candidates = (
+        root_path / "qwen3.5_temperature_scope_per_date" / "prompt_layer_uncertainty.jsonl",
+        root_path / "per_date" / "prompt_layer_uncertainty.jsonl",
+        root_path / "prompt_layer_uncertainty.jsonl",
+    )
+    for combined in combined_candidates:
+        if combined.is_file():
+            return {key: combined for key in DEFAULT_UNCERTAINTY_FILES}
     return {
         key: root_path / Path(source).relative_to("artifacts")
         for key, source in DEFAULT_UNCERTAINTY_FILES.items()

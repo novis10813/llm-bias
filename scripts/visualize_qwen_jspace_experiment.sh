@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Build the Qwen Semantic Scope dashboard and uncertainty plots.
+# Build the Qwen uncertainty plots and Semantic Scope attribution dashboard.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-MODEL="${MODEL:-.cache/models/qwen3.5-4b}"
-TOKENIZER="${TOKENIZER:-${MODEL}}"
+# By default this consumes the artifacts produced by the documented Qwen
+# workflow. Set RUN_ROOT to use a separate runner output directory.
+RUN_ROOT="${RUN_ROOT:-artifacts}"
+UNCERTAINTY_ROOT="${UNCERTAINTY_ROOT:-${RUN_ROOT}}"
+TOKENIZER="${TOKENIZER:-.cache/models/qwen3.5-4b}"
 INPUT_CSV="${INPUT_CSV:-sp500_r1k_r2k_entityBiasPrompt.csv}"
-RUN_ROOT="${RUN_ROOT:-artifacts/qwen_jspace_experiment}"
-ATTRIBUTION="${ATTRIBUTION:-${RUN_ROOT}/generated_attribution/generated_token_attribution.jsonl}"
-UNCERTAINTY="${UNCERTAINTY:-${RUN_ROOT}/per_date/prompt_layer_uncertainty.jsonl}"
-VALIDATION="${VALIDATION:-${RUN_ROOT}/no_validation.jsonl}"
-OUTPUT_DIR="${OUTPUT_DIR:-${RUN_ROOT}/result_visualization}"
+OUTPUT_DIR="${OUTPUT_DIR:-${RUN_ROOT}/qwen_result_visualization}"
 INPUT_TOP_K="${INPUT_TOP_K:-15}"
 MAX_SEQ_LEN="${MAX_SEQ_LEN:-256}"
 
@@ -22,10 +21,10 @@ command -v uv >/dev/null || {
     exit 1
 }
 
-for required_file in "${INPUT_CSV}" "${ATTRIBUTION}" "${UNCERTAINTY}"; do
+for required_file in "${INPUT_CSV}"; do
     [[ -f "${required_file}" ]] || {
         echo "Missing required file: ${required_file}" >&2
-        echo "Set RUN_ROOT, ATTRIBUTION, or UNCERTAINTY if the experiment used custom paths." >&2
+        echo "Set INPUT_CSV if the experiment used a custom input file." >&2
         exit 1
     }
 done
@@ -36,37 +35,85 @@ done
     exit 1
 }
 
-# The visualizer currently discovers one combined uncertainty file through this
-# compatibility directory name. The runner writes the same file under per_date/.
-UNCERTAINTY_ALIAS_DIR="${RUN_ROOT}/qwen3.5_temperature_scope_per_date"
-UNCERTAINTY_ALIAS="${UNCERTAINTY_ALIAS_DIR}/prompt_layer_uncertainty.jsonl"
-UNCERTAINTY_ALIAS_TARGET="$(realpath --relative-to="${UNCERTAINTY_ALIAS_DIR}" "${UNCERTAINTY}")"
-mkdir -p "${UNCERTAINTY_ALIAS_DIR}"
-
-if [[ -e "${UNCERTAINTY_ALIAS}" || -L "${UNCERTAINTY_ALIAS}" ]]; then
-    if [[ ! -L "${UNCERTAINTY_ALIAS}" ]] || \
-        [[ "$(readlink "${UNCERTAINTY_ALIAS}")" != "${UNCERTAINTY_ALIAS_TARGET}" ]]; then
-        echo "Refusing to replace existing file: ${UNCERTAINTY_ALIAS}" >&2
-        exit 1
+resolve_optional_file() {
+    local variable_name="$1"
+    shift
+    if [[ -n "${!variable_name:-}" ]]; then
+        return 0
     fi
-else
-    ln -s "${UNCERTAINTY_ALIAS_TARGET}" "${UNCERTAINTY_ALIAS}"
+    local candidate
+    for candidate in "$@"; do
+        if [[ -f "${candidate}" ]]; then
+            printf -v "${variable_name}" '%s' "${candidate}"
+            return 0
+        fi
+    done
+    printf -v "${variable_name}" '%s' ""
+}
+
+# Prefer the Semantic Scope artifact used by the dashboard. Fall back to the
+# portable runner's generated-attribution output when necessary.
+resolve_optional_file ATTRIBUTION \
+    "${RUN_ROOT}/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl" \
+    "${RUN_ROOT}/qwen_generated_attribution_semantic_scope_selected/generated_token_attribution.jsonl" \
+    "${RUN_ROOT}/generated_attribution/generated_token_attribution.jsonl"
+
+resolve_optional_file VALIDATION \
+    "${RUN_ROOT}/qwen_semantic_scope_validation_selected/semantic_scope_aopc.jsonl" \
+    "${RUN_ROOT}/semantic_scope_validation_selected/semantic_scope_aopc.jsonl"
+
+combined_uncertainty=""
+for candidate in \
+    "${UNCERTAINTY_ROOT}/qwen3.5_temperature_scope_per_date/prompt_layer_uncertainty.jsonl" \
+    "${UNCERTAINTY_ROOT}/per_date/prompt_layer_uncertainty.jsonl" \
+    "${UNCERTAINTY_ROOT}/prompt_layer_uncertainty.jsonl"; do
+    if [[ -f "${candidate}" ]]; then
+        combined_uncertainty="${candidate}"
+        break
+    fi
+done
+if [[ -z "${combined_uncertainty}" ]]; then
+    echo "No combined uncertainty file found below: ${UNCERTAINTY_ROOT}" >&2
+    echo "Expected qwen3.5_temperature_scope_per_date/, per_date/, or the root itself." >&2
+    exit 1
+fi
+
+if [[ -z "${ATTRIBUTION}" || ! -f "${ATTRIBUTION}" ]]; then
+    echo "Missing generated-token attribution JSONL." >&2
+    echo "Set ATTRIBUTION=/path/to/generated_token_attribution.jsonl" >&2
+    exit 1
+fi
+
+if [[ -n "${VALIDATION}" && ! -f "${VALIDATION}" ]]; then
+    echo "Validation file does not exist; continuing without validation: ${VALIDATION}" >&2
+    VALIDATION=""
 fi
 
 echo "Building Qwen result visualizations..."
-echo "  uncertainty: ${UNCERTAINTY}"
+echo "  uncertainty root: ${UNCERTAINTY_ROOT}"
 echo "  Semantic Scope: ${ATTRIBUTION}"
+if [[ -n "${VALIDATION}" ]]; then
+    echo "  validation: ${VALIDATION}"
+else
+    echo "  validation: disabled"
+fi
 echo "  output: ${OUTPUT_DIR}"
 
-uv run python -m llm_bias visualize-qwen-results \
-    --uncertainty-root "${RUN_ROOT}" \
-    --attribution "${ATTRIBUTION}" \
-    --validation "${VALIDATION}" \
-    --prices "${INPUT_CSV}" \
-    --tokenizer "${TOKENIZER}" \
-    --input-top-k "${INPUT_TOP_K}" \
-    --max-seq-len "${MAX_SEQ_LEN}" \
+visualize_args=(
+    uv run python -m llm_bias visualize-qwen-results
+    --uncertainty-root "${UNCERTAINTY_ROOT}"
+    --attribution "${ATTRIBUTION}"
+    --prices "${INPUT_CSV}"
+    --tokenizer "${TOKENIZER}"
+    --input-top-k "${INPUT_TOP_K}"
+    --max-seq-len "${MAX_SEQ_LEN}"
     --output-dir "${OUTPUT_DIR}"
+)
+if [[ -n "${VALIDATION}" ]]; then
+    visualize_args+=(--validation "${VALIDATION}")
+fi
+
+"${visualize_args[@]}"
 
 echo
 echo "Visualization complete: ${OUTPUT_DIR}"

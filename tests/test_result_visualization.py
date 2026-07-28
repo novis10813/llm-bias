@@ -11,6 +11,7 @@ from llm_bias.result_visualization import (
     load_final_layer_uncertainty,
     render_attribution_html,
     select_attribution_dates,
+    uncertainty_paths_from_root,
 )
 
 
@@ -175,6 +176,21 @@ def test_load_final_layer_uncertainty_filters_combined_artifact(tmp_path):
 
     assert len(loaded) == 1
     assert loaded[0]["entropy_nats"] == pytest.approx(1.0)
+
+
+def test_uncertainty_paths_from_root_discovers_runner_per_date_directory(tmp_path):
+    path = tmp_path / "per_date" / "prompt_layer_uncertainty.jsonl"
+    path.parent.mkdir()
+    path.write_text("{}\n", encoding="utf-8")
+
+    paths = uncertainty_paths_from_root(tmp_path)
+
+    assert set(paths) == {
+        (index, context)
+        for index in ("sp500", "russell1000", "russell2000")
+        for context in ("without", "with")
+    }
+    assert set(paths.values()) == {path}
 
 
 def test_render_attribution_html_embeds_tokens_and_interaction_script():

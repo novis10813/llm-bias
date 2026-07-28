@@ -182,6 +182,18 @@ attribution have been produced, create the final-layer uncertainty plots and the
 standalone interactive attribution dashboard:
 
 ```bash
+bash scripts/visualize_qwen_jspace_experiment.sh
+```
+
+The script uses the artifacts under `artifacts/` by default and automatically
+selects the full Semantic Scope attribution and validation outputs. For a
+separate run directory, set `RUN_ROOT`; custom inputs can be supplied with
+`INPUT_CSV`, `TOKENIZER`, `ATTRIBUTION`, `VALIDATION`, `UNCERTAINTY_ROOT`, or
+`OUTPUT_DIR`.
+
+The equivalent direct command is:
+
+```bash
 uv run python -m llm_bias visualize-qwen-results \
   --uncertainty-root artifacts \
   --attribution artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl \
