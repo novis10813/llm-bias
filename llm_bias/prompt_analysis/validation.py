@@ -14,15 +14,14 @@ import torch
 from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.model import WrappedModel
 
-from llm_bias.generated_attribution import _find_subsequence
-from llm_bias.model import QWEN35_MODEL, load_model
-from llm_bias.prompt_outputs import _prepare_prompt
+from llm_bias.core.model import DEFAULT_MODEL, load_model
+from llm_bias.core.prompting import find_token_subsequence, format_prompt
 
 DEFAULT_ATTRIBUTION = (
-    "artifacts/qwen_generated_attribution_semantic_scope_full_selected/"
+    "artifacts/prompt_analysis/generated_attribution/"
     "generated_token_attribution.jsonl"
 )
-DEFAULT_OUTPUT_DIR = "artifacts/qwen_semantic_scope_validation_selected"
+DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/attribution_validation"
 ABLATION_RATES = (0.0, 0.05, 0.10, 0.20)
 
 
@@ -145,7 +144,7 @@ def _visible_output_token(token: str) -> bool:
 def evaluate_semantic_scope(
     *,
     attribution_path: str | Path = DEFAULT_ATTRIBUTION,
-    model_name: str = QWEN35_MODEL,
+    model_name: str = DEFAULT_MODEL,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     seed: int = 0,
 ) -> Path:
@@ -171,8 +170,11 @@ def evaluate_semantic_scope(
             prompt = str(row.get("prompt", "")).strip()
             if not prompt:
                 raise ValueError(f"attribution row {row_index} has no prompt")
-            formatted = _prepare_prompt(
-                tokenizer, prompt, use_chat_template=True, enable_thinking=False
+            formatted = format_prompt(
+                tokenizer,
+                prompt,
+                use_chat_template=True,
+                enable_thinking=False,
             )
             prompt_ids = tokenizer(
                 formatted,
@@ -186,7 +188,7 @@ def evaluate_semantic_scope(
                 truncation=True,
                 max_length=256,
             ).input_ids
-            input_start, input_end = _find_subsequence(
+            input_start, input_end = find_token_subsequence(
                 prompt_ids[0].tolist(), raw_ids[0].tolist()
             )
             input_positions = list(range(input_start, input_end))

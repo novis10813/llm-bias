@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
-from llm_bias.interventions import (
+from llm_bias.counterfactual_patching.interventions import (
     _patch_tensor_span,
     _replace_first,
     next_logits,

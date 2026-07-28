@@ -58,7 +58,7 @@ class Pair:
 
 
 def default_spec_path() -> Path:
-    return Path(__file__).resolve().parents[1] / (
+    return Path(__file__).resolve().parents[2] / (
         "third_party/jacobian-lens/data/experiments/flexible-generalization.json"
     )
 
@@ -198,18 +198,3 @@ def save_pairs(pairs: list[Pair], path: str | Path) -> None:
 def load_saved_pairs(path: str | Path) -> list[Pair]:
     with Path(path).open(encoding="utf-8") as handle:
         return [Pair(**json.loads(line)) for line in handle if line.strip()]
-
-
-def calibration_prompts(count: int = 16) -> list[str]:
-    """Return deterministic, non-task prompts for fitting a model-specific lens."""
-    seeds = [
-        "A small village sits beside a river and depends on the water for travel and trade.",
-        "Researchers collected careful notes before comparing the results of the experiment.",
-        "The old library contains maps, letters, and books from many different periods.",
-        "During the afternoon, clouds moved across the valley while the temperature slowly fell.",
-        "A teacher asked the class to explain the pattern using a short example and clear evidence.",
-        "The mechanic inspected the engine, replaced a worn part, and tested the vehicle again.",
-        "Several birds gathered on the roof before the storm arrived from the western horizon.",
-        "The museum displayed tools that showed how people solved practical problems in the past.",
-    ]
-    return [seeds[index % len(seeds)] + f" This is calibration passage {index}." for index in range(count)]

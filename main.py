@@ -1,4 +1,4 @@
-from llm_bias.cli import main
+from llm_bias.__main__ import main
 
 
 if __name__ == "__main__":

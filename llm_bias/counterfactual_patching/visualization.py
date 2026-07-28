@@ -19,14 +19,17 @@ from pydantic import BaseModel, Field
 from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
-from llm_bias.data import Pair, load_saved_pairs
-from llm_bias.interventions import patched_residuals, record_residuals
-from llm_bias.model import load_model as load_lens_model
+from llm_bias.core.model import load_model as load_lens_model
+from llm_bias.counterfactual_patching.data import Pair, load_saved_pairs
+from llm_bias.counterfactual_patching.interventions import (
+    patched_residuals,
+    record_residuals,
+)
 
 LOGGER = logging.getLogger(__name__)
-STATIC_DIR = Path(__file__).parent / "static"
-DEFAULT_PAIRS = "artifacts/entity_control/pairs.jsonl"
-DEFAULT_LENS = "artifacts/entity_control/jacobian_lens.pt"
+STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
+DEFAULT_PAIRS = "artifacts/counterfactual_patching/pairs.jsonl"
+DEFAULT_LENS = "artifacts/lenses/jacobian_lens.pt"
 
 
 @dataclass
@@ -59,7 +62,7 @@ def _rank(logits: torch.Tensor, token_id: int) -> int:
 
 def _record_dependency_versions() -> None:
     """Record ignored checkout revisions so local figures remain attributable."""
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     versions: dict[str, str] = {}
     for name in ("jacobian-lens", "jspace-viz"):
         checkout = root / "third_party" / name

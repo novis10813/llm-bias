@@ -3,23 +3,19 @@
 這份文件說明主實驗 Python package 的責任邊界；上層規則見 repository root
 的 `AGENTS.md`。
 
-## 模組責任
+## Package 邊界
 
-- `data.py`：讀取 factual generalization spec，建立 token-aligned `Pair`，並
-  儲存/載入 `pairs.jsonl`。若改變 token span 過濾條件，必須更新資料測試。
-- `model.py`：提供原始 `jlens` 實驗使用的 Hugging Face model loader，以及預設
-  local model path。
-- `interventions.py`：記錄 residual stream、執行單點 activation patch，以及
-  輸出 patched residuals；patch hook 必須保留 decoder block output 的 tuple、list
-  或 model-output 結構。
-- `analysis.py`：fitting lens、跑完整 patch experiment、計算 normalized transfer
-  與產生靜態 summary/heatmap。不要把 static summary 當成 per-cell interactive
-  readout。
-- `visualization.py`：使用 `jspace_viz` 的 `WrappedModel` 與 `JacobianLens`，把
-  source/target/patched activation 轉成相同的 layer × position grid schema，並
-  提供 FastAPI endpoints。
-- `cli.py`：只負責 command dispatch；實驗邏輯放在上述模組，不要在 CLI 中直接
-  寫模型推理流程。
+- `core/`：只放 model loading、prompt formatting 等模型無關的共用基礎設施。
+- `lens_fitting/`：獨立 fitting Jacobian lens；不可 import 任一 experiment。
+- `counterfactual_patching/`：擁有 `Pair`、residual patch、transfer analysis
+  與 interactive counterfactual visualization。
+- `prompt_analysis/`：擁有 CSV prompt readout、generated-token attribution、
+  attribution validation 與結果視覺化。
+
+兩個 experiment package 不可互相 import。共同能力必須先確認確實與研究語意
+無關，才可放進 `core/`。三個 CLI 入口分別是 `fit-jacobian-lens`、
+`counterfactual-patching` 與 `prompt-analysis`；experiment CLI 不可自行 fitting
+lens。
 
 ## Counterfactual API
 

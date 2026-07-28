@@ -3,10 +3,10 @@ import json
 import pytest
 import torch
 
-from llm_bias.generated_attribution import _semantic_scope_scores
-from llm_bias.semantic_scope_validation import _aopc
+from llm_bias.prompt_analysis.attribution import _semantic_scope_scores
+from llm_bias.prompt_analysis.validation import _aopc
 
-from llm_bias.result_visualization import (
+from llm_bias.prompt_analysis.visualization import (
     build_attribution_data,
     load_final_layer_uncertainty,
     render_attribution_html,

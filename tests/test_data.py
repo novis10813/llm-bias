@@ -1,8 +1,9 @@
 import json
 import re
 
-from llm_bias.analysis import normalized_transfer
-from llm_bias.data import calibration_prompts, load_pairs
+from llm_bias.counterfactual_patching.data import load_pairs
+from llm_bias.counterfactual_patching.experiment import normalized_transfer
+from llm_bias.lens_fitting.calibration import builtin_calibration_prompts
 
 
 class _Encoded(dict):
@@ -37,8 +38,8 @@ class _WhitespaceTokenizer:
 
 
 def test_calibration_prompts_are_deterministic_and_long_enough():
-    prompts = calibration_prompts(8)
-    assert prompts == calibration_prompts(8)
+    prompts = builtin_calibration_prompts(8)
+    assert prompts == builtin_calibration_prompts(8)
     assert len(prompts) == 8
     assert all(len(prompt.split()) > 10 for prompt in prompts)
 
@@ -51,7 +52,7 @@ def test_normalized_transfer_uses_source_as_zero_and_target_as_one():
 
 
 def test_pair_dataclass_serialization():
-    from llm_bias.data import Pair
+    from llm_bias.counterfactual_patching.data import Pair
 
     pair = Pair(
         pair_id="x",

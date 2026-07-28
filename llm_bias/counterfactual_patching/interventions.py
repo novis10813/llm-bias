@@ -1,4 +1,4 @@
-"""Residual recording and causal activation patching."""
+"""Residual recording and causal patching for counterfactual pairs."""
 
 from __future__ import annotations
 

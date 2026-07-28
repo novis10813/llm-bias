@@ -1,4 +1,4 @@
-"""Static and interactive visualizations for the Qwen prompt experiments."""
+"""Static and interactive visualizations for prompt-analysis artifacts."""
 
 from __future__ import annotations
 
@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
-DEFAULT_ATTRIBUTION = "artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl"
-DEFAULT_VALIDATION = "artifacts/qwen_semantic_scope_validation_selected/semantic_scope_aopc.jsonl"
-DEFAULT_OUTPUT_DIR = "artifacts/qwen_result_visualization"
-DEFAULT_TOKENIZER = ".cache/models/qwen3.5-4b"
+DEFAULT_ARTIFACT_ROOT = "artifacts/prompt_analysis"
+DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/generated_attribution/generated_token_attribution.jsonl"
+DEFAULT_VALIDATION = "artifacts/prompt_analysis/attribution_validation/semantic_scope_aopc.jsonl"
+DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/visualization"
+DEFAULT_TOKENIZER = ".cache/models/llama-3.2-1b-instruct"
 
 INDEX_LABELS = {
     "sp500": "S&P 500",
@@ -23,26 +24,28 @@ INDEX_LABELS = {
 INDEX_ORDER = ("sp500", "russell1000", "russell2000")
 CONTEXT_ORDER = ("without", "with")
 DEFAULT_UNCERTAINTY_FILES = {
-    ("sp500", "without"): "artifacts/qwen3.5_sp500_no_context_per_prompt/prompt_layer_uncertainty.jsonl",
-    ("sp500", "with"): "artifacts/qwen3.5_sp500_with_context_per_prompt/prompt_layer_uncertainty.jsonl",
-    ("russell1000", "without"): "artifacts/qwen3.5_russell1000_without_context_per_prompt/prompt_layer_uncertainty.jsonl",
-    ("russell1000", "with"): "artifacts/qwen3.5_russell1000_with_context_per_prompt/prompt_layer_uncertainty.jsonl",
-    ("russell2000", "without"): "artifacts/qwen3.5_russell2000_without_context_per_prompt/prompt_layer_uncertainty.jsonl",
-    ("russell2000", "with"): "artifacts/qwen3.5_russell2000_with_context_per_prompt/prompt_layer_uncertainty.jsonl",
+    ("sp500", "without"): "artifacts/prompt_analysis/readout/sp500_without/prompt_layer_uncertainty.jsonl",
+    ("sp500", "with"): "artifacts/prompt_analysis/readout/sp500_with/prompt_layer_uncertainty.jsonl",
+    ("russell1000", "without"): "artifacts/prompt_analysis/readout/russell1000_without/prompt_layer_uncertainty.jsonl",
+    ("russell1000", "with"): "artifacts/prompt_analysis/readout/russell1000_with/prompt_layer_uncertainty.jsonl",
+    ("russell2000", "without"): "artifacts/prompt_analysis/readout/russell2000_without/prompt_layer_uncertainty.jsonl",
+    ("russell2000", "with"): "artifacts/prompt_analysis/readout/russell2000_with/prompt_layer_uncertainty.jsonl",
 }
 
 
-def uncertainty_paths_from_root(root: str | Path = "artifacts") -> dict[tuple[str, str], Path]:
+def uncertainty_paths_from_root(
+    root: str | Path = DEFAULT_ARTIFACT_ROOT,
+) -> dict[tuple[str, str], Path]:
     """Resolve six uncertainty inputs, preferring one combined artifact.
 
-    ``analyze-prompt-outputs`` writes a combined file directly below its
+    ``prompt-analysis readout`` writes a combined file directly below its
     output directory. Support both the historical named directory and the
     portable runner's ``per_date`` directory so callers do not need to create
     compatibility symlinks.
     """
     root_path = Path(root)
     combined_candidates = (
-        root_path / "qwen3.5_temperature_scope_per_date" / "prompt_layer_uncertainty.jsonl",
+        root_path / "readout" / "prompt_layer_uncertainty.jsonl",
         root_path / "per_date" / "prompt_layer_uncertainty.jsonl",
         root_path / "prompt_layer_uncertainty.jsonl",
     )
@@ -50,7 +53,7 @@ def uncertainty_paths_from_root(root: str | Path = "artifacts") -> dict[tuple[st
         if combined.is_file():
             return {key: combined for key in DEFAULT_UNCERTAINTY_FILES}
     return {
-        key: root_path / Path(source).relative_to("artifacts")
+        key: root_path / Path(source).relative_to(DEFAULT_ARTIFACT_ROOT)
         for key, source in DEFAULT_UNCERTAINTY_FILES.items()
     }
 
@@ -412,7 +415,9 @@ def build_attribution_data(
 
 
 def _load_template(name: str) -> str:
-    return (Path(__file__).parent / "static" / name).read_text(encoding="utf-8")
+    return (
+        Path(__file__).resolve().parents[1] / "static" / name
+    ).read_text(encoding="utf-8")
 
 
 def render_attribution_html(data: dict[str, Any]) -> str:
@@ -517,7 +522,7 @@ def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> Non
         plt.close(entropy_figure)
 
 
-def visualize_qwen_results(
+def visualize_prompt_results(
     *,
     uncertainty_paths: dict[tuple[str, str], str | Path] | None = None,
     attribution_path: str | Path = DEFAULT_ATTRIBUTION,

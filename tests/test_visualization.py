@@ -1,4 +1,4 @@
-from llm_bias.visualization import _top1_comparison
+from llm_bias.counterfactual_patching.visualization import _top1_comparison
 
 
 def _grid(rows):

@@ -18,6 +18,11 @@ dependencies = [
     "uvicorn>=0.34.0",
 ]
 
+[project.scripts]
+fit-jacobian-lens = "llm_bias.lens_fitting.cli:main"
+counterfactual-patching = "llm_bias.counterfactual_patching.cli:main"
+prompt-analysis = "llm_bias.prompt_analysis.cli:main"
+
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"

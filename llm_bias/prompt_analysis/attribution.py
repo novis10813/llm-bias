@@ -13,15 +13,14 @@ import torch
 from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.model import WrappedModel
 
-from llm_bias.model import QWEN35_MODEL, load_model as load_lens_model
-from llm_bias.prompt_outputs import (
+from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
+from llm_bias.core.prompting import decode_token, find_token_subsequence, format_prompt
+from llm_bias.prompt_analysis.readout import (
     DEFAULT_INPUT,
-    _decode_token,
-    _prepare_prompt,
     discover_prompt_columns,
 )
 
-DEFAULT_OUTPUT_DIR = "artifacts/qwen_generated_attribution"
+DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/generated_attribution"
 
 
 def _sample_rows(rows: list[dict[str, str]], count: int) -> list[dict[str, str]]:
@@ -37,14 +36,8 @@ def _sample_rows(rows: list[dict[str, str]], count: int) -> list[dict[str, str]]
 
 
 def _find_subsequence(sequence: list[int], target: list[int]) -> tuple[int, int]:
-    """Find raw user-message IDs inside the chat-formatted prompt."""
-    if not target:
-        return 0, len(sequence)
-    width = len(target)
-    for start in range(len(sequence) - width + 1):
-        if sequence[start : start + width] == target:
-            return start, start + width
-    return 0, len(sequence)
+    """Backward-compatible alias for shared token alignment."""
+    return find_token_subsequence(sequence, target)
 
 
 def _semantic_scope_scores(gradient: torch.Tensor) -> torch.Tensor:
@@ -109,7 +102,7 @@ def _attribute_generated_token(
     top = contribution.topk(top_k)
     return {
         "token_id": target_id,
-        "token": _decode_token(model.tokenizer, target_id),
+        "token": decode_token(model.tokenizer, target_id),
         "logit": float(target_logit.detach()),
         "log_probability": float(log_probability.detach()),
         "top_input_tokens": [
@@ -118,7 +111,7 @@ def _attribute_generated_token(
                 "position": input_start + int(position),
                 "prompt_position": int(position),
                 "token_id": int(prompt_ids[0, input_start + position]),
-                "token": _decode_token(
+                "token": decode_token(
                     model.tokenizer, int(prompt_ids[0, input_start + position])
                 ),
                 "attribution": float(value),
@@ -149,7 +142,7 @@ def _greedy_generate(
 def analyze_generated_attribution(
     *,
     input_path: str = DEFAULT_INPUT,
-    model_name: str = QWEN35_MODEL,
+    model_name: str = DEFAULT_MODEL,
     output_dir: str = DEFAULT_OUTPUT_DIR,
     sample_per_condition: int = 32,
     max_new_tokens: int = 64,
@@ -193,8 +186,11 @@ def analyze_generated_attribution(
             sampled = candidates if selected_dates else _sample_rows(candidates, sample_per_condition)
             for sample_index, row in enumerate(sampled):
                 prompt = (row.get(column.name) or "").strip()
-                formatted = _prepare_prompt(
-                    tokenizer, prompt, use_chat_template=True, enable_thinking=False
+                formatted = format_prompt(
+                    tokenizer,
+                    prompt,
+                    use_chat_template=True,
+                    enable_thinking=False,
                 )
                 encoded = tokenizer(
                     formatted,

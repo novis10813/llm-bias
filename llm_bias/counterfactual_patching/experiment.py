@@ -11,14 +11,19 @@ import pandas as pd
 import torch
 
 import jlens
-from llm_bias.data import Pair, calibration_prompts, load_pairs, load_saved_pairs, save_pairs
-from llm_bias.interventions import (
+from llm_bias.core.model import DEFAULT_MODEL, load_model
+from llm_bias.counterfactual_patching.data import (
+    Pair,
+    load_pairs,
+    load_saved_pairs,
+    save_pairs,
+)
+from llm_bias.counterfactual_patching.interventions import (
     next_logits,
     normalized_span_mapping,
     patched_next_logits,
     record_residuals,
 )
-from llm_bias.model import DEFAULT_MODEL, load_model
 
 
 def normalized_transfer(
@@ -76,50 +81,15 @@ def _span_readout_difference(
     return target_score - source_score
 
 
-def fit_lens(
-    model_name: str = DEFAULT_MODEL,
-    output: str = "artifacts/entity_control/jacobian_lens.pt",
-    calibration_count: int = 16,
-    layer_stride: int = 2,
-    dim_batch: int = 16,
-    max_seq_len: int = 128,
-    skip_first: int = 0,
-) -> Path:
-    if dim_batch < 1:
-        raise ValueError("dim_batch must be positive")
-    if max_seq_len < 1:
-        raise ValueError("max_seq_len must be positive")
-    if skip_first < 0:
-        raise ValueError("skip_first must be non-negative")
-    jlens.configure_logging()
-    model, _tokenizer, _device = load_model(model_name)
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    layers = list(range(0, model.n_layers - 1, layer_stride))
-    lens = jlens.fit(
-        model,
-        calibration_prompts(calibration_count),
-        source_layers=layers,
-        dim_batch=dim_batch,
-        max_seq_len=max_seq_len,
-        skip_first=skip_first,
-        checkpoint_path=output + ".checkpoint.pt",
-        checkpoint_every=1,
-    )
-    destination = Path(output)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    lens.save(str(destination))
-    return destination
-
-
 def prepare_data(
     model_name: str = DEFAULT_MODEL,
-    output: str = "artifacts/entity_control/pairs.jsonl",
+    output: str = "artifacts/counterfactual_patching/pairs.jsonl",
     max_pairs: int | None = None,
 ) -> Path:
     _model, tokenizer, _device = load_model(model_name)
     pairs = load_pairs(tokenizer, max_pairs=max_pairs)
     if not pairs:
-        raise RuntimeError("No aligned single-token entity pairs survived tokenization")
+        raise RuntimeError("No aligned entity-span pairs survived tokenization")
     save_pairs(pairs, output)
     print(f"Prepared {len(pairs)} aligned pairs at {output}")
     return Path(output)
@@ -127,9 +97,9 @@ def prepare_data(
 
 def run_patch(
     model_name: str = DEFAULT_MODEL,
-    pairs_path: str = "artifacts/entity_control/pairs.jsonl",
-    lens_path: str | None = "artifacts/entity_control/jacobian_lens.pt",
-    output: str = "artifacts/entity_control/patch_results.jsonl",
+    pairs_path: str = "artifacts/counterfactual_patching/pairs.jsonl",
+    lens_path: str | None = None,
+    output: str = "artifacts/counterfactual_patching/patch_results.jsonl",
     max_pairs: int | None = None,
 ) -> Path:
     model, tokenizer, device = load_model(model_name)
@@ -249,8 +219,8 @@ def run_patch(
 
 
 def summarize(
-    input_path: str = "artifacts/entity_control/patch_results.jsonl",
-    output_dir: str = "artifacts/entity_control",
+    input_path: str = "artifacts/counterfactual_patching/patch_results.jsonl",
+    output_dir: str = "artifacts/counterfactual_patching",
 ) -> Path:
     rows = pd.read_json(input_path, lines=True)
     rng = np.random.default_rng(0)
@@ -306,8 +276,8 @@ def summarize(
 
 
 def visualize(
-    input_path: str = "artifacts/entity_control/patch_results_full.jsonl",
-    output_dir: str = "artifacts/entity_control",
+    input_path: str = "artifacts/counterfactual_patching/patch_results.jsonl",
+    output_dir: str = "artifacts/counterfactual_patching",
 ) -> Path:
     """Create patch and Jacobian-lens representation heatmaps."""
     summary_path = summarize(input_path, output_dir)

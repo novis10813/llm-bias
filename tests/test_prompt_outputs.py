@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from llm_bias.prompt_outputs import (
+from llm_bias.prompt_analysis.readout import (
     _batched_output_gradients,
     _prepare_prompt,
     discover_prompt_columns,

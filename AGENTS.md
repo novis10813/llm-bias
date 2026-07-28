@@ -107,11 +107,11 @@ uv build
 視覺化 server：
 
 ```bash
-uv run python -m llm_bias serve-viz \
+uv run counterfactual-patching serve \
   --host 0.0.0.0 \
   --port 8321 \
-  --lens artifacts/entity_control/jacobian_lens_16.pt \
-  --pairs artifacts/entity_control/pairs.jsonl
+  --lens artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens_16.pt \
+  --pairs artifacts/counterfactual_patching/pairs.jsonl
 ```
 
 # 外部套件與工具

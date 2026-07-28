@@ -1,4 +1,4 @@
-"""HuggingFace model loading and device checks."""
+"""Hugging Face model loading and device checks shared by all workflows."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import jlens
 
 
 DEFAULT_MODEL = ".cache/models/llama-3.2-1b-instruct"
-QWEN35_MODEL = ".cache/models/qwen3.5-4b"
 
 
 def _is_conditional_generation_checkpoint(name: str) -> bool:
@@ -29,11 +28,6 @@ def resolve_model_name(model: str) -> str:
         raise FileNotFoundError(
             f"Local model is not ready at {path}. Check artifacts/llama_download.log "
             "or pass --model with a HuggingFace model id."
-        )
-    if model == QWEN35_MODEL:
-        raise FileNotFoundError(
-            f"Local model is not ready at {path}. Check artifacts/qwen3.5_download.log "
-            "or pass --model Qwen/Qwen3.5-4B."
         )
     return model
 

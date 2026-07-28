@@ -18,11 +18,12 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
-from llm_bias.model import QWEN35_MODEL, load_model as load_lens_model
+from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
+from llm_bias.core.prompting import decode_token, format_prompt
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
-DEFAULT_OUTPUT_DIR = "artifacts/sp500_r1k_r2k_jspace"
-DEFAULT_STRIDE1_LENS = "artifacts/qwen3.5_entity_control/stride1/jacobian_lens.pt"
+DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/readout"
+DEFAULT_STRIDE1_LENS = "artifacts/lenses/jacobian_lens.pt"
 PROMPT_COLUMN_PATTERN = re.compile(
     r"^prompt_(?P<context>with|without)_context_(?P<index>.+)$"
 )
@@ -77,11 +78,8 @@ def discover_prompt_columns(
 
 
 def _decode_token(tokenizer: Any, token_id: int) -> str:
-    return tokenizer.decode(
-        [token_id],
-        skip_special_tokens=False,
-        clean_up_tokenization_spaces=False,
-    )
+    """Backward-compatible local alias for the shared decoder."""
+    return decode_token(tokenizer, token_id)
 
 
 def topk_token_records(
@@ -162,17 +160,11 @@ def _prepare_prompt(
     use_chat_template: bool,
     enable_thinking: bool = False,
 ) -> str:
-    if not use_chat_template:
-        return prompt
-    if not getattr(tokenizer, "chat_template", None):
-        raise ValueError(
-            "use_chat_template=True but the tokenizer has no chat template; "
-            "pass --raw-prompt for a base model"
-        )
-    return tokenizer.apply_chat_template(
-        [{"role": "user", "content": prompt}],
-        tokenize=False,
-        add_generation_prompt=True,
+    """Backward-compatible local alias for shared prompt formatting."""
+    return format_prompt(
+        tokenizer,
+        prompt,
+        use_chat_template=use_chat_template,
         enable_thinking=enable_thinking,
     )
 
@@ -784,7 +776,7 @@ def _plot_input_attributions(
 def analyze_prompt_outputs(
     *,
     input_path: str = DEFAULT_INPUT,
-    model_name: str = QWEN35_MODEL,
+    model_name: str = DEFAULT_MODEL,
     lens_path: str = DEFAULT_STRIDE1_LENS,
     output_dir: str = DEFAULT_OUTPUT_DIR,
     top_k: int = 15,
@@ -948,7 +940,7 @@ def analyze_prompt_outputs(
             input_top_k=input_top_k,
         )
 
-    repository_root = Path(__file__).resolve().parents[1]
+    repository_root = Path(__file__).resolve().parents[2]
     metadata = {
         "input": str(source),
         "input_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),

@@ -1,10 +1,17 @@
-# Entity-level causal representation experiment
+# Entity-level causal representation experiments
 
 This repository studies when an entity-sensitive representation forms inside a
 decoder language model and whether it causally changes the answer distribution.
-The first experiment uses aligned factual counterfactual pairs and residual
-activation patching. `jlens` is used as a Jacobian-lens readout; it is not
-treated as a direct decoder of hidden chain-of-thought.
+The repository contains two independent experiments:
+
+- `counterfactual-patching`: aligned entity-span swapping and causal residual
+  activation patching.
+- `prompt-analysis`: per-layer prompt readout, uncertainty, generated-token
+  attribution, validation, and result visualization.
+
+Jacobian-lens fitting is a third, standalone tool. Both experiments consume a
+fitted lens but never fit one themselves. `jlens` readouts are transported
+representations, not direct decoders of hidden chain-of-thought.
 
 ## Setup
 
@@ -48,17 +55,17 @@ from Llama, then pass the same model and Qwen lens to the patch/dashboard
 commands:
 
 ```bash
-uv run python -m llm_bias fit-lens \
+uv run fit-jacobian-lens \
   --model .cache/models/qwen3.5-4b \
-  --output artifacts/qwen3.5_entity_control/jacobian_lens.pt
-uv run python -m llm_bias run-patch \
+  --output artifacts/lenses/qwen3.5-4b/stride2/jacobian_lens.pt
+uv run counterfactual-patching run \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/qwen3.5_entity_control/jacobian_lens.pt \
-  --output artifacts/qwen3.5_entity_control/patch_results.jsonl
-uv run python -m llm_bias serve-viz \
+  --lens artifacts/lenses/qwen3.5-4b/stride2/jacobian_lens.pt \
+  --output artifacts/counterfactual_patching/qwen3.5-4b/patch_results.jsonl
+uv run counterfactual-patching serve \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/qwen3.5_entity_control/jacobian_lens.pt \
-  --pairs artifacts/entity_control/pairs.jsonl
+  --lens artifacts/lenses/qwen3.5-4b/stride2/jacobian_lens.pt \
+  --pairs artifacts/counterfactual_patching/pairs.jsonl
 ```
 
 ## Run
@@ -66,12 +73,17 @@ uv run python -m llm_bias serve-viz \
 ```bash
 uv sync
 uv run pytest
-uv run python -m llm_bias prepare-data
-uv run python -m llm_bias fit-lens --calibration-prompts 16 --layer-stride 4
-uv run python -m llm_bias run-patch --lens artifacts/entity_control/jacobian_lens.pt
-uv run python -m llm_bias visualize
-uv run python -m llm_bias analyze-prompt-outputs
-uv run python -m llm_bias serve-viz --lens artifacts/entity_control/jacobian_lens.pt
+uv run fit-jacobian-lens \
+  --model .cache/models/llama-3.2-1b-instruct \
+  --output artifacts/lenses/llama-3.2-1b-instruct/stride4/jacobian_lens.pt \
+  --calibration-prompts 16 \
+  --layer-stride 4
+uv run counterfactual-patching prepare-data
+uv run counterfactual-patching run \
+  --lens artifacts/lenses/llama-3.2-1b-instruct/stride4/jacobian_lens.pt
+uv run counterfactual-patching visualize
+uv run counterfactual-patching serve \
+  --lens artifacts/lenses/llama-3.2-1b-instruct/stride4/jacobian_lens.pt
 ```
 
 The last command starts a local interactive counterfactual dashboard at
@@ -82,23 +94,22 @@ two ignored external checkout revisions to
 
 The smoke run can use `--max-pairs 4` and two calibration prompts. The full
 current run produced 170 aligned pairs across countries, months, animals, and
-numbers. Results are written under `artifacts/entity_control/`.
+numbers. Results are written under `artifacts/counterfactual_patching/`.
 
 The visualization command writes the corrected transfer curve,
 `patch_transfer_heatmap.png`, and `jacobian_readout_heatmap.png`.
 
 ## Average prompt-output distributions
 
-`analyze-prompt-outputs` reads every `prompt_with_context_*` and
+`prompt-analysis readout` reads every `prompt_with_context_*` and
 `prompt_without_context_*` column in
 `sp500_r1k_r2k_entityBiasPrompt.csv`. For each prompt it reads the next-token
 distribution at the final, non-padding prompt position. Fitted intermediate
 layers use the Jacobian transport; the final layer is the model's actual
 output distribution. The default `k` is 15. CSV prompts are wrapped as a user
-message with the tokenizer's chat template. Qwen thinking mode is disabled by
-default so the requested JSON output is the first generated distribution; use
-`--enable-thinking` to restore it or `--raw-prompt` for an unformatted
-base-model read.
+message with the tokenizer's chat template. Thinking mode is disabled by
+default for tokenizers that support it; use `--enable-thinking` to restore it
+or `--raw-prompt` for an unformatted base-model read.
 
 The aggregate is computed by averaging the complete vocabulary softmax for
 each condition before selecting its top-k. This is different from averaging
@@ -106,15 +117,15 @@ only the per-prompt top-k entries, which would bias the result. Use the
 stride-1 lens to retain every intermediate layer:
 
 ```bash
-uv run python -m llm_bias analyze-prompt-outputs \
+uv run prompt-analysis readout \
   --input sp500_r1k_r2k_entityBiasPrompt.csv \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/qwen3.5_entity_control/stride1/jacobian_lens.pt \
+  --lens artifacts/lenses/qwen3.5-4b/stride1/jacobian_lens.pt \
   --top-k 15 \
   --batch-size 32 \
   --attribution-batch-size 8 \
   --attribution-output-top-k 1 \
-  --output-dir artifacts/sp500_r1k_r2k_jspace
+  --output-dir artifacts/prompt_analysis/qwen3.5-4b/per_date
 ```
 
 For a quick integration check, add `--max-rows 2`. The command writes:
@@ -145,48 +156,48 @@ condition. This is a local sensitivity attribution, not an attention map or a
 claim of standalone causal effect. Attribution is the expensive part of the
 run; `--attribution-output-top-k 1` is a quick focus on the mean top-1 output,
 and `--attribution-max-rows 128 --attribution-batch-size 1` gives a
-deterministic date-spread sample that fits large Qwen models. Use
+deterministic date-spread sample that fits large models. Use
 `--no-input-attribution` to skip it entirely.
 
-## Portable Qwen runner
+## Portable prompt-analysis runner
+
+日後重跑與視覺化的完整操作說明見
+[Prompt-analysis 實驗重現指南](docs/prompt-analysis-reproducibility.md)。
 
 The complete workflow is also available as a tmux-backed shell runner:
 
 ```bash
-bash scripts/run_qwen_jspace_experiment.sh
+bash scripts/run_prompt_analysis.sh
 ```
 
-It fits a stride-1 lens, saves per-date/per-layer top-k and uncertainty for all
-six prompt columns, and runs sampled generated-token attribution. Override
-settings with environment variables when moving to another model or machine:
+It requires a fitted lens, saves per-date/per-layer top-k and uncertainty for
+all six prompt columns, and runs sampled generated-token attribution. Lens
+fitting is deliberately separate so the runner cannot unexpectedly start an
+expensive fitting job. Override settings with environment variables:
 
 ```bash
-MODEL=.cache/models/qwen3.5-27b \
-RUN_ROOT=artifacts/qwen27b_jspace \
-FIT_DIM_BATCH=2 \
+MODEL=/path/to/another-model \
+LENS=artifacts/lenses/another-model/stride1/jacobian_lens.pt \
+RUN_ROOT=artifacts/prompt_analysis/another-model \
 ATTR_SAMPLE_PER_CONDITION=32 \
-bash scripts/run_qwen_jspace_experiment.sh
+bash scripts/run_prompt_analysis.sh
 ```
 
-The default detached session is `qwen_jspace_experiment`; attach with
-`tmux attach -t qwen_jspace_experiment`. Set `RUN_IN_TMUX=0` to run in the
-foreground. The script resumes lens fitting from its checkpoint if interrupted.
-For very large models, choose `FIT_DIM_BATCH` conservatively for available
-GPU memory; the model loader still needs to be adapted separately if the model
-does not fit on the selected device.
+The default detached session is `prompt_analysis`; attach with
+`tmux attach -t prompt_analysis`. Set `RUN_IN_TMUX=0` to run in the foreground.
 
-## Qwen result visualizations
+## Prompt-analysis result visualizations
 
 After the six per-date uncertainty files and sampled generated-token
 attribution have been produced, create the final-layer uncertainty plots and the
 standalone interactive attribution dashboard:
 
 ```bash
-bash scripts/visualize_qwen_jspace_experiment.sh
+bash scripts/visualize_prompt_analysis.sh
 ```
 
-The script uses the artifacts under `artifacts/` by default and automatically
-selects the full Semantic Scope attribution and validation outputs. For a
+The script uses `artifacts/prompt_analysis/qwen3.5-4b/` by default and
+automatically selects its attribution and optional validation outputs. For a
 separate run directory, set `RUN_ROOT`; custom inputs can be supplied with
 `INPUT_CSV`, `TOKENIZER`, `ATTRIBUTION`, `VALIDATION`, `UNCERTAINTY_ROOT`, or
 `OUTPUT_DIR`.
@@ -194,11 +205,12 @@ separate run directory, set `RUN_ROOT`; custom inputs can be supplied with
 The equivalent direct command is:
 
 ```bash
-uv run python -m llm_bias visualize-qwen-results \
-  --uncertainty-root artifacts \
-  --attribution artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl \
+uv run prompt-analysis visualize \
+  --uncertainty-root artifacts/prompt_analysis/qwen3.5-4b \
+  --attribution artifacts/prompt_analysis/qwen3.5-4b/generated_attribution/generated_token_attribution.jsonl \
   --prices sp500_r1k_r2k_entityBiasPrompt.csv \
-  --output-dir artifacts/qwen_result_visualization
+  --tokenizer .cache/models/qwen3.5-4b \
+  --output-dir artifacts/prompt_analysis/qwen3.5-4b/visualization
 ```
 
 The command writes two final-layer Temperature Scope uncertainty time-series
@@ -209,30 +221,30 @@ PNGs, `final_layer_uncertainty.csv` containing both measures, and
 directly in a browser; it has no server or model inference dependency, although
 the tokenizer is loaded once while constructing the HTML so every actual CSV
 prompt token can be displayed. Choose one of the selected dates, then hover a
-Qwen output token to color the complete SP500 input prompt by its attribution.
+generated output token to color the complete SP500 input prompt by its attribution.
 The generated-token attribution uses the paper's Semantic Scope objective:
 for each generated token, it differentiates that token's target logit with
 respect to each input embedding and uses the gradient L2 norm as the token
 influence. It is a local first-order sensitivity score; it is not attention or
 a standalone causal claim. The default is 64 new tokens so the JSON answer and
-confidence/evidence fields are included when Qwen emits them.
+confidence/evidence fields are included when the model emits them.
 
 For a selected-date dashboard with longer generated JSON outputs, first run
 attribution only for the dates used by the dashboard:
 
 ```bash
-uv run python -m llm_bias analyze-generated-attribution \
+uv run prompt-analysis attribute \
   --input sp500_r1k_r2k_entityBiasPrompt.csv \
   --model .cache/models/qwen3.5-4b \
   --date 2010-07-16 \
   --date 2014-04-10 \
   --date 2024-05-30 \
   --max-new-tokens 64 \
-  --output-dir artifacts/qwen_generated_attribution_semantic_scope_full_selected
+  --output-dir artifacts/prompt_analysis/qwen3.5-4b/generated_attribution_selected
 ```
 
 Then pass
-`artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl`
+`artifacts/prompt_analysis/qwen3.5-4b/generated_attribution_selected/generated_token_attribution.jsonl`
 as `--attribution` to the visualization command.
 
 When `--input-top-k` is omitted, the generated-token Semantic Scope run saves
@@ -243,10 +255,10 @@ To validate the Semantic Scope ranking with zero-vector input ablations and a
 deterministic random baseline:
 
 ```bash
-uv run python -m llm_bias validate-semantic-scope \
-  --attribution artifacts/qwen_generated_attribution_semantic_scope_full_selected/generated_token_attribution.jsonl \
+uv run prompt-analysis validate-attribution \
+  --attribution artifacts/prompt_analysis/qwen3.5-4b/generated_attribution_selected/generated_token_attribution.jsonl \
   --model .cache/models/qwen3.5-4b \
-  --output-dir artifacts/qwen_semantic_scope_validation_selected
+  --output-dir artifacts/prompt_analysis/qwen3.5-4b/attribution_validation
 ```
 
 Pass the resulting `semantic_scope_aopc.jsonl` with `--validation` when

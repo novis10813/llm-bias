@@ -5,7 +5,9 @@
 
 ## 測試分層
 
-- `test_data.py`：Pair serialization、calibration prompts 與 transfer 公式。
+- `test_data.py`：Pair serialization 與 transfer 公式。
+- `test_workflow_boundaries.py`：三個 CLI、experiment import 邊界與 calibration
+  prompt loading。
 - `test_interventions.py`：activation patch hook 對 tensor、tuple、list 與 model
   output 結構的保留行為。
 - `test_visualization.py`：counterfactual grid comparison payload 的 layer/position
