@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "design": "parallel_domain_style_matched",
+  "conditions": {
+    "english": {
+      "count": 128,
+      "languages": {
+        "en": 128
+      }
+    },
+    "chinese_simplified": {
+      "count": 128,
+      "languages": {
+        "zh-CN": 128
+      }
+    },
+    "mixed": {
+      "count": 128,
+      "languages": {
+        "en": 64,
+        "zh-CN": 64
+      }
+    }
+  },
+  "domains": [
+    "river_management",
+    "public_library",
+    "urban_transit",
+    "agriculture",
+    "weather_station",
+    "community_clinic",
+    "manufacturing",
+    "astronomy",
+    "marine_ecology",
+    "school_experiment",
+    "archaeology",
+    "renewable_energy",
+    "software_reliability",
+    "supply_chain",
+    "community_festival",
+    "market_analysis"
+  ],
+  "styles": [
+    "field_report",
+    "planning_note",
+    "cause_and_effect",
+    "procedure",
+    "comparison",
+    "public_briefing",
+    "historical_record",
+    "decision_review"
+  ],
+  "sha256": {
+    "english": "ed57fc5ec312d71c747dff8053ac4217cd5698ff507a1fde426ff8d423e44fbd",
+    "chinese_simplified": "15a391654e29fe9ffdcca850bb5451f86fa6c096312901649a892e74abb856a8",
+    "mixed": "f5359657ec1b5c2e4891c399b0b633068f731fce13ba879d41d032d1262fd105"
+  }
+}

@@ -100,6 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
     visual.add_argument("--input-top-k", type=int, default=15)
     visual.add_argument("--tokenizer", required=True)
     visual.add_argument("--max-seq-len", type=int, default=256)
+
+    serve = commands.add_parser(
+        "serve", help="serve an interactive Jacobian-lens prompt explorer"
+    )
+    serve.add_argument("--model", required=True)
+    serve.add_argument(
+        "--lens",
+        help="defaults to artifacts/lenses/<model>/jacobian_lens.pt",
+    )
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8322)
     return parser
 
 
@@ -156,6 +167,13 @@ def main() -> None:
             tokenizer_path=args.tokenizer,
             max_seq_len=args.max_seq_len,
         )
+    elif args.command == "serve":
+        import uvicorn
+
+        from llm_bias.prompt_analysis.interactive import build_app
+
+        app = build_app(args.model, args.lens)
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

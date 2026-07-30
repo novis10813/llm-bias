@@ -23,32 +23,44 @@ test -d .cache/models/qwen3.5-4b
 test -f sp500_r1k_r2k_entityBiasPrompt.csv
 ```
 
-## 1. 獨立建立 Jacobian lens
+## 1. 準備 model-specific canonical Jacobian lens
 
-Prompt analysis 需要 stride-1 lens 才能保留每個 intermediate layer：
+Canonical lens 必須保留每個 intermediate layer。Qwen3.5-4B 已使用 English-only、
+Simplified-Chinese-only 與 mixed 各 128 題完成 controlled selection；完整設計、
+重跑方式與結果見
+[Qwen3.5-4B Jacobian-lens calibration 與候選選擇](qwen-jacobian-lens-selection.md)。
+
+一般新模型可以先使用 standalone fitter 建立 experimental lens，但不要用小型
+smoke calibration 直接覆寫已有的 validated canonical artifact：
 
 ```bash
 uv run fit-jacobian-lens \
-  --model .cache/models/qwen3.5-4b \
-  --output artifacts/lenses/qwen3.5-4b/stride1/jacobian_lens.pt \
+  --model /path/to/new-model \
+  --output artifacts/candidate_lenses/new-model/smoke/jacobian_lens.pt \
   --calibration-prompts 16 \
-  --layer-stride 1 \
   --dim-batch 16 \
   --max-seq-len 128
 ```
 
-輸出為：
+Qwen production workflow 使用：
+
+```bash
+bash scripts/run_qwen_lens_candidates.sh
+```
+
+選出的 active artifact 為：
 
 ```text
-artifacts/lenses/qwen3.5-4b/stride1/
+artifacts/lenses/qwen3.5-4b/
 ├── jacobian_lens.pt
-├── jacobian_lens.pt.checkpoint.pt
-└── jacobian_lens.pt.metadata.json
+├── jacobian_lens.pt.metadata.json
+└── selection.json
 ```
 
 Metadata 記錄模型、hidden width、layers、fitting 參數、calibration digest 與
-jlens version。若 fitting 中斷，以完全相同的 output path 重跑，jlens 會嘗試使用
-checkpoint。
+jlens version。Checkpoint 與 partial/experimental lens 不放在 active model lens
+folder；若 fitting 中斷，以完全相同的 model/output 與 calibration 重跑即可
+繼續。
 
 也可以使用外部 calibration prompts。純文字格式為每行一個 prompt；JSONL
 則預設讀取 `text` 欄位：
@@ -59,8 +71,7 @@ uv run fit-jacobian-lens \
   --calibration-file calibration.jsonl \
   --calibration-field text \
   --calibration-prompts 32 \
-  --output artifacts/lenses/my-model/stride1/jacobian_lens.pt \
-  --layer-stride 1
+  --output artifacts/candidate_lenses/my-model/experiment/jacobian_lens.pt
 ```
 
 ## 2. 執行 prompt-analysis
@@ -69,7 +80,7 @@ uv run fit-jacobian-lens \
 
 ```text
 MODEL=.cache/models/qwen3.5-4b
-LENS=artifacts/lenses/qwen3.5-4b/stride1/jacobian_lens.pt
+LENS=artifacts/lenses/qwen3.5-4b/jacobian_lens.pt
 RUN_ROOT=artifacts/prompt_analysis/qwen3.5-4b
 ```
 
@@ -96,7 +107,7 @@ RUN_IN_TMUX=0 bash scripts/run_prompt_analysis.sh
 
 ```bash
 MODEL=/path/to/model \
-LENS=artifacts/lenses/my-model/stride1/jacobian_lens.pt \
+LENS=artifacts/lenses/my-model/jacobian_lens.pt \
 RUN_ROOT=artifacts/prompt_analysis/my-model/repro-001 \
 SESSION=prompt_analysis_repro_001 \
 bash scripts/run_prompt_analysis.sh
@@ -126,7 +137,7 @@ ${RUN_ROOT}/
 | 變數 | 預設值 |
 |---|---|
 | `MODEL` | `.cache/models/qwen3.5-4b` |
-| `LENS` | `artifacts/lenses/qwen3.5-4b/stride1/jacobian_lens.pt` |
+| `LENS` | `artifacts/lenses/qwen3.5-4b/jacobian_lens.pt` |
 | `INPUT_CSV` | `sp500_r1k_r2k_entityBiasPrompt.csv` |
 | `RUN_ROOT` | `artifacts/prompt_analysis/qwen3.5-4b` |
 | `READOUT_BATCH_SIZE` | `32` |
@@ -184,7 +195,7 @@ ${RUN_ROOT}/visualization/
 ## 完成檢查
 
 ```bash
-test -f artifacts/lenses/qwen3.5-4b/stride1/jacobian_lens.pt
+test -f artifacts/lenses/qwen3.5-4b/jacobian_lens.pt
 test -f artifacts/prompt_analysis/qwen3.5-4b/per_date/prompt_layer_uncertainty.jsonl
 test -f artifacts/prompt_analysis/qwen3.5-4b/generated_attribution/generated_token_attribution.jsonl
 test -f artifacts/prompt_analysis/qwen3.5-4b/visualization/attribution_dashboard.html

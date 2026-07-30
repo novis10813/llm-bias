@@ -1,0 +1,64 @@
+{"id":"en-00","pair_id":"carnival_ocean","language":"en","prompt":"The ocean beside the country most famous for Carnival is the","native_intermediate":"Brazil","crosslingual_intermediate":"巴西","target":"Atlantic"}
+{"id":"zh-CN-00","pair_id":"carnival_ocean","language":"zh-CN","prompt":"狂欢节最著名的国家濒临的海洋是","native_intermediate":"巴西","crosslingual_intermediate":"Brazil","target":"大西洋"}
+{"id":"en-01","pair_id":"amazon_language","language":"en","prompt":"The main language of the country where the Amazon River reaches the sea is","native_intermediate":"Brazil","crosslingual_intermediate":"巴西","target":"Portuguese"}
+{"id":"zh-CN-01","pair_id":"amazon_language","language":"zh-CN","prompt":"亚马孙河入海口所在国家的主要语言是","native_intermediate":"巴西","crosslingual_intermediate":"Brazil","target":"葡萄牙语"}
+{"id":"en-02","pair_id":"web_animal_legs","language":"en","prompt":"The number of legs on the animal that spins webs is","native_intermediate":"spider","crosslingual_intermediate":"蜘蛛","target":"eight"}
+{"id":"zh-CN-02","pair_id":"web_animal_legs","language":"zh-CN","prompt":"会织网的动物有多少条腿，答案是","native_intermediate":"蜘蛛","crosslingual_intermediate":"spider","target":"八"}
+{"id":"en-03","pair_id":"fourth_planet_color","language":"en","prompt":"The usual color associated with the fourth planet from the Sun is","native_intermediate":"Mars","crosslingual_intermediate":"火星","target":"red"}
+{"id":"zh-CN-03","pair_id":"fourth_planet_color","language":"zh-CN","prompt":"与太阳系第四颗行星最常联系的颜色是","native_intermediate":"火星","crosslingual_intermediate":"Mars","target":"红色"}
+{"id":"en-04","pair_id":"paper_continent","language":"en","prompt":"The continent containing the country where paper was invented is","native_intermediate":"China","crosslingual_intermediate":"中国","target":"Asia"}
+{"id":"zh-CN-04","pair_id":"paper_continent","language":"zh-CN","prompt":"发明造纸术的国家所在的大洲是","native_intermediate":"中国","crosslingual_intermediate":"China","target":"亚洲"}
+{"id":"en-05","pair_id":"boot_country_capital","language":"en","prompt":"The capital of the European country shaped like a boot is","native_intermediate":"Italy","crosslingual_intermediate":"意大利","target":"Rome"}
+{"id":"zh-CN-05","pair_id":"boot_country_capital","language":"zh-CN","prompt":"那个形状像靴子的欧洲国家的首都是","native_intermediate":"意大利","crosslingual_intermediate":"Italy","target":"罗马"}
+{"id":"en-06","pair_id":"eiffel_currency","language":"en","prompt":"The currency used in the country containing the Eiffel Tower is the","native_intermediate":"France","crosslingual_intermediate":"法国","target":"euro"}
+{"id":"zh-CN-06","pair_id":"eiffel_currency","language":"zh-CN","prompt":"拥有埃菲尔铁塔的国家所使用的货币是","native_intermediate":"法国","crosslingual_intermediate":"France","target":"欧元"}
+{"id":"en-07","pair_id":"pyramid_river","language":"en","prompt":"The river flowing past the country famous for the pyramids is the","native_intermediate":"Egypt","crosslingual_intermediate":"埃及","target":"Nile"}
+{"id":"zh-CN-07","pair_id":"pyramid_river","language":"zh-CN","prompt":"流经以金字塔闻名的国家的河流是","native_intermediate":"埃及","crosslingual_intermediate":"Egypt","target":"尼罗河"}
+{"id":"en-08","pair_id":"wool_animal","language":"en","prompt":"The farm animal whose coat is commonly turned into wool is a","native_intermediate":"sheep","crosslingual_intermediate":"羊","target":"sheep"}
+{"id":"zh-CN-08","pair_id":"wool_animal","language":"zh-CN","prompt":"身上的毛通常被制成羊毛的农场动物是","native_intermediate":"羊","crosslingual_intermediate":"sheep","target":"羊"}
+{"id":"en-09","pair_id":"honey_insect","language":"en","prompt":"The insect that visits flowers and stores honey is a","native_intermediate":"bee","crosslingual_intermediate":"蜂","target":"bee"}
+{"id":"zh-CN-09","pair_id":"honey_insect","language":"zh-CN","prompt":"采花并储存蜂蜜的昆虫是","native_intermediate":"蜂","crosslingual_intermediate":"bee","target":"蜜蜂"}
+{"id":"en-10","pair_id":"barking_animal","language":"en","prompt":"The domestic animal most closely associated with barking is a","native_intermediate":"dog","crosslingual_intermediate":"狗","target":"dog"}
+{"id":"zh-CN-10","pair_id":"barking_animal","language":"zh-CN","prompt":"最常与吠叫联系在一起的家养动物是","native_intermediate":"狗","crosslingual_intermediate":"dog","target":"狗"}
+{"id":"en-11","pair_id":"purring_animal","language":"en","prompt":"The domestic animal known for purring when comfortable is a","native_intermediate":"cat","crosslingual_intermediate":"猫","target":"cat"}
+{"id":"zh-CN-11","pair_id":"purring_animal","language":"zh-CN","prompt":"感到舒适时会发出呼噜声的家养动物是","native_intermediate":"猫","crosslingual_intermediate":"cat","target":"猫"}
+{"id":"en-12","pair_id":"trunk_animal","language":"en","prompt":"The very large land animal that uses a trunk to lift objects is an","native_intermediate":"elephant","crosslingual_intermediate":"象","target":"elephant"}
+{"id":"zh-CN-12","pair_id":"trunk_animal","language":"zh-CN","prompt":"用长鼻子卷起物品的大型陆地动物是","native_intermediate":"象","crosslingual_intermediate":"elephant","target":"大象"}
+{"id":"en-13","pair_id":"shell_animal","language":"en","prompt":"The slow animal protected by a hard shell is a","native_intermediate":"turtle","crosslingual_intermediate":"龟","target":"turtle"}
+{"id":"zh-CN-13","pair_id":"shell_animal","language":"zh-CN","prompt":"受到坚硬外壳保护并且行动缓慢的动物是","native_intermediate":"龟","crosslingual_intermediate":"turtle","target":"乌龟"}
+{"id":"en-14","pair_id":"howling_animal","language":"en","prompt":"The wild animal that lives in packs and is famous for howling is a","native_intermediate":"wolf","crosslingual_intermediate":"狼","target":"wolf"}
+{"id":"zh-CN-14","pair_id":"howling_animal","language":"zh-CN","prompt":"成群生活并以嚎叫闻名的野生动物是","native_intermediate":"狼","crosslingual_intermediate":"wolf","target":"狼"}
+{"id":"en-15","pair_id":"hibernating_animal","language":"en","prompt":"The large animal often described as hibernating through winter is a","native_intermediate":"bear","crosslingual_intermediate":"熊","target":"bear"}
+{"id":"zh-CN-15","pair_id":"hibernating_animal","language":"zh-CN","prompt":"经常被描述为冬季冬眠的大型动物是","native_intermediate":"熊","crosslingual_intermediate":"bear","target":"熊"}
+{"id":"en-16","pair_id":"antler_animal","language":"en","prompt":"The woodland animal whose males commonly grow antlers is a","native_intermediate":"deer","crosslingual_intermediate":"鹿","target":"deer"}
+{"id":"zh-CN-16","pair_id":"antler_animal","language":"zh-CN","prompt":"雄性通常会长出鹿角的林地动物是","native_intermediate":"鹿","crosslingual_intermediate":"deer","target":"鹿"}
+{"id":"en-17","pair_id":"saddle_animal","language":"en","prompt":"The animal traditionally fitted with a saddle for riding is a","native_intermediate":"horse","crosslingual_intermediate":"马","target":"horse"}
+{"id":"zh-CN-17","pair_id":"saddle_animal","language":"zh-CN","prompt":"传统上会装上马鞍供人骑乘的动物是","native_intermediate":"马","crosslingual_intermediate":"horse","target":"马"}
+{"id":"en-18","pair_id":"dairy_animal","language":"en","prompt":"The farm animal most commonly associated with producing milk is a","native_intermediate":"cow","crosslingual_intermediate":"牛","target":"cow"}
+{"id":"zh-CN-18","pair_id":"dairy_animal","language":"zh-CN","prompt":"最常与生产牛奶联系在一起的农场动物是","native_intermediate":"牛","crosslingual_intermediate":"cow","target":"奶牛"}
+{"id":"en-19","pair_id":"quacking_animal","language":"en","prompt":"The water bird whose call is usually written as quack is a","native_intermediate":"duck","crosslingual_intermediate":"鸭","target":"duck"}
+{"id":"zh-CN-19","pair_id":"quacking_animal","language":"zh-CN","prompt":"叫声通常被写成嘎嘎声的水鸟是","native_intermediate":"鸭","crosslingual_intermediate":"duck","target":"鸭子"}
+{"id":"en-20","pair_id":"prey_bird","language":"en","prompt":"The large bird of prey often used as a national symbol is an","native_intermediate":"eagle","crosslingual_intermediate":"鹰","target":"eagle"}
+{"id":"zh-CN-20","pair_id":"prey_bird","language":"zh-CN","prompt":"经常被用作国家象征的大型猛禽是","native_intermediate":"鹰","crosslingual_intermediate":"eagle","target":"鹰"}
+{"id":"en-21","pair_id":"frozen_water","language":"en","prompt":"When liquid water freezes, the solid material formed is","native_intermediate":"ice","crosslingual_intermediate":"冰","target":"ice"}
+{"id":"zh-CN-21","pair_id":"frozen_water","language":"zh-CN","prompt":"液态水冻结后形成的固体物质是","native_intermediate":"冰","crosslingual_intermediate":"ice","target":"冰"}
+{"id":"en-22","pair_id":"condensed_vapor","language":"en","prompt":"When ordinary vapor cools and condenses, the liquid formed is","native_intermediate":"water","crosslingual_intermediate":"水","target":"water"}
+{"id":"zh-CN-22","pair_id":"condensed_vapor","language":"zh-CN","prompt":"普通水蒸气冷却凝结后形成的液体是","native_intermediate":"水","crosslingual_intermediate":"water","target":"水"}
+{"id":"en-23","pair_id":"opposite_small","language":"en","prompt":"The ordinary opposite of the word small is","native_intermediate":"big","crosslingual_intermediate":"大","target":"big"}
+{"id":"zh-CN-23","pair_id":"opposite_small","language":"zh-CN","prompt":"“小”这个词通常对应的反义词是","native_intermediate":"大","crosslingual_intermediate":"big","target":"大"}
+{"id":"en-24","pair_id":"opposite_hot","language":"en","prompt":"The ordinary opposite of the word hot is","native_intermediate":"cold","crosslingual_intermediate":"冷","target":"cold"}
+{"id":"zh-CN-24","pair_id":"opposite_hot","language":"zh-CN","prompt":"“热”这个词通常对应的反义词是","native_intermediate":"冷","crosslingual_intermediate":"cold","target":"冷"}
+{"id":"en-25","pair_id":"season_after_summer","language":"en","prompt":"The season that follows summer is","native_intermediate":"autumn","crosslingual_intermediate":"秋","target":"autumn"}
+{"id":"zh-CN-25","pair_id":"season_after_summer","language":"zh-CN","prompt":"夏季之后的季节是","native_intermediate":"秋","crosslingual_intermediate":"autumn","target":"秋季"}
+{"id":"en-26","pair_id":"sunrise_direction","language":"en","prompt":"The compass direction where the Sun appears to rise is","native_intermediate":"east","crosslingual_intermediate":"东","target":"east"}
+{"id":"zh-CN-26","pair_id":"sunrise_direction","language":"zh-CN","prompt":"太阳升起时所在的方向是","native_intermediate":"东","crosslingual_intermediate":"east","target":"东方"}
+{"id":"en-27","pair_id":"opposite_north","language":"en","prompt":"The compass direction opposite north is","native_intermediate":"south","crosslingual_intermediate":"南","target":"south"}
+{"id":"zh-CN-27","pair_id":"opposite_north","language":"zh-CN","prompt":"与北方相反的方向是","native_intermediate":"南","crosslingual_intermediate":"south","target":"南方"}
+{"id":"en-28","pair_id":"clear_sky_color","language":"en","prompt":"The color most often used to describe a clear daytime sky is","native_intermediate":"blue","crosslingual_intermediate":"蓝","target":"blue"}
+{"id":"zh-CN-28","pair_id":"clear_sky_color","language":"zh-CN","prompt":"最常用来形容晴朗白天天空的颜色是","native_intermediate":"蓝","crosslingual_intermediate":"blue","target":"蓝色"}
+{"id":"en-29","pair_id":"banana_color","language":"en","prompt":"The typical color of a ripe banana is","native_intermediate":"yellow","crosslingual_intermediate":"黄","target":"yellow"}
+{"id":"zh-CN-29","pair_id":"banana_color","language":"zh-CN","prompt":"成熟香蕉通常呈现的颜色是","native_intermediate":"黄","crosslingual_intermediate":"yellow","target":"黄色"}
+{"id":"en-30","pair_id":"grass_color","language":"en","prompt":"The typical color of healthy grass is","native_intermediate":"green","crosslingual_intermediate":"绿","target":"green"}
+{"id":"zh-CN-30","pair_id":"grass_color","language":"zh-CN","prompt":"健康草地通常呈现的颜色是","native_intermediate":"绿","crosslingual_intermediate":"green","target":"绿色"}
+{"id":"en-31","pair_id":"snow_color","language":"en","prompt":"The color conventionally associated with fresh snow is","native_intermediate":"white","crosslingual_intermediate":"白","target":"white"}
+{"id":"zh-CN-31","pair_id":"snow_color","language":"zh-CN","prompt":"通常与新雪联系在一起的颜色是","native_intermediate":"白","crosslingual_intermediate":"white","target":"白色"}

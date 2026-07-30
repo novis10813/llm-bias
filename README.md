@@ -50,21 +50,20 @@ uv run hf download Qwen/Qwen3.5-4B \
   > artifacts/qwen3.5_download.log 2>&1
 ```
 
-Fit a separate lens for Qwen because its residual width and layer count differ
-from Llama, then pass the same model and Qwen lens to the patch/dashboard
-commands:
+Qwen requires its own lens because its residual width and layer count differ
+from Llama. Use the controlled three-candidate workflow below instead of
+overwriting its canonical lens with the standalone fitter's small built-in
+smoke corpus. The winner is promoted to the model-specific canonical path
+`artifacts/lenses/qwen3.5-4b/jacobian_lens.pt`:
 
 ```bash
-uv run fit-jacobian-lens \
-  --model .cache/models/qwen3.5-4b \
-  --output artifacts/lenses/qwen3.5-4b/stride2/jacobian_lens.pt
+bash scripts/run_qwen_lens_candidates.sh
 uv run counterfactual-patching run \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/lenses/qwen3.5-4b/stride2/jacobian_lens.pt \
+  --lens artifacts/lenses/qwen3.5-4b/jacobian_lens.pt \
   --output artifacts/counterfactual_patching/qwen3.5-4b/patch_results.jsonl
 uv run counterfactual-patching serve \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/lenses/qwen3.5-4b/stride2/jacobian_lens.pt \
   --pairs artifacts/counterfactual_patching/pairs.jsonl
 ```
 
@@ -75,15 +74,12 @@ uv sync
 uv run pytest
 uv run fit-jacobian-lens \
   --model .cache/models/llama-3.2-1b-instruct \
-  --output artifacts/lenses/llama-3.2-1b-instruct/stride4/jacobian_lens.pt \
-  --calibration-prompts 16 \
-  --layer-stride 4
+  --calibration-prompts 16
 uv run counterfactual-patching prepare-data
 uv run counterfactual-patching run \
-  --lens artifacts/lenses/llama-3.2-1b-instruct/stride4/jacobian_lens.pt
+  --lens artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt
 uv run counterfactual-patching visualize
-uv run counterfactual-patching serve \
-  --lens artifacts/lenses/llama-3.2-1b-instruct/stride4/jacobian_lens.pt
+uv run counterfactual-patching serve
 ```
 
 The last command starts a local interactive counterfactual dashboard at
@@ -99,6 +95,72 @@ numbers. Results are written under `artifacts/counterfactual_patching/`.
 The visualization command writes the corrected transfer curve,
 `patch_transfer_heatmap.png`, and `jacobian_readout_heatmap.png`.
 
+## Qwen bilingual Jacobian-lens selection
+
+完整 calibration design、fitting/recovery、holdout metric、2026-07-30 結果、
+uncertainty 與 promotion provenance 見
+[Qwen3.5-4B Jacobian-lens calibration 與候選選擇](docs/qwen-jacobian-lens-selection.md)。
+
+Qwen3.5-4B uses a controlled three-candidate calibration experiment:
+
+- `english`: 128 English passages.
+- `chinese_simplified`: 128 Simplified-Chinese passages.
+- `mixed`: 64 English and 64 Simplified-Chinese passages.
+
+The conditions share the same 16 domains × 8 discourse styles, keeping content
+composition and Qwen token lengths closely matched. Regenerate and verify the
+tracked inputs with:
+
+```bash
+uv run python scripts/prepare_qwen_calibration.py
+uv run python scripts/prepare_qwen_lens_eval.py
+```
+
+Fit all three complete 31-source-layer candidates in a resumable tmux session:
+
+```bash
+bash scripts/run_qwen_lens_candidates.sh
+tmux attach -t qwen_lens_candidates
+```
+
+Candidates use the Qwen chat template with thinking disabled, `skip_first=16`,
+and checkpoints keyed by the hash of the exact formatted calibration corpus.
+Selection uses a separate 32-pair/64-prompt bilingual holdout. The
+preregistered primary metric is balanced English/Chinese mean log10 rank of
+one canonical native-language token over layers L11–L23 (leading-space token
+for English, raw token for Chinese); the corresponding canonical cross-lingual
+token rank is the tie-break. After all fits finish, the runner evaluates the candidates,
+archives the prior canonical Qwen lens, and promotes the winner to
+`artifacts/lenses/qwen3.5-4b/jacobian_lens.pt`.
+
+The evaluation also reports paired uncertainty across the 32 semantic pairs:
+a deterministic 10,000-resample bootstrap confidence interval and a
+one-sided sign-flip permutation p-value for the selected candidate against
+each alternative. These are descriptive, not confirmatory, because the same
+holdout is used both to select the winner and to quantify its advantage.
+
+The completed run selected `chinese_simplified` under the fixed primary metric:
+balanced native mean log10 ranks were 3.826620 (Chinese-only), 3.881337
+(mixed), and 3.889848 (English-only). Both paired 95% intervals for the
+winner's advantage cross zero, so this is an operational selection, not
+evidence that Chinese-only calibration is generally superior.
+
+## Interactive Prompt Lens Dashboard
+
+任意 prompt 的完整逐層 readout 與模型實際 greedy response 操作、API schema 和
+研究解讀限制見
+[Interactive Prompt Lens Dashboard](docs/interactive-prompt-lens-dashboard.md)。
+
+```bash
+uv run prompt-analysis serve \
+  --model .cache/models/qwen3.5-4b \
+  --host 0.0.0.0 \
+  --port 8322
+```
+
+The server resolves the canonical model lens automatically, rejects
+wrong-model or incomplete lens artifacts, and never saves raw activations.
+
 ## Average prompt-output distributions
 
 `prompt-analysis readout` reads every `prompt_with_context_*` and
@@ -113,14 +175,14 @@ or `--raw-prompt` for an unformatted base-model read.
 
 The aggregate is computed by averaging the complete vocabulary softmax for
 each condition before selecting its top-k. This is different from averaging
-only the per-prompt top-k entries, which would bias the result. Use the
-stride-1 lens to retain every intermediate layer:
+only the per-prompt top-k entries, which would bias the result. The canonical
+lens retains every intermediate layer:
 
 ```bash
 uv run prompt-analysis readout \
   --input sp500_r1k_r2k_entityBiasPrompt.csv \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/lenses/qwen3.5-4b/stride1/jacobian_lens.pt \
+  --lens artifacts/lenses/qwen3.5-4b/jacobian_lens.pt \
   --top-k 15 \
   --batch-size 32 \
   --attribution-batch-size 8 \
@@ -177,7 +239,7 @@ expensive fitting job. Override settings with environment variables:
 
 ```bash
 MODEL=/path/to/another-model \
-LENS=artifacts/lenses/another-model/stride1/jacobian_lens.pt \
+LENS=artifacts/lenses/another-model/jacobian_lens.pt \
 RUN_ROOT=artifacts/prompt_analysis/another-model \
 ATTR_SAMPLE_PER_CONDITION=32 \
 bash scripts/run_prompt_analysis.sh
@@ -263,3 +325,19 @@ uv run prompt-analysis validate-attribution \
 
 Pass the resulting `semantic_scope_aopc.jsonl` with `--validation` when
 rebuilding the dashboard to show per-output-token AOPC values.
+## Interactive prompt lens explorer
+
+輸入任意 prompt，查看每個 fitted Jacobian-lens layer 與 token position 的
+top-k readout、entropy、kurtosis 與 layer diagnostics：
+
+```bash
+uv run prompt-analysis serve \
+  --model .cache/models/llama-3.2-1b-instruct \
+  --host 0.0.0.0 \
+  --port 8322
+```
+
+開啟 `http://localhost:8322`。Dashboard 預設會使用同一個 model 與 chat
+template 顯示 deterministic greedy response；`Output tokens` 可控制回答長度，
+也可關閉「顯示模型回答」以降低延遲。互動 API 只回傳 compact top-k／統計資料
+與生成文字，不保存 raw activations。

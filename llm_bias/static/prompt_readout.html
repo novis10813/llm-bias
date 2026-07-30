@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Prompt Lens Explorer</title>
+    <link rel="stylesheet" href="/static/prompt_readout.css?v=3" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="Prompt Lens Explorer">
+        <span class="brand-mark">J</span>
+        <span>Prompt Lens <i>Explorer</i></span>
+      </a>
+      <div class="model-meta">
+        <span class="live-dot"></span>
+        <span id="model-meta">正在連接模型…</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Residual stream observatory</p>
+          <h1>看見 prompt 在<br /><em>每一層</em>如何被讀出。</h1>
+        </div>
+        <p class="hero-note">
+          Jacobian lens 將中間 residual state transport 到最終 readout space。
+          這是連續表徵的診斷工具，不是模型的 chain-of-thought。
+        </p>
+      </section>
+
+      <section class="composer" aria-labelledby="prompt-label">
+        <div class="composer-top">
+          <label id="prompt-label" for="prompt">Prompt</label>
+          <span id="character-count">0 characters</span>
+        </div>
+        <textarea
+          id="prompt"
+          rows="5"
+          spellcheck="false"
+          placeholder="輸入任何你想分析的 prompt…"
+        >The CEO announced a surprisingly strong quarter. What is the likely market reaction?</textarea>
+        <div class="toolbar">
+          <div class="field">
+            <label for="mode">Readout</label>
+            <select id="mode">
+              <option value="jlens">Jacobian lens</option>
+              <option value="logit">Logit lens</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="top-k">Top-k</label>
+            <input id="top-k" type="number" min="1" max="32" value="8" />
+          </div>
+          <div class="field">
+            <label for="max-seq-len">Max tokens</label>
+            <input id="max-seq-len" type="number" min="8" max="2048" value="256" />
+          </div>
+          <div class="field">
+            <label for="max-new-tokens">Output tokens</label>
+            <input id="max-new-tokens" type="number" min="1" max="256" value="64" />
+          </div>
+          <label class="toggle">
+            <input id="chat" type="checkbox" checked />
+            <span></span>
+            Chat template
+          </label>
+          <label
+            class="toggle"
+            title="關閉時以 enable_thinking=false 格式化 prompt"
+          >
+            <input id="reasoning" type="checkbox" />
+            <span></span>
+            Reasoning
+          </label>
+          <label class="toggle">
+            <input id="continuation" type="checkbox" checked />
+            <span></span>
+            顯示模型回答
+          </label>
+          <button id="run" type="button">
+            <span class="button-label">分析 prompt</span>
+            <span class="button-arrow">↗</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="lens-warning" class="lens-warning" hidden></section>
+      <section id="error" class="error" hidden></section>
+
+      <section id="results" class="results" hidden>
+        <div class="result-heading">
+          <div>
+            <p class="eyebrow">Layer × token readout</p>
+            <h2>Residual trajectory</h2>
+          </div>
+          <div id="summary" class="summary"></div>
+        </div>
+
+        <div id="continuation-card" class="continuation-card" hidden>
+          <span>Model response · greedy</span>
+          <p id="continuation-text"></p>
+        </div>
+
+        <div class="view-controls">
+          <div class="legend">
+            <span><i class="low"></i> lower confidence</span>
+            <span><i class="high"></i> higher confidence</span>
+            <span class="legend-note">點選格子可固定詳細資料</span>
+          </div>
+          <div class="position-control">
+            <label for="position">Focus position</label>
+            <select id="position"></select>
+          </div>
+        </div>
+
+        <div class="workspace">
+          <div class="grid-shell">
+            <div id="grid" class="grid" role="table" aria-label="Layer by token readout grid"></div>
+          </div>
+          <aside id="inspector" class="inspector">
+            <p class="inspector-kicker">Cell inspector</p>
+            <h3>選擇一個 readout cell</h3>
+            <p class="inspector-empty">Hover 或點選 grid，查看該 layer 與 token position 的完整 top-k 分布。</p>
+          </aside>
+        </div>
+
+        <section class="metrics-section">
+          <div>
+            <p class="eyebrow">Layer diagnostics</p>
+            <h2>Workspace signals</h2>
+          </div>
+          <div class="metric-legend">
+            next-token accuracy、logit kurtosis 與 adjacent top-1 agreement
+          </div>
+          <div id="layer-metrics" class="layer-metrics"></div>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      <span>Prompt Lens Explorer</span>
+      <span>Compact top-k readouts only · raw activations are not persisted</span>
+    </footer>
+    <script src="/static/prompt_readout.js?v=5"></script>
+  </body>
+</html>

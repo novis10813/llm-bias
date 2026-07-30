@@ -45,7 +45,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     serve = commands.add_parser("serve")
     _model_argument(serve)
-    serve.add_argument("--lens", required=True)
+    serve.add_argument(
+        "--lens",
+        help="defaults to artifacts/lenses/<model>/jacobian_lens.pt",
+    )
     serve.add_argument("--pairs", default=f"{DEFAULT_ROOT}/pairs.jsonl")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8321)

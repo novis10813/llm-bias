@@ -19,6 +19,10 @@ from pydantic import BaseModel, Field
 from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
+from llm_bias.core.lens_artifacts import (
+    canonical_lens_path,
+    validate_lens_for_model,
+)
 from llm_bias.core.model import load_model as load_lens_model
 from llm_bias.counterfactual_patching.data import Pair, load_saved_pairs
 from llm_bias.counterfactual_patching.interventions import (
@@ -29,7 +33,6 @@ from llm_bias.counterfactual_patching.interventions import (
 LOGGER = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 DEFAULT_PAIRS = "artifacts/counterfactual_patching/pairs.jsonl"
-DEFAULT_LENS = "artifacts/lenses/jacobian_lens.pt"
 
 
 @dataclass
@@ -270,18 +273,26 @@ def read_counterfactual(
 
 def build_app(
     model_name: str,
-    lens_path: str,
+    lens_path: str | None = None,
     pairs_path: str = DEFAULT_PAIRS,
 ) -> FastAPI:
     """Build a local app while keeping the model resident in memory."""
     _record_dependency_versions()
+    resolved_lens_path = str(lens_path or canonical_lens_path(model_name))
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
-    lens = JacobianLens.load(lens_path)
-    if lens.d_model != model.d_model:
-        raise ValueError(f"lens d_model={lens.d_model} does not match model d_model={model.d_model}")
+    lens = JacobianLens.load(resolved_lens_path)
+    validate_lens_for_model(
+        model=model,
+        lens=lens,
+        model_name=model_name,
+        lens_path=resolved_lens_path,
+        require_complete=True,
+    )
     pairs = {pair.pair_id: pair for pair in load_saved_pairs(pairs_path)}
-    state = VisualizationState(model, lens, pairs, model_name, lens_path)
+    state = VisualizationState(
+        model, lens, pairs, model_name, resolved_lens_path
+    )
     app = FastAPI(title="Entity Bias · J-space")
 
     @app.get("/api/info")
@@ -343,7 +354,10 @@ def build_app(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=".cache/models/llama-3.2-1b-instruct")
-    parser.add_argument("--lens", default=DEFAULT_LENS)
+    parser.add_argument(
+        "--lens",
+        help="defaults to artifacts/lenses/<model>/jacobian_lens.pt",
+    )
     parser.add_argument("--pairs", default=DEFAULT_PAIRS)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8321)

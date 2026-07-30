@@ -94,6 +94,9 @@
 - 新環境請依照 `README.md` clone 兩個外部 repo 後再執行 `uv sync`。
 - 不要把模型權重、patch 結果、lens binary 或第三方 checkout 加入 root Git
   repository。這些內容位於 `.cache/`、`artifacts/`、`third_party/`。
+- 每個 model 只有一個 active、完整逐層的 canonical lens：
+  `artifacts/lenses/<model>/jacobian_lens.pt`。Partial/stride 實驗與 fitting
+  checkpoint 必須放在 `artifacts/archive/`，不可混入 active model folder。
 
 ## 常用驗證
 
@@ -110,7 +113,6 @@ uv build
 uv run counterfactual-patching serve \
   --host 0.0.0.0 \
   --port 8321 \
-  --lens artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens_16.pt \
   --pairs artifacts/counterfactual_patching/pairs.jsonl
 ```
 

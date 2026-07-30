@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "design": "32_semantically_paired_bilingual_intermediate_prompts",
+  "count": 64,
+  "languages": {
+    "en": 32,
+    "zh-CN": 32
+  },
+  "sha256": "cefa319537ce8665b8a1ec2a0bed9a3f3d666471d599b0e1e6ca4abee7cfeaf3"
+}

@@ -5,9 +5,11 @@ from pathlib import Path
 from llm_bias.counterfactual_patching.cli import build_parser as patch_parser
 from llm_bias.counterfactual_patching.data import default_spec_path
 from llm_bias.counterfactual_patching.visualization import STATIC_DIR
+from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.lens_fitting.calibration import load_calibration_prompts
 from llm_bias.lens_fitting.cli import build_parser as lens_parser
 from llm_bias.prompt_analysis.cli import build_parser as prompt_parser
+from llm_bias.prompt_analysis.interactive import STATIC_DIR as PROMPT_STATIC_DIR
 
 
 def _llm_bias_imports(package: Path) -> set[str]:
@@ -45,6 +47,7 @@ def test_experiment_packages_do_not_import_each_other():
 def test_moved_package_resources_resolve_from_repository_root():
     assert default_spec_path().is_file()
     assert (STATIC_DIR / "counterfactual.html").is_file()
+    assert (PROMPT_STATIC_DIR / "prompt_readout.html").is_file()
 
 
 def test_independent_cli_command_sets():
@@ -63,10 +66,17 @@ def test_independent_cli_command_sets():
         "attribute",
         "validate-attribution",
         "visualize",
+        "serve",
     }
     assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
-    assert lens_parser().parse_args([]).output.endswith("jacobian_lens.pt")
+    lens_args = lens_parser().parse_args([])
+    assert lens_args.output is None
+    assert lens_args.layer_stride == 1
+    assert lens_args.checkpoint_every == 4
+    assert canonical_lens_path(lens_args.model) == Path(
+        "artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt"
+    )
 
 
 def test_load_calibration_prompts_supports_text_and_jsonl(tmp_path):
