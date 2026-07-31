@@ -29,6 +29,19 @@ class Pair:
     answer_target_token: int
     source_entity_token_ids: list[int] | None = None
     target_entity_token_ids: list[int] | None = None
+    task_type: str = "factual_counterfactual"
+    content_id: str | None = None
+    contrast_id: str | None = None
+    condition: str | None = None
+    pairing_strategy: str | None = None
+    direction: str | None = None
+    expected_outcome: str | None = None
+    outcome_options: list[str] | None = None
+    margin_definition: str | None = None
+    dataset_status: str | None = None
+    source_entity_id: str | None = None
+    target_entity_id: str | None = None
+    tokenizer_name: str | None = None
 
     def __post_init__(self) -> None:
         """Normalize legacy single-token pairs to the span representation."""
@@ -63,7 +76,7 @@ def default_spec_path() -> Path:
     )
 
 
-def _token_span(tokenizer: Any, text: str, start: int, end: int) -> tuple[int, int] | None:
+def token_span(tokenizer: Any, text: str, start: int, end: int) -> tuple[int, int] | None:
     encoded = tokenizer(
         text,
         add_special_tokens=True,
@@ -129,10 +142,10 @@ def load_pairs(
                         continue
                     source_prompt = prefix + source + suffix
                     target_prompt = prefix + target + suffix
-                    source_span = _token_span(
+                    source_span = token_span(
                         tokenizer, source_prompt, len(prefix), len(prefix) + len(source)
                     )
-                    target_span = _token_span(
+                    target_span = token_span(
                         tokenizer, target_prompt, len(prefix), len(prefix) + len(target)
                     )
                     source_answer = answers[source]
@@ -197,4 +210,9 @@ def save_pairs(pairs: list[Pair], path: str | Path) -> None:
 
 def load_saved_pairs(path: str | Path) -> list[Pair]:
     with Path(path).open(encoding="utf-8") as handle:
-        return [Pair(**json.loads(line)) for line in handle if line.strip()]
+        field_names = set(Pair.__dataclass_fields__)
+        return [
+            Pair(**{key: value for key, value in json.loads(line).items() if key in field_names})
+            for line in handle
+            if line.strip()
+        ]

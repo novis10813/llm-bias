@@ -22,6 +22,13 @@ dependencies = [
 fit-jacobian-lens = "llm_bias.lens_fitting.cli:main"
 counterfactual-patching = "llm_bias.counterfactual_patching.cli:main"
 prompt-analysis = "llm_bias.prompt_analysis.cli:main"
+prepare-edgar-8k = "llm_bias.edgar_preparation.cli:main"
+prepare-counterfactual-data = "llm_bias.counterfactual_data.cli:main"
+
+[project.optional-dependencies]
+extraction = [
+    "langextract[openai]>=1.6.0",
+]
 
 [build-system]
 requires = ["setuptools>=64"]

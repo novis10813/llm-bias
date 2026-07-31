@@ -8,10 +8,63 @@ The repository contains two independent experiments:
   activation patching.
 - `prompt-analysis`: per-layer prompt readout, uncertainty, generated-token
   attribution, validation, and result visualization.
+- `prepare-edgar-8k`: auditable staging-data preparation for extracted 8-K
+  filings.
+- `prepare-counterfactual-data`: reviewed entity-only counterfactual generation
+  from staged 8-K earnings events.
 
 Jacobian-lens fitting is a third, standalone tool. Both experiments consume a
 fitted lens but never fit one themselves. `jlens` readouts are transported
 representations, not direct decoders of hidden chain-of-thought.
+
+## Preparing extracted 8-K filings
+
+The EDGAR preparation workflow reads the external crawler dataset without
+modifying it. It streams every extracted filing into JSONL artifacts under the
+git-ignored `artifacts/` directory:
+
+```bash
+uv run prepare-edgar-8k clean \
+  --input ../10-k/edgar-crawler/datasets/EXTRACTED_FILINGS/8-K \
+  --output artifacts/edgar_8k/cleaned
+
+uv run prepare-edgar-8k validate \
+  --input artifacts/edgar_8k/cleaned
+```
+
+Use `--max-files 100` for a smoke run. The cleaner writes `filings.jsonl`,
+`sections.jsonl`, `quality_report.json`, and `manifest.json`. Each non-empty
+section retains lightly normalized source text alongside an analysis version
+with recorded boilerplate spans removed. Event-family and candidate flags are
+deterministic; no model-generated summary, counterfactual pair, or market label
+is introduced at this stage.
+
+The upstream extracted filings may omit exhibits and may have removed numerical
+tables. These limitations are recorded in the manifest, and absent extracted
+text must not be interpreted as an absent company disclosure.
+
+完整的清理規則、event-family mapping、JSONL schema 與全量執行統計見
+[EDGAR 8-K 清理與事件候選資料](docs/edgar-8k-preparation.md)。
+
+## Building entity-only counterfactual data
+
+The counterfactual-data workflow builds point-in-time CIK/name histories,
+samples a deterministic 500-event earnings pilot, uses the local
+OpenAI-compatible llama.cpp endpoint through LangExtract, and enforces a
+200-item manual review gate before any row is marked validated:
+
+```bash
+uv run prepare-counterfactual-data entities
+uv run prepare-counterfactual-data sample --count 500 --seed 20260730
+uv run --extra extraction prepare-counterfactual-data annotate
+uv run prepare-counterfactual-data review-bundle --count 200
+```
+
+No ticker or current market cap is required in V1. Same-industry targets are
+matched by historical filing exposure and are explicitly named
+`matched_exposure`, not size-matched. Full schemas, review thresholds, pairing
+rules, promotion, model-specific rendering, and validation are documented in
+[8-K counterfactual entity dataset](docs/counterfactual-dataset-generation.md).
 
 ## Setup
 

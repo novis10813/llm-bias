@@ -38,8 +38,17 @@ def normalized_transfer(
     return (patched_margin - source_margin) / denominator
 
 
+def expected_outcome_margin(margin: float, expected_outcome: str | None) -> float | None:
+    """Orient the fixed positive-minus-negative margin toward the gold outcome."""
+    if expected_outcome == "positive":
+        return margin
+    if expected_outcome == "negative":
+        return -margin
+    return None
+
+
 def _tokenizer_input(tokenizer: Any, text: str, device: torch.device) -> torch.Tensor:
-    encoded = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
+    encoded = tokenizer(text, return_tensors="pt")
     return encoded.input_ids.to(device)
 
 
@@ -158,6 +167,7 @@ def run_patch(
             )
             row: dict[str, Any] = {
                 "pair_id": pair.pair_id,
+                "task_type": pair.task_type,
                 "category": pair.category,
                 "function": pair.function,
                 "source_entity": pair.source_entity,
@@ -168,9 +178,17 @@ def run_patch(
                 "source_margin": source_margin,
                 "target_margin": target_margin,
                 "patched_margin": patched_margin,
-                "transfer": normalized_transfer(patched_margin, source_margin, target_margin),
+                "transfer": (
+                    None
+                    if pair.task_type == "entity_bias"
+                    else normalized_transfer(patched_margin, source_margin, target_margin)
+                ),
                 "control_margin": control_margin,
-                "control_transfer": normalized_transfer(control_margin, source_margin, target_margin),
+                "control_transfer": (
+                    None
+                    if pair.task_type == "entity_bias"
+                    else normalized_transfer(control_margin, source_margin, target_margin)
+                ),
                 "source_entity_span": list(source_span),
                 "target_entity_span": list(target_span),
                 "span_mapping": normalized_span_mapping(
@@ -184,6 +202,31 @@ def run_patch(
                 "source_target_answer_rank": int((source_logits > source_logits[pair.answer_target_token]).sum()) + 1,
                 "target_source_answer_rank": int((target_logits > target_logits[pair.answer_source_token]).sum()) + 1,
             }
+            if pair.task_type == "entity_bias":
+                row.update(
+                    {
+                        "task_type": pair.task_type,
+                        "content_id": pair.content_id,
+                        "contrast_id": pair.contrast_id,
+                        "condition": pair.condition,
+                        "pairing_strategy": pair.pairing_strategy,
+                        "direction": pair.direction,
+                        "expected_outcome": pair.expected_outcome,
+                        "margin_definition": "logit(positive)-logit(negative)",
+                        "direct_entity_effect": target_margin - source_margin,
+                        "causal_patch_effect": patched_margin - source_margin,
+                        "control_patch_effect": control_margin - source_margin,
+                        "source_expected_margin": expected_outcome_margin(
+                            source_margin, pair.expected_outcome
+                        ),
+                        "target_expected_margin": expected_outcome_margin(
+                            target_margin, pair.expected_outcome
+                        ),
+                        "patched_expected_margin": expected_outcome_margin(
+                            patched_margin, pair.expected_outcome
+                        ),
+                    }
+                )
             if lens is not None and layer in lens.jacobians:
                 row["entity_target_minus_source_readout"] = float(
                     _span_readout_difference(
@@ -243,6 +286,31 @@ def summarize(
                 "transfer_ci_high": ci_high,
                 "mean_control_transfer": group["control_transfer"].mean(),
                 "mean_patched_margin": group["patched_margin"].mean(),
+                "mean_direct_entity_effect": (
+                    group["direct_entity_effect"].mean()
+                    if "direct_entity_effect" in group
+                    else float("nan")
+                ),
+                "mean_causal_patch_effect": (
+                    group["causal_patch_effect"].mean()
+                    if "causal_patch_effect" in group
+                    else float("nan")
+                ),
+                "mean_source_expected_margin": (
+                    group["source_expected_margin"].mean()
+                    if "source_expected_margin" in group
+                    else float("nan")
+                ),
+                "mean_target_expected_margin": (
+                    group["target_expected_margin"].mean()
+                    if "target_expected_margin" in group
+                    else float("nan")
+                ),
+                "mean_patched_expected_margin": (
+                    group["patched_expected_margin"].mean()
+                    if "patched_expected_margin" in group
+                    else float("nan")
+                ),
             }
         )
     summary = pd.DataFrame(summary_rows)
