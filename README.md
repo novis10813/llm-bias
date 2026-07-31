@@ -285,8 +285,27 @@ The complete workflow is also available as a tmux-backed shell runner:
 bash scripts/run_prompt_analysis.sh
 ```
 
+The runner and visualization script also accept arbitrary ticker-style prompt
+columns. For example, a MAG7 table with `Date`, `aapl`, ..., `tsla`, and
+`prompt_{with,without}_context_<ticker>` columns can be run with:
+
+```bash
+INPUT_CSV=mag7_entityBiasPrompt.csv \
+RUN_ROOT=artifacts/prompt_analysis/qwen3.5-4b/mag7 \
+bash scripts/run_prompt_analysis.sh
+
+INPUT_CSV=mag7_entityBiasPrompt.csv \
+RUN_ROOT=artifacts/prompt_analysis/qwen3.5-4b/mag7 \
+bash scripts/visualize_prompt_analysis.sh
+```
+
+Condition names, price columns, uncertainty plots, and dashboard labels are
+discovered from the artifacts instead of being restricted to the three legacy
+index names. Attribution sampling uses shared dates across non-empty prompt
+conditions so missing ticker observations do not prevent date selection.
+
 It requires a fitted lens, saves per-date/per-layer top-k and uncertainty for
-all six prompt columns, and runs sampled generated-token attribution. Lens
+all selected prompt columns, and runs sampled generated-token attribution. Lens
 fitting is deliberately separate so the runner cannot unexpectedly start an
 expensive fitting job. Override settings with environment variables:
 

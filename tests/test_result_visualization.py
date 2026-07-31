@@ -178,6 +178,55 @@ def test_load_final_layer_uncertainty_filters_combined_artifact(tmp_path):
     assert loaded[0]["entropy_nats"] == pytest.approx(1.0)
 
 
+def test_load_final_layer_uncertainty_discovers_arbitrary_conditions(tmp_path):
+    path = tmp_path / "uncertainty.jsonl"
+    rows = [
+        {
+            "date": "2020-01-01",
+            "index": index,
+            "context": context,
+            "layers": [{"layer": 1, "is_output": True, "entropy_nats": 1.0}],
+        }
+        for index, context in (("aapl", "without"), ("aapl", "with"), ("msft", "without"))
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    loaded = load_final_layer_uncertainty(
+        {
+            ("sp500", "without"): path,
+            ("sp500", "with"): path,
+        }
+    )
+
+    assert {(row["index"], row["context"]) for row in loaded} == {
+        ("aapl", "without"),
+        ("aapl", "with"),
+        ("msft", "without"),
+    }
+
+
+def test_select_attribution_dates_accepts_arbitrary_price_columns():
+    rows = []
+    for day in ("2020-01-01", "2020-01-02", "2020-01-03"):
+        for context in ("without", "with"):
+            rows.append({"date": day, "index": "aapl", "context": context})
+    prices = [
+        {"Date": "2020-01-01", "aapl": "100"},
+        {"Date": "2020-01-02", "aapl": "90"},
+        {"Date": "2020-01-03", "aapl": "89.9"},
+    ]
+
+    selected, market = select_attribution_dates(
+        rows,
+        prices,
+        crash_count=1,
+        condition_order=[("aapl", "without"), ("aapl", "with")],
+    )
+
+    assert selected == ["2020-01-02", "2020-01-03"]
+    assert market["2020-01-02"]["prices"] == {"aapl": 90.0}
+
+
 def test_uncertainty_paths_from_root_discovers_runner_per_date_directory(tmp_path):
     path = tmp_path / "per_date" / "prompt_layer_uncertainty.jsonl"
     path.parent.mkdir()

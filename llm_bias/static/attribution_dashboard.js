@@ -2,7 +2,6 @@
   "use strict";
 
   const data = window.ATTRIBUTION_DATA;
-  const indexLabels = { sp500: "S&P 500", russell1000: "Russell 1000", russell2000: "Russell 2000" };
   const contextLabels = { without: "without context", with: "with context" };
   const select = document.getElementById("date-select");
   const panels = document.getElementById("panels");
@@ -79,7 +78,8 @@
     panel._matrix = condition.matrix;
 
     const title = document.createElement("h2");
-    title.textContent = (indexLabels[condition.index] || condition.index) + " · " + (contextLabels[condition.context] || condition.context);
+    title.textContent = (condition.index_label || String(condition.index || "").toUpperCase()) + " · " +
+      (condition.context_label || contextLabels[condition.context] || condition.context);
     panel.appendChild(title);
     const subtitle = document.createElement("div");
     subtitle.className = "panel-subtitle";

@@ -170,6 +170,28 @@ def analyze_generated_attribution(
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
+    # Sample the same dates for every condition.  This is important for real
+    # market tables where a ticker can have missing prompt rows: sampling each
+    # column independently would leave the dashboard with too few common dates
+    # to select crash/normal examples.
+    effective_dates = set(selected_dates)
+    if not selected_dates:
+        date_sets = [
+            {
+                row.get("Date", "")
+                for row in rows
+                if (row.get(column.name) or "").strip() and row.get("Date", "")
+            }
+            for column in columns
+        ]
+        common_dates = set.intersection(*date_sets) if date_sets else set()
+        if not common_dates:
+            raise ValueError("prompt columns have no common non-empty dates to sample")
+        shared_rows = [{"Date": date} for date in sorted(common_dates)]
+        effective_dates = {
+            row["Date"] for row in _sample_rows(shared_rows, sample_per_condition)
+        }
+
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     output_path = destination / "generated_token_attribution.jsonl"
@@ -181,9 +203,12 @@ def analyze_generated_attribution(
                 row
                 for row in rows
                 if (row.get(column.name) or "").strip()
-                and (not selected_dates or row.get("Date", "") in selected_dates)
+                and (
+                    not effective_dates
+                    or row.get("Date", "") in effective_dates
+                )
             ]
-            sampled = candidates if selected_dates else _sample_rows(candidates, sample_per_condition)
+            sampled = candidates
             for sample_index, row in enumerate(sampled):
                 prompt = (row.get(column.name) or "").strip()
                 formatted = format_prompt(
@@ -256,7 +281,7 @@ def analyze_generated_attribution(
         "model": model_name,
         "prompt_columns": [column.name for column in columns],
         "sample_per_condition": sample_per_condition,
-        "selected_dates": sorted(selected_dates),
+        "selected_dates": sorted(effective_dates),
         "max_new_tokens": max_new_tokens,
         "input_top_k": input_top_k,
         "input_attribution_storage": "all_input_tokens" if input_top_k is None else "top_k",

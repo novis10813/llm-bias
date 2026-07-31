@@ -80,71 +80,107 @@ def load_final_layer_uncertainty(
     paths: dict[tuple[str, str], str | Path],
 ) -> list[dict[str, Any]]:
     """Load one final-layer uncertainty record per date and condition."""
+    # A runner writes one combined JSONL for all prompt columns.  The historical
+    # ``paths`` API represents that file six times (once per index/context), so
+    # detect that shape and discover the conditions from the records instead of
+    # filtering against the old fixed S&P/Russell condition set.
+    unique_sources = {Path(source) for source in paths.values()}
+    combined_source = next(iter(unique_sources)) if len(unique_sources) == 1 else None
+    discover_conditions = combined_source is not None and len(paths) > 1
     result: list[dict[str, Any]] = []
-    for (index, context), source in paths.items():
-        rows = _read_jsonl(Path(source))
-        seen_dates: set[str] = set()
-        for row in rows:
-            row_index_name = str(row.get("index", ""))
-            row_context = str(row.get("context", ""))
-            if (row_index_name or row_context) and (
-                row_index_name != index or row_context != context
-            ):
-                continue
-            row_index = row.get("row_index")
-            row_date = str(row.get("date", ""))
-            layers = row.get("layers")
-            if not row_date or not isinstance(layers, list):
-                raise ValueError(f"uncertainty row is missing date/layers: {source}")
-            output_layers = [layer for layer in layers if layer.get("is_output")]
-            if len(output_layers) != 1:
-                raise ValueError(
-                    f"expected exactly one output layer for {index}/{context} "
-                    f"date {row_date}, found {len(output_layers)}"
-                )
-            if row_date in seen_dates:
-                raise ValueError(f"duplicate uncertainty date {row_date} in {source}")
-            seen_dates.add(row_date)
-            output = output_layers[0]
-            if "entropy_nats" not in output:
-                raise ValueError(f"output layer has no entropy_nats: {source}")
-            result.append(
-                {
-                    "row_index": row_index,
-                    "date": row_date,
-                    "index": index,
-                    "context": context,
-                    "layer": output.get("layer"),
-                    "entropy_nats": float(output["entropy_nats"]),
-                    "normalized_entropy": float(output.get("normalized_entropy", 0.0)),
-                    "perplexity": float(output.get("perplexity", 0.0)),
-                    "top1_probability": float(output.get("top1_probability", 0.0)),
-                    "topk_mass": float(output.get("topk_mass", 0.0)),
-                    "effective_inverse_temperature": float(
-                        output.get("effective_inverse_temperature", 0.0)
-                    ),
-                    "effective_temperature": float(
-                        output.get("effective_temperature", 0.0)
-                    ),
-                }
+    seen_dates_by_condition: dict[tuple[str, str], set[str]] = defaultdict(set)
+
+    def append_row(
+        row: dict[str, Any],
+        *,
+        index: str,
+        context: str,
+        source_path: Path,
+    ) -> None:
+        row_date = str(row.get("date", ""))
+        layers = row.get("layers")
+        if not row_date or not isinstance(layers, list):
+            raise ValueError(f"uncertainty row is missing date/layers: {source_path}")
+        output_layers = [layer for layer in layers if layer.get("is_output")]
+        if len(output_layers) != 1:
+            raise ValueError(
+                f"expected exactly one output layer for {index}/{context} "
+                f"date {row_date}, found {len(output_layers)}"
             )
+        condition = (index, context)
+        if row_date in seen_dates_by_condition[condition]:
+            raise ValueError(
+                f"duplicate uncertainty date {row_date} for {index}/{context} "
+                f"in {source_path}"
+            )
+        seen_dates_by_condition[condition].add(row_date)
+        output = output_layers[0]
+        if "entropy_nats" not in output:
+            raise ValueError(f"output layer has no entropy_nats: {source_path}")
+        result.append(
+            {
+                "row_index": row.get("row_index"),
+                "date": row_date,
+                "index": index,
+                "context": context,
+                "layer": output.get("layer"),
+                "entropy_nats": float(output["entropy_nats"]),
+                "normalized_entropy": float(output.get("normalized_entropy", 0.0)),
+                "perplexity": float(output.get("perplexity", 0.0)),
+                "top1_probability": float(output.get("top1_probability", 0.0)),
+                "topk_mass": float(output.get("topk_mass", 0.0)),
+                "effective_inverse_temperature": float(
+                    output.get("effective_inverse_temperature", 0.0)
+                ),
+                "effective_temperature": float(
+                    output.get("effective_temperature", 0.0)
+                ),
+            }
+        )
+
+    if discover_conditions and combined_source is not None:
+        for row in _read_jsonl(combined_source):
+            index = str(row.get("index", ""))
+            context = str(row.get("context", ""))
+            if not index or not context:
+                raise ValueError(
+                    f"combined uncertainty row has no index/context: {combined_source}"
+                )
+            append_row(row, index=index, context=context, source_path=combined_source)
+    else:
+        for (index, context), source in paths.items():
+            source_path = Path(source)
+            for row in _read_jsonl(source_path):
+                row_index_name = str(row.get("index", ""))
+                row_context = str(row.get("context", ""))
+                if (row_index_name or row_context) and (
+                    row_index_name != index or row_context != context
+                ):
+                    continue
+                append_row(row, index=index, context=context, source_path=source_path)
     return sorted(result, key=lambda row: (row["date"], row["index"], row["context"]))
 
 
-def _load_prices(path: Path) -> list[dict[str, str]]:
+def _load_prices(
+    path: Path,
+    indices: Iterable[str] = INDEX_ORDER,
+) -> list[dict[str, str]]:
+    """Load rows containing the price columns used by the experiment."""
     if not path.is_file():
         raise FileNotFoundError(path)
+    price_indices = tuple(dict.fromkeys(str(index) for index in indices))
+    if not price_indices:
+        raise ValueError("at least one price column is required")
     with path.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    required = {"Date", *INDEX_ORDER}
+    required = {"Date", *price_indices}
     if not rows or not required.issubset(rows[0]):
         raise ValueError(f"price CSV must contain {sorted(required)}")
     valid_rows = []
     for row in rows:
         try:
-            float(row["sp500"])
-            float(row["russell1000"])
-            float(row["russell2000"])
+            for index in price_indices:
+                float(row[index])
         except (TypeError, ValueError):
             continue
         valid_rows.append(row)
@@ -155,16 +191,18 @@ def _load_prices(path: Path) -> list[dict[str, str]]:
 
 def _market_returns(
     prices: Iterable[dict[str, str]],
+    indices: Iterable[str] = INDEX_ORDER,
 ) -> dict[str, dict[str, Any]]:
     rows = list(prices)
+    price_indices = tuple(dict.fromkeys(str(index) for index in indices))
     result: dict[str, dict[str, Any]] = {}
     for row_index, row in enumerate(rows):
-        values = {index: float(row[index]) for index in INDEX_ORDER}
+        values = {index: float(row[index]) for index in price_indices}
         previous = rows[row_index - 1] if row_index else None
         returns = (
             {
                 index: (values[index] / float(previous[index]) - 1.0) * 100.0
-                for index in INDEX_ORDER
+                for index in price_indices
             }
             if previous is not None
             else None
@@ -183,9 +221,16 @@ def select_attribution_dates(
     prices: Iterable[dict[str, str]],
     *,
     crash_count: int = 2,
+    condition_order: Iterable[tuple[str, str]] | None = None,
 ) -> tuple[list[str], dict[str, dict[str, Any]]]:
-    """Select common crash and normal dates deterministically."""
-    required_conditions = {(index, context) for index in INDEX_ORDER for context in CONTEXT_ORDER}
+    """Select common crash and normal dates deterministically.
+
+    ``condition_order`` keeps the original three-index default for backwards
+    compatibility, while the visualization runner supplies conditions discovered
+    from the input artifact (for example ``aapl`` through ``tsla``).
+    """
+    required_order = list(condition_order or _condition_order())
+    required_conditions = set(required_order)
     by_date: dict[str, set[tuple[str, str]]] = defaultdict(set)
     for row in attribution_rows:
         key = (str(row.get("index", "")), str(row.get("context", "")))
@@ -193,7 +238,8 @@ def select_attribution_dates(
         if key in required_conditions and date_value:
             by_date[date_value].add(key)
 
-    market = _market_returns(prices)
+    indices = tuple(dict.fromkeys(index for index, _context in required_order))
+    market = _market_returns(prices, indices)
     common = [
         day
         for day, conditions in by_date.items()
@@ -216,8 +262,51 @@ def select_attribution_dates(
     return selected, {day: market[day] for day in selected}
 
 
-def _condition_order() -> list[tuple[str, str]]:
-    return [(index, context) for index in INDEX_ORDER for context in CONTEXT_ORDER]
+def _condition_order(
+    records: Iterable[dict[str, Any]] | None = None,
+) -> list[tuple[str, str]]:
+    """Return deterministic index/context order.
+
+    With no records this preserves the historical S&P/Russell order.  When
+    records are supplied, conditions are discovered from their ``index`` and
+    ``context`` fields while keeping each index's without/with ordering.
+    """
+    if records is None:
+        return [(index, context) for index in INDEX_ORDER for context in CONTEXT_ORDER]
+    rows = list(records)
+    indices: list[str] = []
+    contexts_by_index: dict[str, list[str]] = defaultdict(list)
+    for row in rows:
+        index = str(row.get("index", ""))
+        context = str(row.get("context", ""))
+        if not index or not context:
+            continue
+        if index not in indices:
+            indices.append(index)
+        if context not in contexts_by_index[index]:
+            contexts_by_index[index].append(context)
+    result: list[tuple[str, str]] = []
+    for index in indices:
+        contexts = contexts_by_index[index]
+        for context in CONTEXT_ORDER:
+            if context in contexts:
+                result.append((index, context))
+        # Preserve non-standard context values without silently dropping them.
+        for context in contexts:
+            if (index, context) not in result:
+                result.append((index, context))
+    return result
+
+
+def _index_label(index: str) -> str:
+    """Human-readable label for a condition, including arbitrary tickers."""
+    return INDEX_LABELS.get(index, index.upper())
+
+
+def _context_label(context: str) -> str:
+    return {"without": "without context", "with": "with context"}.get(
+        context, context
+    )
 
 
 def _prompt_tokens(
@@ -327,7 +416,9 @@ def _attribution_panel(
     max_attribution = max((value for values in matrix for value in values), default=0.0)
     return {
         "index": str(row["index"]),
+        "index_label": _index_label(str(row["index"])),
         "context": str(row["context"]),
+        "context_label": _context_label(str(row["context"])),
         "prompt_column": str(row["prompt_column"]),
         "prompt": str(row.get("prompt", "")),
         "generated_text": str(row.get("generated_text", "")),
@@ -349,6 +440,7 @@ def build_attribution_data(
     tokenizer: Any | None = None,
     max_seq_len: int = 256,
     validation_rows: Iterable[dict[str, Any]] | None = None,
+    condition_order: Iterable[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build the compact JSON payload used by the standalone dashboard."""
     if input_top_k < 1:
@@ -372,10 +464,11 @@ def build_attribution_data(
             raise ValueError(f"duplicate validation record for {key}")
         validation_by_key[key] = validation
 
+    required_order = list(condition_order or _condition_order())
     dates = []
     for day in selected:
         conditions = []
-        for index, context in _condition_order():
+        for index, context in required_order:
             row = by_key.get((day, index, context))
             if row is None:
                 raise ValueError(f"missing attribution record for {day}/{index}/{context}")
@@ -429,12 +522,22 @@ def render_attribution_html(data: dict[str, Any]) -> str:
     return template.replace("__ATTRIBUTION_DATA__", payload).replace("__ATTRIBUTION_SCRIPT__", script)
 
 
-def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> None:
+def plot_uncertainty(
+    records: Iterable[dict[str, Any]],
+    output_dir: Path,
+    *,
+    condition_order: Iterable[tuple[str, str]] | None = None,
+) -> None:
     """Write Temperature Scope curves and entropy comparison curves."""
     import matplotlib.dates as mdates
     import matplotlib.pyplot as plt
 
     rows = list(records)
+    required_order = list(condition_order or _condition_order(rows))
+    indices = list(dict.fromkeys(index for index, _context in required_order))
+    contexts = list(dict.fromkeys(context for _index, context in required_order))
+    if not indices or not contexts:
+        raise ValueError("uncertainty records contain no index/context conditions")
     output_dir.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "date", "index", "context", "layer", "entropy_nats",
@@ -451,17 +554,24 @@ def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> Non
         writer.writeheader()
         writer.writerows({key: row.get(key) for key in fieldnames} for row in rows)
 
-    colors = {"sp500": "#2563eb", "russell1000": "#dc2626", "russell2000": "#059669"}
-    for context in CONTEXT_ORDER:
+    palette = (
+        "#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c",
+        "#0891b2", "#be123c", "#4f46e5", "#65a30d", "#c026d3",
+    )
+    colors = {
+        index: palette[position % len(palette)]
+        for position, index in enumerate(indices)
+    }
+    for context in contexts:
         figure, axes = plt.subplots(
-            len(INDEX_ORDER),
+            len(indices),
             1,
             figsize=(15, 10),
             sharex=True,
             squeeze=False,
         )
-        for index in INDEX_ORDER:
-            axis = axes[INDEX_ORDER.index(index)][0]
+        for index_position, index in enumerate(indices):
+            axis = axes[index_position][0]
             series = sorted(
                 (row for row in rows if row["index"] == index and row["context"] == context),
                 key=lambda row: row["date"],
@@ -471,14 +581,16 @@ def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> Non
             dates = [datetime.strptime(row["date"], "%Y-%m-%d") for row in series]
             values = [row["effective_temperature"] for row in series]
             axis.plot(dates, values, linewidth=1.25, color=colors[index])
-            axis.set_title(INDEX_LABELS[index], loc="left", fontsize=11, fontweight="bold")
+            axis.set_title(_index_label(index), loc="left", fontsize=11, fontweight="bold")
             axis.set_ylabel("Effective temperature")
             axis.grid(alpha=0.25)
         axes[-1][0].set_xlabel("Date")
         locator = mdates.AutoDateLocator(minticks=8, maxticks=14)
         axes[-1][0].xaxis.set_major_locator(locator)
         axes[-1][0].xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
-        figure.suptitle(f"Temperature Scope uncertainty · {context} context", fontsize=14)
+        figure.suptitle(
+            f"Temperature Scope uncertainty · {_context_label(context)}", fontsize=14
+        )
         figure.tight_layout()
         figure.savefig(
             output_dir / f"final_layer_effective_temperature_{context}_context.png",
@@ -488,10 +600,10 @@ def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> Non
 
         # Retain an entropy comparison plot under the historical name.
         entropy_figure, entropy_axes = plt.subplots(
-            len(INDEX_ORDER), 1, figsize=(15, 10), sharex=True, squeeze=False
+            len(indices), 1, figsize=(15, 10), sharex=True, squeeze=False
         )
-        for index in INDEX_ORDER:
-            axis = entropy_axes[INDEX_ORDER.index(index)][0]
+        for index_position, index in enumerate(indices):
+            axis = entropy_axes[index_position][0]
             series = sorted(
                 (row for row in rows if row["index"] == index and row["context"] == context),
                 key=lambda row: row["date"],
@@ -505,7 +617,7 @@ def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> Non
                 linewidth=1.25,
                 color=colors[index],
             )
-            axis.set_title(INDEX_LABELS[index], loc="left", fontsize=11, fontweight="bold")
+            axis.set_title(_index_label(index), loc="left", fontsize=11, fontweight="bold")
             axis.set_ylabel("Entropy (nats)")
             axis.grid(alpha=0.25)
         entropy_axes[-1][0].set_xlabel("Date")
@@ -514,7 +626,9 @@ def plot_uncertainty(records: Iterable[dict[str, Any]], output_dir: Path) -> Non
         entropy_axes[-1][0].xaxis.set_major_formatter(
             mdates.ConciseDateFormatter(entropy_locator)
         )
-        entropy_figure.suptitle(f"Final-layer entropy comparison · {context} context", fontsize=14)
+        entropy_figure.suptitle(
+            f"Final-layer entropy comparison · {_context_label(context)}", fontsize=14
+        )
         entropy_figure.tight_layout()
         entropy_figure.savefig(
             output_dir / f"final_layer_entropy_{context}_context.png", dpi=180
@@ -543,11 +657,19 @@ def visualize_prompt_results(
         if validation_path is not None and Path(validation_path).is_file()
         else None
     )
-    prices = _load_prices(Path(prices_path))
+    condition_order = _condition_order(uncertainty)
+    if not condition_order:
+        condition_order = _condition_order(attribution_rows)
+    indices = tuple(dict.fromkeys(index for index, _context in condition_order))
+    prices = _load_prices(Path(prices_path), indices)
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path), use_fast=True)
-    selected_dates, market = select_attribution_dates(attribution_rows, prices)
+    selected_dates, market = select_attribution_dates(
+        attribution_rows,
+        prices,
+        condition_order=condition_order,
+    )
     data = build_attribution_data(
         attribution_rows,
         selected_dates,
@@ -556,8 +678,9 @@ def visualize_prompt_results(
         tokenizer=tokenizer,
         max_seq_len=max_seq_len,
         validation_rows=validation_rows,
+        condition_order=condition_order,
     )
-    plot_uncertainty(uncertainty, output)
+    plot_uncertainty(uncertainty, output, condition_order=condition_order)
     output.mkdir(parents=True, exist_ok=True)
     (output / "attribution_dashboard.html").write_text(
         render_attribution_html(data), encoding="utf-8"
