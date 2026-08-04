@@ -21,16 +21,36 @@ def format_prompt(
     use_chat_template: bool,
     enable_thinking: bool = False,
 ) -> str:
-    """Optionally wrap a raw prompt as one user turn for a chat model."""
+    """Optionally wrap a raw prompt as one user turn for a chat model.
+
+    This legacy helper intentionally retains its user-only behavior. Pair
+    datasets use :func:`format_messages` for a real system message.
+    """
+    return format_messages(
+        tokenizer,
+        [{"role": "user", "content": prompt}],
+        use_chat_template=use_chat_template,
+        enable_thinking=enable_thinking,
+    )
+
+
+def format_messages(
+    tokenizer: Any,
+    messages: list[dict[str, str]],
+    *,
+    use_chat_template: bool,
+    enable_thinking: bool = False,
+) -> str:
+    """Format chat messages, preserving system/user message boundaries."""
     if not use_chat_template:
-        return prompt
+        return "\n\n".join(message["content"] for message in messages)
     if not getattr(tokenizer, "chat_template", None):
         raise ValueError(
             "use_chat_template=True but the tokenizer has no chat template; "
             "pass --raw-prompt for a base model"
         )
     return tokenizer.apply_chat_template(
-        [{"role": "user", "content": prompt}],
+        messages,
         tokenize=False,
         add_generation_prompt=True,
         enable_thinking=enable_thinking,

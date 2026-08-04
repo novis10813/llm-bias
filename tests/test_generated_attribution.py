@@ -7,6 +7,15 @@ import torch
 from llm_bias.prompt_analysis import attribution
 
 
+def test_parse_generated_return_answer_is_strict_and_nonfatal():
+    assert attribution.parse_generated_return_answer('{"label":"neutral","confidence":80}') == {
+        "label": "neutral", "confidence": 80, "parse_status": "valid", "parse_reason": None
+    }
+    invalid = attribution.parse_generated_return_answer('{"label":"neutral","confidence":80.0}')
+    assert invalid["parse_status"] == "invalid"
+    assert invalid["parse_reason"] == "invalid_confidence"
+
+
 class _Tokenizer:
     eos_token_id = 0
     pad_token_id = 0
