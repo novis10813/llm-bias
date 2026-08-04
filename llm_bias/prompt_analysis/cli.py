@@ -71,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="use_chat_template",
     )
     readout.add_argument("--enable-thinking", action="store_true")
+    readout.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
 
     attribute = commands.add_parser(
         "attribute", help="generate output tokens and attribute them to prompt tokens"
@@ -89,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     attribute.add_argument("--seed", type=int)
     attribute.add_argument("--top-p", type=float, default=1.0)
     attribute.add_argument("--top-k", type=int, default=0)
+    attribute.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
 
     validate = commands.add_parser(
         "validate-attribution", help="evaluate Semantic Scope with input ablations"
@@ -164,6 +166,7 @@ def main() -> None:
             enable_thinking=args.enable_thinking,
             attribution_output_top_k=args.attribution_output_top_k,
             attribution_max_rows=args.attribution_max_rows,
+            dataset_format=args.dataset_format,
         )
     elif args.command == "attribute":
         analyze_generated_attribution(
@@ -181,6 +184,7 @@ def main() -> None:
             seed=args.seed,
             top_p=args.top_p,
             top_k=args.top_k,
+            dataset_format=args.dataset_format,
         )
     elif args.command == "validate-attribution":
         evaluate_semantic_scope(

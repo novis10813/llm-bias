@@ -146,3 +146,25 @@ def test_prepare_prompt_uses_user_chat_template_by_default():
         "<user>hello</user><assistant>"
     )
     assert _prepare_prompt(_Tokenizer(), "hello", False) == "hello"
+
+
+def test_return_pairs_expand_by_pair_and_preserve_identity(tmp_path):
+    path = tmp_path / "pairs.csv"
+    path.write_text(
+        "cik,filename,item,filing_date,ticker,peer_ticker,system_prompt,prompt,counterfactual_prompt,return_label,fwd_return_1d\n"
+        "1,a.txt,item_1,2026-01-01,AAA,BBB,sys,orig,counter,neutral,0.0\n"
+        "2,a.txt,item_1,2026-01-01,CCC,DDD,sys,orig2,counter2,bullish,0.1\n",
+        encoding="utf-8",
+    )
+    columns, rows = load_prompt_table(path, dataset_format="return-pairs", max_rows=2)
+    assert [column.condition for column in columns] == ["original", "counterfactual"]
+    assert len(rows) == 4
+    assert {row["pair_id"] for row in rows} == {"1|a.txt|item_1", "2|a.txt|item_1"}
+    assert [row["condition"] for row in rows[:2]] == ["original", "counterfactual"]
+
+
+def test_auto_does_not_treat_partial_pair_schema_as_return_pairs(tmp_path):
+    path = tmp_path / "legacy.csv"
+    path.write_text("cik,prompt_without_context_x\n1,hello\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no prompt_with_context"):
+        load_prompt_table(path, dataset_format="auto")
