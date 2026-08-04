@@ -291,6 +291,37 @@ Metadata 保存 source SHA-256、condition/date counts、各市場 paired 與 un
 quantile method、metric definitions 與 non-causal interpretation。Entropy 與 effective
 temperature 使用不同 figures，不使用 dual axis。
 
+## Legacy MAG7/S&P500 compatibility checklist
+
+在替換或擴充 prompt-analysis workflow 前，請確認下列既有 contract 仍成立：
+
+- **CSV schema**：`Date` 與名稱完全符合
+  `prompt_with_context_<ticker>` / `prompt_without_context_<ticker>` 的欄位會被載入；
+  不符合 pattern 的額外欄位可保留但不會被當成 condition。BOM、quoted multiline
+  prompt、空 prompt 與任意 ticker 名稱都必須可讀；空白或空 prompt 會被跳過並在
+  `condition_counts` 記錄 `skipped_empty_prompts`。
+- **Date sampling**：generated attribution 的自動 sampling 先取所有 condition
+  都有非空 prompt 的共同 `Date`，再以 deterministic spread 選日期；每個 condition
+  使用同一組日期，不可各自抽樣造成 paired conditions 日期不一致。明確傳入
+  `--date` 時則只使用指定日期。
+- **Prompt assembly**：預設使用 tokenizer 的 user-only chat template，且不啟用
+  thinking；`readout --raw-prompt` 才改用原始 prompt。attribution 的 scope 仍是
+  chat-formatted prompt 中的 raw user message tokens。
+- **Legacy artifacts**：readout 的核心檔名仍為
+  `prompt_layer_topk.jsonl`、`prompt_layer_uncertainty.jsonl`、
+  `average_layer_topk.jsonl`、`average_layer_topk.csv` 與 `metadata.json`；
+  multi-run attribution 仍使用 `manifest.json`、`run_NNN/` 與每個 run 的
+  `generated_token_attribution.jsonl`。JSONL/manifest 的既有欄位（日期、condition、
+  `run_index`、`sample_index`、generation config、condition counts 與 record counts）
+  必須保留。
+- **Price answer parser**：只接受 JSON object 中 finite numeric `answer`；整數與
+  浮點數都會轉成 numeric price。`confidence` 是 optional numeric metadata，不會把
+  有效 answer 變成 invalid；null、字串、布林、NaN、malformed JSON 與缺少 answer
+  必須標為 invalid，且不可靜默轉成 0。
+- **CLI defaults**：現有 `prompt-analysis readout`、`attribute` 與 visualization
+  的 input/output、sampling、generation、chat-template 與 token-length defaults
+  必須維持。不要在本 checklist 宣稱尚未落地的命令或 workflow。
+
 ## 完成檢查
 
 ```bash

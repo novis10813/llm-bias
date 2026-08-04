@@ -453,6 +453,19 @@ def test_parse_generated_answer_accepts_json_with_wrappers():
     }
 
 
+def test_parse_generated_answer_keeps_numeric_answer_when_confidence_is_non_numeric():
+    parsed = _parse_generated_answer(
+        'prefix {"answer": 101, "confidence": "high"} trailing text'
+    )
+
+    assert parsed == {
+        "parsed_answer": 101.0,
+        "confidence": None,
+        "parse_status": "valid",
+        "parse_reason": None,
+    }
+
+
 @pytest.mark.parametrize(
     ("generated_text", "reason"),
     [
