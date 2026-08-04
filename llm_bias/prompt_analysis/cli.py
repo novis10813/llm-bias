@@ -21,7 +21,11 @@ from llm_bias.prompt_analysis.visualization import (
     DEFAULT_ARTIFACT_ROOT,
     DEFAULT_INPUT as DEFAULT_PRICE_INPUT,
     DEFAULT_OUTPUT_DIR as DEFAULT_VISUALIZATION_OUTPUT,
+    DEFAULT_PRICE_DISTRIBUTION_OUTPUT,
+    DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT,
     uncertainty_paths_from_root,
+    visualize_price_distributions,
+    visualize_uncertainty_distributions,
     visualize_prompt_results,
 )
 
@@ -106,6 +110,25 @@ def build_parser() -> argparse.ArgumentParser:
     visual.add_argument("--tokenizer", required=True)
     visual.add_argument("--max-seq-len", type=int, default=256)
 
+    price_distributions = commands.add_parser(
+        "plot-price-distributions",
+        help="plot actual closes, sampled price distributions, and errors",
+    )
+    price_distributions.add_argument("--sampling-root", required=True)
+    price_distributions.add_argument("--prices", default=DEFAULT_PRICE_INPUT)
+    price_distributions.add_argument(
+        "--output-dir", default=DEFAULT_PRICE_DISTRIBUTION_OUTPUT
+    )
+
+    uncertainty_distributions = commands.add_parser(
+        "plot-uncertainty-distributions",
+        help="plot final-layer entropy and effective-temperature distributions",
+    )
+    uncertainty_distributions.add_argument("--uncertainty-root", required=True)
+    uncertainty_distributions.add_argument(
+        "--output-dir", default=DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT
+    )
+
     serve = commands.add_parser(
         "serve", help="serve an interactive Jacobian-lens prompt explorer"
     )
@@ -176,6 +199,17 @@ def main() -> None:
             input_top_k=args.input_top_k,
             tokenizer_path=args.tokenizer,
             max_seq_len=args.max_seq_len,
+        )
+    elif args.command == "plot-price-distributions":
+        visualize_price_distributions(
+            sampling_root=args.sampling_root,
+            prices_path=args.prices,
+            output_dir=args.output_dir,
+        )
+    elif args.command == "plot-uncertainty-distributions":
+        visualize_uncertainty_distributions(
+            uncertainty_paths=uncertainty_paths_from_root(args.uncertainty_root),
+            output_dir=args.output_dir,
         )
     elif args.command == "serve":
         import uvicorn

@@ -66,6 +66,8 @@ def test_independent_cli_command_sets():
         "attribute",
         "validate-attribution",
         "visualize",
+        "plot-price-distributions",
+        "plot-uncertainty-distributions",
         "serve",
     }
     assert "fit-lens" not in patch_choices
@@ -92,6 +94,31 @@ def test_independent_cli_command_sets():
     assert attribute_args.seed == 20260803
     assert attribute_args.top_p == 1.0
     assert attribute_args.top_k == 0
+    price_plot_args = prompt_parser().parse_args(
+        [
+            "plot-price-distributions",
+            "--sampling-root",
+            "artifacts/sampling",
+            "--prices",
+            "prices.csv",
+            "--output-dir",
+            "artifacts/figures",
+        ]
+    )
+    assert price_plot_args.sampling_root == "artifacts/sampling"
+    assert price_plot_args.prices == "prices.csv"
+    assert price_plot_args.output_dir == "artifacts/figures"
+    uncertainty_plot_args = prompt_parser().parse_args(
+        [
+            "plot-uncertainty-distributions",
+            "--uncertainty-root",
+            "artifacts/readout",
+            "--output-dir",
+            "artifacts/uncertainty-figures",
+        ]
+    )
+    assert uncertainty_plot_args.uncertainty_root == "artifacts/readout"
+    assert uncertainty_plot_args.output_dir == "artifacts/uncertainty-figures"
     lens_args = lens_parser().parse_args([])
     assert lens_args.output is None
     assert lens_args.layer_stride == 1

@@ -205,6 +205,92 @@ ${RUN_ROOT}/visualization/
 
 直接在瀏覽器開啟 `attribution_dashboard.html` 即可。
 
+## 5. Multi-run price distribution 研究圖
+
+完整 multi-run sampling artifact 可以直接輸出三個 index 的 close-price 研究圖：
+
+```bash
+uv run prompt-analysis plot-price-distributions \
+  --sampling-root artifacts/prompt_analysis/qwen3.5-4b/sp500_uncertainty/generated_attribution_sampling_t0.7_r30 \
+  --prices sp500_r1k_r2k_entityBiasPrompt.csv \
+  --output-dir artifacts/prompt_analysis/qwen3.5-4b/sp500_uncertainty/generated_attribution_sampling_t0.7_r30/price_distribution
+```
+
+命令會先驗證 `manifest.json`、所有宣告的 `run_NNN/` 目錄、每個 run 的 record
+數量，以及每個 date/index/context condition 是否完整。Incomplete artifact 不會被靜默當成
+完整實驗。
+
+每個市場輸出一張 300-DPI PNG：上方兩個共享 price scale 的 panels 分別顯示 without
+context 與 with context，包含 actual close、LLM median、25–75% band 與 5–95% band；
+下方 error panel 比較兩個 conditions 每日期的 median absolute percentage error（MdAPE）：
+
+```text
+abs(generated price - actual close) / actual close × 100
+```
+
+輸出為：
+
+```text
+${OUTPUT_DIR}/
+├── sp500_price_distribution.png
+├── russell1000_price_distribution.png
+├── russell2000_price_distribution.png
+├── price_distribution_samples.csv
+├── price_distribution_summary.csv
+└── price_distribution_metadata.json
+```
+
+`price_distribution_samples.csv` 保留所有 run 的 normalized records，包括 raw generated
+text、parse status、actual close 與 sample-level error。只有 finite numeric `answer` 進入
+quantile 與 MdAPE；`null`、string、malformed 或 non-finite answers 不會被轉成 0。
+`price_distribution_metadata.json` 保存輸入 SHA-256、generation config、quantile method、
+error formula 與 valid/invalid counts。圖中的 bands 是 valid generated prices 的中央 90% 與
+50%，描述的是 sampling variability 與 prediction error，不是 causal effect。
+
+## 6. Final-layer uncertainty distribution 研究圖
+
+既有 readout artifact 已保存每個日期與 condition 的 final-layer uncertainty，因此可以直接
+建立跨日期分布，不需重新載入 model/lens 或執行 inference：
+
+```bash
+uv run prompt-analysis plot-uncertainty-distributions \
+  --uncertainty-root artifacts/qwen3.5-4b/qwen3.5_temperature_scope_per_date \
+  --output-dir artifacts/qwen3.5-4b/qwen3.5_uncertainty_distribution
+```
+
+Raw distribution 使用 ECDF，比較每個市場的 with-context 與 without-context：
+
+- `entropy_nats`：final-layer full-vocabulary softmax 的 Shannon entropy。
+- `effective_temperature`：final-normalized residual L2 norm 的倒數；不是 generation
+  sampling temperature。
+
+Paired distribution 會在每個市場內，以同日期配對後計算：
+
+```text
+with context − without context
+```
+
+Russell 1000 若有缺少 with-context 的日期，只會從 Russell 1000 的 paired set 排除，
+不影響另外兩個市場。Paired differences 是 descriptive associations，不是 causal effects。
+
+輸出為：
+
+```text
+${OUTPUT_DIR}/
+├── final_layer_entropy_raw_ecdf.png
+├── final_layer_entropy_paired_delta_violin.png
+├── final_layer_effective_temperature_raw_ecdf.png
+├── final_layer_effective_temperature_paired_delta_violin.png
+├── final_layer_uncertainty_distribution_raw.csv
+├── final_layer_uncertainty_paired_delta.csv
+├── final_layer_uncertainty_distribution_summary.csv
+└── final_layer_uncertainty_distribution_metadata.json
+```
+
+Metadata 保存 source SHA-256、condition/date counts、各市場 paired 與 unmatched counts、
+quantile method、metric definitions 與 non-causal interpretation。Entropy 與 effective
+temperature 使用不同 figures，不使用 dual axis。
+
 ## 完成檢查
 
 ```bash

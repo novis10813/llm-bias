@@ -7,11 +7,21 @@ from llm_bias.prompt_analysis.attribution import _semantic_scope_scores
 from llm_bias.prompt_analysis.validation import _aopc
 
 from llm_bias.prompt_analysis.visualization import (
+    _parse_generated_answer,
     build_attribution_data,
+    build_paired_uncertainty_deltas,
+    build_uncertainty_distribution_rows,
     load_final_layer_uncertainty,
+    load_price_distribution_samples,
+    plot_price_distributions,
+    plot_uncertainty_distribution_figures,
     render_attribution_html,
     select_attribution_dates,
+    summarize_price_distributions,
+    summarize_uncertainty_distributions,
     uncertainty_paths_from_root,
+    visualize_price_distributions,
+    visualize_uncertainty_distributions,
 )
 
 
@@ -205,6 +215,146 @@ def test_load_final_layer_uncertainty_discovers_arbitrary_conditions(tmp_path):
     }
 
 
+def _uncertainty_distribution_records():
+    rows = []
+    for index in ("sp500", "russell1000", "russell2000"):
+        for date_position, date in enumerate(
+            ("2020-01-01", "2020-01-02", "2020-01-03")
+        ):
+            for context in ("without", "with"):
+                if (
+                    index == "russell1000"
+                    and date == "2020-01-03"
+                    and context == "with"
+                ):
+                    continue
+                context_offset = 0.5 if context == "with" else 0.0
+                rows.append(
+                    {
+                        "date": date,
+                        "index": index,
+                        "context": context,
+                        "layer": 31,
+                        "entropy_nats": 1.0 + date_position + context_offset,
+                        "effective_temperature": 0.1
+                        + date_position * 0.01
+                        + context_offset * 0.02,
+                    }
+                )
+    return rows
+
+
+def test_uncertainty_distribution_rows_and_paired_deltas():
+    records = _uncertainty_distribution_records()
+
+    raw = build_uncertainty_distribution_rows(records)
+    paired = build_paired_uncertainty_deltas(records)
+    summary = summarize_uncertainty_distributions(raw, paired)
+
+    assert len(raw) == len(records) * 2
+    assert sum(row["index"] == "sp500" for row in paired) == 3
+    assert sum(row["index"] == "russell1000" for row in paired) == 2
+    assert sum(row["index"] == "russell2000" for row in paired) == 3
+    first_pair = next(
+        row
+        for row in paired
+        if row["index"] == "sp500" and row["date"] == "2020-01-01"
+    )
+    assert first_pair["entropy_delta_nats"] == pytest.approx(0.5)
+    assert first_pair["effective_temperature_delta"] == pytest.approx(0.01)
+    entropy_delta = next(
+        row
+        for row in summary
+        if row["distribution"] == "paired_delta"
+        and row["metric"] == "entropy_nats"
+        and row["index"] == "sp500"
+    )
+    assert entropy_delta["n"] == 3
+    assert entropy_delta["median"] == pytest.approx(0.5)
+
+
+def test_uncertainty_distribution_rejects_duplicate_and_nonfinite_records():
+    records = _uncertainty_distribution_records()
+    with pytest.raises(ValueError, match="duplicate uncertainty condition"):
+        build_uncertainty_distribution_rows([records[0], records[0]])
+
+    invalid = {**records[0], "entropy_nats": float("nan")}
+    with pytest.raises(ValueError, match="must be finite"):
+        build_uncertainty_distribution_rows([invalid])
+
+    mixed_layer = {**records[1], "layer": 30}
+    with pytest.raises(ValueError, match="one consistent output layer"):
+        build_uncertainty_distribution_rows([records[0], mixed_layer])
+
+
+def test_uncertainty_delta_plot_rejects_indices_without_pairs(tmp_path):
+    records = [
+        row for row in _uncertainty_distribution_records()
+        if row["index"] == "sp500" and row["context"] == "without"
+    ]
+    raw = build_uncertainty_distribution_rows(records)
+
+    with pytest.raises(ValueError, match="no common dates"):
+        plot_uncertainty_distribution_figures(raw, [], tmp_path)
+
+
+def test_visualize_uncertainty_distributions_writes_research_outputs(tmp_path):
+    source = tmp_path / "prompt_layer_uncertainty.jsonl"
+    rows = []
+    for record in _uncertainty_distribution_records():
+        rows.append(
+            {
+                "date": record["date"],
+                "index": record["index"],
+                "context": record["context"],
+                "layers": [
+                    {
+                        "layer": record["layer"],
+                        "is_output": True,
+                        "entropy_nats": record["entropy_nats"],
+                        "effective_temperature": record["effective_temperature"],
+                    }
+                ],
+            }
+        )
+    source.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8"
+    )
+    output = tmp_path / "output"
+
+    result = visualize_uncertainty_distributions(
+        uncertainty_paths={
+            ("sp500", "without"): source,
+            ("sp500", "with"): source,
+        },
+        output_dir=output,
+    )
+
+    assert result == output
+    for name in (
+        "final_layer_entropy_raw_ecdf.png",
+        "final_layer_entropy_paired_delta_violin.png",
+        "final_layer_effective_temperature_raw_ecdf.png",
+        "final_layer_effective_temperature_paired_delta_violin.png",
+    ):
+        path = output / name
+        assert path.is_file()
+        assert path.stat().st_size > 0
+    metadata = json.loads(
+        (output / "final_layer_uncertainty_distribution_metadata.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert metadata["records"] == len(rows)
+    assert metadata["raw_distribution_rows"] == len(rows) * 2
+    assert metadata["paired"]["by_index"]["russell1000"] == {
+        "n_pairs": 2,
+        "unmatched_dates": 1,
+        "date_rule": "intersection within index",
+    }
+    assert metadata["plots"]["dual_axis"] is False
+
+
 def test_select_attribution_dates_accepts_arbitrary_price_columns():
     rows = []
     for day in ("2020-01-01", "2020-01-02", "2020-01-03"):
@@ -288,3 +438,225 @@ def test_build_attribution_data_embeds_validation_scores():
     output = data["dates"][0]["conditions"][0]["output_tokens"][0]
     assert output["semantic_scope_aopc"] == pytest.approx(-0.3)
     assert data["dates"][0]["conditions"][0]["validation_summary"]["random_aopc_mean"] == pytest.approx(-0.1)
+
+
+def test_parse_generated_answer_accepts_json_with_wrappers():
+    parsed = _parse_generated_answer(
+        '```json\n{"answer": 123.5, "confidence": 90}\n```<|im_end|>'
+    )
+
+    assert parsed == {
+        "parsed_answer": 123.5,
+        "confidence": 90.0,
+        "parse_status": "valid",
+        "parse_reason": None,
+    }
+
+
+@pytest.mark.parametrize(
+    ("generated_text", "reason"),
+    [
+        ('{"answer": null}', "answer_null"),
+        ('{"answer": "123"}', "answer_not_numeric"),
+        ('{"answer": true}', "answer_not_numeric"),
+        ('{"answer": NaN}', "answer_not_finite"),
+        ('{"confidence": 90}', "answer_missing"),
+        ("not JSON", "json_object_not_found"),
+        ("{broken", "malformed_json"),
+        (None, "generated_text_not_string"),
+    ],
+)
+def test_parse_generated_answer_rejects_invalid_values(generated_text, reason):
+    parsed = _parse_generated_answer(generated_text)
+
+    assert parsed["parse_status"] == "invalid"
+    assert parsed["parse_reason"] == reason
+    assert parsed["parsed_answer"] is None
+
+
+def _write_price_sampling_fixture(tmp_path):
+    indices = ("sp500", "russell1000", "russell2000")
+    dates = ("2020-01-01", "2020-01-02")
+    prices = {
+        "2020-01-01": {"sp500": 100, "russell1000": 200, "russell2000": 300},
+        "2020-01-02": {"sp500": 110, "russell1000": 210, "russell2000": 310},
+    }
+    price_path = tmp_path / "prices.csv"
+    price_path.write_text(
+        "Date,sp500,russell1000,russell2000\n"
+        + "\n".join(
+            f'{date},{values["sp500"]},{values["russell1000"]},{values["russell2000"]}'
+            for date, values in prices.items()
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    root = tmp_path / "sampling"
+    root.mkdir()
+    prompt_columns = [
+        f"prompt_{context}_context_{index}"
+        for index in indices
+        for context in ("without", "with")
+    ]
+    records_per_run = len(dates) * len(prompt_columns)
+    manifest = {
+        "input": str(price_path),
+        "model": "fake-model",
+        "runs": 2,
+        "run_indices": [0, 1],
+        "generation": "sampling",
+        "generation_config": {"temperature": 0.7},
+        "selected_dates": list(dates),
+        "condition_counts": {column: len(dates) for column in prompt_columns},
+        "records_per_run": records_per_run,
+        "run_directories": [
+            {
+                "run_index": run_index,
+                "run_seed": 100 + run_index,
+                "directory": f"run_{run_index:03d}",
+                "records_written": records_per_run,
+            }
+            for run_index in range(2)
+        ],
+    }
+    (root / "manifest.json").write_text(
+        json.dumps(manifest) + "\n", encoding="utf-8"
+    )
+
+    for run_index in range(2):
+        run_dir = root / f"run_{run_index:03d}"
+        run_dir.mkdir()
+        rows = []
+        for sample_index, date in enumerate(dates):
+            for index in indices:
+                for context in ("without", "with"):
+                    actual = prices[date][index]
+                    answer = actual + (-10 if run_index == 0 else 10)
+                    generated_text = json.dumps({"answer": answer, "confidence": 90})
+                    if (
+                        run_index == 1
+                        and date == "2020-01-01"
+                        and index == "sp500"
+                        and context == "without"
+                    ):
+                        generated_text = '{"answer": null, "confidence": 90}'
+                    rows.append(
+                        {
+                            "run_index": run_index,
+                            "sample_index": sample_index,
+                            "date": date,
+                            "prompt_column": f"prompt_{context}_context_{index}",
+                            "index": index,
+                            "context": context,
+                            "generated_text": generated_text,
+                        }
+                    )
+        (run_dir / "generated_token_attribution.jsonl").write_text(
+            "\n".join(json.dumps(row) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+    return root, price_path
+
+
+def test_load_and_summarize_price_distribution_samples(tmp_path):
+    root, price_path = _write_price_sampling_fixture(tmp_path)
+
+    samples, manifest = load_price_distribution_samples(root, price_path)
+    summaries = summarize_price_distributions(samples)
+
+    assert manifest["runs"] == 2
+    assert len(samples) == 24
+    assert len(summaries) == 12
+    row = next(
+        row
+        for row in summaries
+        if row["date"] == "2020-01-01"
+        and row["index"] == "sp500"
+        and row["context"] == "without"
+    )
+    assert row["n_valid"] == 1
+    assert row["n_invalid"] == 1
+    assert row["median"] == pytest.approx(90)
+    assert row["median_absolute_percentage_error"] == pytest.approx(10)
+
+    complete_row = next(
+        row
+        for row in summaries
+        if row["date"] == "2020-01-01"
+        and row["index"] == "sp500"
+        and row["context"] == "with"
+    )
+    assert complete_row["q05"] == pytest.approx(91)
+    assert complete_row["median"] == pytest.approx(100)
+    assert complete_row["q95"] == pytest.approx(109)
+
+
+def test_load_price_distribution_samples_rejects_incomplete_runs(tmp_path):
+    root, price_path = _write_price_sampling_fixture(tmp_path)
+    (root / "run_001" / "generated_token_attribution.jsonl").unlink()
+
+    with pytest.raises(FileNotFoundError):
+        load_price_distribution_samples(root, price_path)
+
+
+def test_load_price_distribution_samples_validates_manifest_directories(tmp_path):
+    root, price_path = _write_price_sampling_fixture(tmp_path)
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["run_directories"][0]["directory"] = "run_001"
+    manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest directory"):
+        load_price_distribution_samples(root, price_path)
+
+
+def test_plot_price_distributions_includes_arbitrary_indices(tmp_path):
+    rows = [
+        {
+            "date": "2020-01-01",
+            "index": "aapl",
+            "context": context,
+            "actual_close": 100.0,
+            "n_invalid": 0,
+            "q05": 90.0,
+            "q25": 95.0,
+            "median": 100.0,
+            "q75": 105.0,
+            "q95": 110.0,
+            "median_absolute_percentage_error": 5.0,
+        }
+        for context in ("without", "with")
+    ]
+
+    paths = plot_price_distributions(rows, tmp_path)
+
+    assert paths == [tmp_path / "aapl_price_distribution.png"]
+    assert paths[0].is_file()
+
+
+def test_visualize_price_distributions_writes_research_outputs(tmp_path):
+    root, price_path = _write_price_sampling_fixture(tmp_path)
+    output = tmp_path / "output"
+
+    result = visualize_price_distributions(
+        sampling_root=root,
+        prices_path=price_path,
+        output_dir=output,
+    )
+
+    assert result == output
+    for index in ("sp500", "russell1000", "russell2000"):
+        figure = output / f"{index}_price_distribution.png"
+        assert figure.is_file()
+        assert figure.stat().st_size > 0
+    samples = (output / "price_distribution_samples.csv").read_text(encoding="utf-8")
+    summary = (output / "price_distribution_summary.csv").read_text(encoding="utf-8")
+    metadata = json.loads(
+        (output / "price_distribution_metadata.json").read_text(encoding="utf-8")
+    )
+    assert len(samples.splitlines()) == 25
+    assert len(summary.splitlines()) == 13
+    assert metadata["records_total"] == 24
+    assert metadata["records_invalid"] == 1
+    assert metadata["error_metric"]["name"] == "median_absolute_percentage_error"

@@ -363,6 +363,44 @@ influence. It is a local first-order sensitivity score; it is not attention or
 a standalone causal claim. The default is 64 new tokens so the JSON answer and
 confidence/evidence fields are included when the model emits them.
 
+For a complete multi-run sampling artifact, plot the actual close against the
+LLM price distribution and add a per-date error panel:
+
+```bash
+uv run prompt-analysis plot-price-distributions \
+  --sampling-root artifacts/prompt_analysis/qwen3.5-4b/sp500_uncertainty/generated_attribution_sampling_t0.7_r30 \
+  --prices sp500_r1k_r2k_entityBiasPrompt.csv \
+  --output-dir artifacts/prompt_analysis/qwen3.5-4b/sp500_uncertainty/generated_attribution_sampling_t0.7_r30/price_distribution
+```
+
+This command requires a complete manifest and all declared run directories. It
+writes one 300-DPI figure per index, with separate without-context and
+with-context price panels plus a shared median absolute percentage error (MdAPE)
+panel. The price panels show the actual close, LLM median, 25–75% band, and
+5–95% band. Invalid generated answers are excluded from numeric summaries but
+retained in `price_distribution_samples.csv`; the summary CSV and metadata JSON
+record the exact quantile method, error formula, input hashes, and valid/invalid
+counts. These figures describe sampling variability and prediction error, not a
+causal effect.
+
+Existing final-layer readout artifacts can also be summarized as cross-date
+uncertainty distributions without rerunning the model:
+
+```bash
+uv run prompt-analysis plot-uncertainty-distributions \
+  --uncertainty-root artifacts/qwen3.5-4b/qwen3.5_temperature_scope_per_date \
+  --output-dir artifacts/qwen3.5-4b/qwen3.5_uncertainty_distribution
+```
+
+The command writes separate entropy and effective-temperature ECDFs for the
+with-context and without-context conditions, plus violin plots of the paired
+same-date `with − without` differences. It also preserves raw, paired, and
+summary CSV tables and input hashes in metadata. Entropy is the Shannon entropy
+of the final-layer full-vocabulary softmax. Effective temperature is the
+reciprocal L2 norm of the final-normalized residual; it is not generation
+sampling temperature. Paired differences are descriptive associations, not
+causal estimates.
+
 For a selected-date dashboard with longer generated JSON outputs, first run
 attribution only for the dates used by the dashboard:
 

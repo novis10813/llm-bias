@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
+import math
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
+
+import numpy as np
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 DEFAULT_ARTIFACT_ROOT = "artifacts/prompt_analysis"
 DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/generated_attribution/generated_token_attribution.jsonl"
 DEFAULT_VALIDATION = "artifacts/prompt_analysis/attribution_validation/semantic_scope_aopc.jsonl"
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/visualization"
+DEFAULT_PRICE_DISTRIBUTION_OUTPUT = "artifacts/prompt_analysis/price_distribution"
+DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT = (
+    "artifacts/prompt_analysis/uncertainty_distribution"
+)
 DEFAULT_TOKENIZER = ".cache/models/llama-3.2-1b-instruct"
 
 INDEX_LABELS = {
@@ -23,6 +31,18 @@ INDEX_LABELS = {
 }
 INDEX_ORDER = ("sp500", "russell1000", "russell2000")
 CONTEXT_ORDER = ("without", "with")
+UNCERTAINTY_METRICS = {
+    "entropy_nats": {
+        "label": "Entropy (nats)",
+        "delta_label": "Entropy difference (nats)",
+        "file_stem": "entropy",
+    },
+    "effective_temperature": {
+        "label": "Effective temperature",
+        "delta_label": "Effective-temperature difference",
+        "file_stem": "effective_temperature",
+    },
+}
 DEFAULT_UNCERTAINTY_FILES = {
     ("sp500", "without"): "artifacts/prompt_analysis/readout/sp500_without/prompt_layer_uncertainty.jsonl",
     ("sp500", "with"): "artifacts/prompt_analysis/readout/sp500_with/prompt_layer_uncertainty.jsonl",
@@ -161,6 +181,598 @@ def load_final_layer_uncertainty(
     return sorted(result, key=lambda row: (row["date"], row["index"], row["context"]))
 
 
+def build_uncertainty_distribution_rows(
+    records: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Convert final-layer uncertainty records into a metric-long table."""
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    layers: set[Any] = set()
+    for record in records:
+        date = str(record.get("date", ""))
+        index = str(record.get("index", ""))
+        context = str(record.get("context", ""))
+        key = (date, index, context)
+        if not all(key):
+            raise ValueError("uncertainty record is missing date/index/context")
+        if key in seen:
+            raise ValueError(f"duplicate uncertainty condition: {date}/{index}/{context}")
+        seen.add(key)
+        layers.add(record.get("layer"))
+        for metric in UNCERTAINTY_METRICS:
+            value = float(record[metric])
+            if not math.isfinite(value):
+                raise ValueError(f"uncertainty metric must be finite: {key}/{metric}")
+            if metric == "entropy_nats" and value < 0:
+                raise ValueError(f"entropy must be non-negative: {key}")
+            if metric == "effective_temperature" and value <= 0:
+                raise ValueError(f"effective temperature must be positive: {key}")
+            result.append(
+                {
+                    "date": date,
+                    "index": index,
+                    "context": context,
+                    "layer": record.get("layer"),
+                    "metric": metric,
+                    "value": value,
+                }
+            )
+    if len(layers) != 1 or None in layers:
+        raise ValueError(
+            f"uncertainty distribution requires one consistent output layer, found {layers}"
+        )
+    index_positions = {index: position for position, index in enumerate(INDEX_ORDER)}
+    context_positions = {context: position for position, context in enumerate(CONTEXT_ORDER)}
+    metric_positions = {
+        metric: position for position, metric in enumerate(UNCERTAINTY_METRICS)
+    }
+    return sorted(
+        result,
+        key=lambda row: (
+            metric_positions[row["metric"]],
+            index_positions.get(row["index"], len(index_positions)),
+            context_positions.get(row["context"], len(context_positions)),
+            row["date"],
+        ),
+    )
+
+
+def build_paired_uncertainty_deltas(
+    records: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Pair with/without readouts by date within each index."""
+    conditions: dict[tuple[str, str], dict[str, dict[str, Any]]] = defaultdict(dict)
+    layers: set[Any] = set()
+    for record in records:
+        date = str(record.get("date", ""))
+        index = str(record.get("index", ""))
+        context = str(record.get("context", ""))
+        if context not in CONTEXT_ORDER:
+            raise ValueError(f"unsupported uncertainty context: {context!r}")
+        layers.add(record.get("layer"))
+        entropy = float(record["entropy_nats"])
+        temperature = float(record["effective_temperature"])
+        if not math.isfinite(entropy) or entropy < 0:
+            raise ValueError(f"entropy must be finite and non-negative: {date}/{index}")
+        if not math.isfinite(temperature) or temperature <= 0:
+            raise ValueError(
+                f"effective temperature must be finite and positive: {date}/{index}"
+            )
+        by_context = conditions[(index, date)]
+        if context in by_context:
+            raise ValueError(f"duplicate uncertainty condition: {date}/{index}/{context}")
+        by_context[context] = record
+
+    if len(layers) != 1 or None in layers:
+        raise ValueError(
+            f"paired uncertainty requires one consistent output layer, found {layers}"
+        )
+    result: list[dict[str, Any]] = []
+    for (index, date), by_context in conditions.items():
+        if not all(context in by_context for context in CONTEXT_ORDER):
+            continue
+        without = by_context["without"]
+        with_context = by_context["with"]
+        entropy_without = float(without["entropy_nats"])
+        entropy_with = float(with_context["entropy_nats"])
+        temperature_without = float(without["effective_temperature"])
+        temperature_with = float(with_context["effective_temperature"])
+        values = (
+            entropy_without,
+            entropy_with,
+            temperature_without,
+            temperature_with,
+        )
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError(f"paired uncertainty metrics must be finite: {date}/{index}")
+        result.append(
+            {
+                "date": date,
+                "index": index,
+                "entropy_without": entropy_without,
+                "entropy_with": entropy_with,
+                "entropy_delta_nats": entropy_with - entropy_without,
+                "effective_temperature_without": temperature_without,
+                "effective_temperature_with": temperature_with,
+                "effective_temperature_delta": temperature_with - temperature_without,
+            }
+        )
+    index_positions = {index: position for position, index in enumerate(INDEX_ORDER)}
+    return sorted(
+        result,
+        key=lambda row: (
+            index_positions.get(row["index"], len(index_positions)),
+            row["date"],
+        ),
+    )
+
+
+def _distribution_statistics(values: Iterable[float]) -> dict[str, Any]:
+    array = np.asarray(list(values), dtype=float)
+    if array.size == 0:
+        raise ValueError("cannot summarize an empty uncertainty distribution")
+    if not np.isfinite(array).all():
+        raise ValueError("uncertainty distribution values must be finite")
+    quantiles = np.percentile(
+        array,
+        [1, 5, 25, 50, 75, 95, 99],
+        method="linear",
+    )
+    return {
+        "n": int(array.size),
+        "mean": float(array.mean()),
+        "std": float(array.std(ddof=1)) if array.size > 1 else 0.0,
+        "min": float(array.min()),
+        "q01": float(quantiles[0]),
+        "q05": float(quantiles[1]),
+        "q25": float(quantiles[2]),
+        "median": float(quantiles[3]),
+        "q75": float(quantiles[4]),
+        "q95": float(quantiles[5]),
+        "q99": float(quantiles[6]),
+        "max": float(array.max()),
+    }
+
+
+def summarize_uncertainty_distributions(
+    raw_rows: Iterable[dict[str, Any]],
+    paired_rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Summarize raw conditions and paired with-minus-without deltas."""
+    raw_groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in raw_rows:
+        raw_groups[(row["metric"], row["index"], row["context"])].append(row)
+
+    result: list[dict[str, Any]] = []
+    for (metric, index, context), rows in raw_groups.items():
+        dates = sorted(str(row["date"]) for row in rows)
+        result.append(
+            {
+                "distribution": "raw",
+                "metric": metric,
+                "index": index,
+                "context": context,
+                "date_min": dates[0],
+                "date_max": dates[-1],
+                **_distribution_statistics(float(row["value"]) for row in rows),
+            }
+        )
+
+    paired_metric_fields = {
+        "entropy_nats": "entropy_delta_nats",
+        "effective_temperature": "effective_temperature_delta",
+    }
+    paired_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in paired_rows:
+        paired_groups[row["index"]].append(row)
+    for index, rows in paired_groups.items():
+        dates = sorted(str(row["date"]) for row in rows)
+        for metric, field in paired_metric_fields.items():
+            result.append(
+                {
+                    "distribution": "paired_delta",
+                    "metric": metric,
+                    "index": index,
+                    "context": "with_minus_without",
+                    "date_min": dates[0],
+                    "date_max": dates[-1],
+                    **_distribution_statistics(float(row[field]) for row in rows),
+                }
+            )
+
+    distribution_positions = {"raw": 0, "paired_delta": 1}
+    metric_positions = {
+        metric: position for position, metric in enumerate(UNCERTAINTY_METRICS)
+    }
+    index_positions = {index: position for position, index in enumerate(INDEX_ORDER)}
+    context_positions = {
+        context: position for position, context in enumerate(
+            (*CONTEXT_ORDER, "with_minus_without")
+        )
+    }
+    return sorted(
+        result,
+        key=lambda row: (
+            distribution_positions[row["distribution"]],
+            metric_positions[row["metric"]],
+            index_positions.get(row["index"], len(index_positions)),
+            context_positions.get(row["context"], len(context_positions)),
+        ),
+    )
+
+
+def _uncertainty_index_order(rows: Iterable[dict[str, Any]]) -> list[str]:
+    available = {str(row["index"]) for row in rows}
+    result = [index for index in INDEX_ORDER if index in available]
+    result.extend(sorted(available - set(result)))
+    return result
+
+
+def plot_uncertainty_distribution_figures(
+    raw_rows: Iterable[dict[str, Any]],
+    paired_rows: Iterable[dict[str, Any]],
+    output_dir: Path,
+) -> list[Path]:
+    """Plot raw ECDFs and paired-delta violins for each uncertainty metric."""
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    raw = list(raw_rows)
+    paired = list(paired_rows)
+    indices = _uncertainty_index_order(raw)
+    if not indices:
+        raise ValueError("uncertainty distribution contains no indices")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    context_colors = {"without": "#eb6834", "with": "#2a78d6"}
+    context_styles = {"without": "--", "with": "-"}
+    violin_color = "#2a78d6"
+    paths: list[Path] = []
+
+    for metric, config in UNCERTAINTY_METRICS.items():
+        figure, axes = plt.subplots(
+            len(indices),
+            1,
+            figsize=(12.5, 3.0 * len(indices) + 1.6),
+            sharex=True,
+            sharey=True,
+            squeeze=False,
+        )
+        for position, index in enumerate(indices):
+            axis = axes[position][0]
+            for context in CONTEXT_ORDER:
+                values = np.sort(
+                    np.asarray(
+                        [
+                            float(row["value"])
+                            for row in raw
+                            if row["metric"] == metric
+                            and row["index"] == index
+                            and row["context"] == context
+                        ],
+                        dtype=float,
+                    )
+                )
+                if values.size == 0:
+                    continue
+                cumulative = np.arange(1, values.size + 1) / values.size
+                axis.plot(
+                    values,
+                    cumulative,
+                    color=context_colors[context],
+                    linestyle=context_styles[context],
+                    linewidth=2.0,
+                    solid_capstyle="round",
+                    label=(
+                        f"Without context (n={values.size:,})"
+                        if context == "without"
+                        else f"With context (n={values.size:,})"
+                    ),
+                )
+            axis.set_title(_index_label(index), loc="left", fontsize=11, fontweight="bold")
+            axis.set_ylabel("Cumulative proportion")
+            axis.set_ylim(0, 1.01)
+            axis.grid(color="#e1e0d9", linewidth=0.8)
+            axis.spines[["top", "right"]].set_visible(False)
+            axis.legend(frameon=False, loc="lower right")
+        axes[-1][0].set_xlabel(config["label"])
+        figure.suptitle(
+            f"Final-layer {config['label'].lower()} distribution across dates",
+            fontsize=15,
+            fontweight="bold",
+        )
+        figure.text(
+            0.01,
+            0.012,
+            "Each curve is an empirical cross-date distribution; no model inference is rerun.",
+            fontsize=8.5,
+            color="#52514e",
+        )
+        figure.tight_layout(rect=(0, 0.035, 1, 0.965))
+        raw_path = output_dir / f"final_layer_{config['file_stem']}_raw_ecdf.png"
+        figure.savefig(raw_path, dpi=300, bbox_inches="tight", facecolor="#fcfcfb")
+        plt.close(figure)
+        paths.append(raw_path)
+
+        delta_field = (
+            "entropy_delta_nats"
+            if metric == "entropy_nats"
+            else "effective_temperature_delta"
+        )
+        distributions = [
+            np.asarray(
+                [float(row[delta_field]) for row in paired if row["index"] == index],
+                dtype=float,
+            )
+            for index in indices
+        ]
+        empty_indices = [
+            index for index, values in zip(indices, distributions, strict=True)
+            if values.size == 0
+        ]
+        if empty_indices:
+            raise ValueError(
+                "paired uncertainty has no common dates for: "
+                + ", ".join(empty_indices)
+            )
+        delta_figure, delta_axis = plt.subplots(figsize=(10.5, 6.5))
+        violin_items = [
+            (position, values)
+            for position, values in enumerate(distributions, start=1)
+            if values.size >= 5
+        ]
+        if violin_items:
+            violin = delta_axis.violinplot(
+                [values for _position, values in violin_items],
+                positions=[position for position, _values in violin_items],
+                widths=0.68,
+                showmeans=False,
+                showmedians=False,
+                showextrema=False,
+            )
+            for body in violin["bodies"]:
+                body.set_facecolor(violin_color)
+                body.set_edgecolor("none")
+                body.set_alpha(0.30)
+        for position, (index, values) in enumerate(
+            zip(indices, distributions, strict=True), start=1
+        ):
+            if values.size < 5:
+                offsets = np.linspace(-0.12, 0.12, values.size)
+                delta_axis.scatter(
+                    position + offsets,
+                    values,
+                    s=36,
+                    color=violin_color,
+                    edgecolor="#fcfcfb",
+                    linewidth=1.0,
+                    alpha=0.65,
+                    zorder=2,
+                )
+            q25, median, q75 = np.percentile(
+                values, [25, 50, 75], method="linear"
+            )
+            delta_axis.vlines(position, q25, q75, color="#0b0b0b", linewidth=6)
+            delta_axis.scatter(
+                position,
+                median,
+                s=56,
+                color=violin_color,
+                edgecolor="#fcfcfb",
+                linewidth=1.5,
+                zorder=3,
+            )
+            delta_axis.text(
+                position,
+                0.98,
+                f"n={values.size:,}",
+                transform=delta_axis.get_xaxis_transform(),
+                ha="center",
+                va="top",
+                fontsize=9,
+                color="#52514e",
+            )
+        delta_axis.axhline(0, color="#898781", linewidth=1.0)
+        delta_axis.set_xticks(
+            np.arange(1, len(indices) + 1),
+            [_index_label(index) for index in indices],
+        )
+        delta_axis.set_ylabel(config["delta_label"] + " · with − without")
+        delta_axis.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+        delta_axis.spines[["top", "right"]].set_visible(False)
+        delta_axis.set_title(
+            f"Final-layer {config['label'].lower()} paired differences",
+            fontsize=15,
+            fontweight="bold",
+            pad=16,
+        )
+        delta_axis.legend(
+            handles=[
+                Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="#0b0b0b",
+                    markerfacecolor="#fcfcfb",
+                    linewidth=6,
+                    markersize=7,
+                    label="Median/IQR; sparse groups show observations",
+                )
+            ],
+            frameon=False,
+            loc="lower right",
+        )
+        delta_figure.text(
+            0.01,
+            0.012,
+            (
+                "Paired within each index on dates present in both contexts; "
+                "with − without is descriptive, not a causal estimate."
+            ),
+            fontsize=8.5,
+            color="#52514e",
+        )
+        delta_figure.tight_layout(rect=(0, 0.045, 1, 1))
+        delta_path = (
+            output_dir / f"final_layer_{config['file_stem']}_paired_delta_violin.png"
+        )
+        delta_figure.savefig(
+            delta_path, dpi=300, bbox_inches="tight", facecolor="#fcfcfb"
+        )
+        plt.close(delta_figure)
+        paths.append(delta_path)
+    return paths
+
+
+def visualize_uncertainty_distributions(
+    *,
+    uncertainty_paths: dict[tuple[str, str], str | Path],
+    output_dir: str | Path = DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT,
+) -> Path:
+    """Create final-layer uncertainty distribution research artifacts."""
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    records = load_final_layer_uncertainty(uncertainty_paths)
+    raw_rows = build_uncertainty_distribution_rows(records)
+    paired_rows = build_paired_uncertainty_deltas(records)
+    indices = set(_uncertainty_index_order(records))
+    paired_indices = {str(row["index"]) for row in paired_rows}
+    if missing_indices := sorted(indices - paired_indices):
+        raise ValueError(
+            "paired uncertainty has no common dates for: "
+            + ", ".join(missing_indices)
+        )
+    summaries = summarize_uncertainty_distributions(raw_rows, paired_rows)
+
+    raw_fields = ["date", "index", "context", "layer", "metric", "value"]
+    paired_fields = [
+        "date",
+        "index",
+        "entropy_without",
+        "entropy_with",
+        "entropy_delta_nats",
+        "effective_temperature_without",
+        "effective_temperature_with",
+        "effective_temperature_delta",
+    ]
+    summary_fields = [
+        "distribution",
+        "metric",
+        "index",
+        "context",
+        "n",
+        "date_min",
+        "date_max",
+        "mean",
+        "std",
+        "min",
+        "q01",
+        "q05",
+        "q25",
+        "median",
+        "q75",
+        "q95",
+        "q99",
+        "max",
+    ]
+    _write_csv(
+        output / "final_layer_uncertainty_distribution_raw.csv",
+        raw_rows,
+        raw_fields,
+    )
+    _write_csv(
+        output / "final_layer_uncertainty_paired_delta.csv",
+        paired_rows,
+        paired_fields,
+    )
+    _write_csv(
+        output / "final_layer_uncertainty_distribution_summary.csv",
+        summaries,
+        summary_fields,
+    )
+    figure_paths = plot_uncertainty_distribution_figures(raw_rows, paired_rows, output)
+
+    source_paths = sorted({Path(path) for path in uncertainty_paths.values()})
+    counts_by_condition: dict[str, int] = defaultdict(int)
+    dates_by_condition: dict[str, list[str]] = defaultdict(list)
+    for record in records:
+        condition = f"{record['index']}/{record['context']}"
+        counts_by_condition[condition] += 1
+        dates_by_condition[condition].append(str(record["date"]))
+    paired_counts: dict[str, int] = defaultdict(int)
+    for row in paired_rows:
+        paired_counts[row["index"]] += 1
+    paired_metadata = {}
+    for index in _uncertainty_index_order(records):
+        without_dates = {
+            str(record["date"])
+            for record in records
+            if record["index"] == index and record["context"] == "without"
+        }
+        with_dates = {
+            str(record["date"])
+            for record in records
+            if record["index"] == index and record["context"] == "with"
+        }
+        paired_metadata[index] = {
+            "n_pairs": paired_counts[index],
+            "unmatched_dates": len(without_dates ^ with_dates),
+            "date_rule": "intersection within index",
+        }
+    metadata = {
+        "sources": [
+            {"path": str(path), "sha256": _sha256_file(path)} for path in source_paths
+        ],
+        "records": len(records),
+        "output_layer": next(iter({record["layer"] for record in records})),
+        "raw_distribution_rows": len(raw_rows),
+        "paired_rows": len(paired_rows),
+        "counts_by_condition": dict(sorted(counts_by_condition.items())),
+        "date_ranges_by_condition": {
+            condition: {"min": min(dates), "max": max(dates)}
+            for condition, dates in sorted(dates_by_condition.items())
+        },
+        "paired": {
+            "definition": "with_context - without_context",
+            "by_index": paired_metadata,
+        },
+        "metrics": {
+            "entropy_nats": {
+                "unit": "nats",
+                "definition": "Shannon entropy of the final-layer full-vocabulary softmax",
+            },
+            "effective_temperature": {
+                "definition": "reciprocal L2 norm of the final-normalized residual",
+                "sampling_temperature": False,
+            },
+        },
+        "quantiles": {
+            "values": [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99],
+            "method": "numpy.percentile(method=linear)",
+        },
+        "plots": {
+            "raw": "empirical cumulative distribution function",
+            "paired_delta": "violin with median and interquartile range",
+            "dual_axis": False,
+        },
+        "interpretation": (
+            "Paired with-minus-without differences are descriptive associations, "
+            "not causal estimates."
+        ),
+        "outputs": [
+            "final_layer_uncertainty_distribution_raw.csv",
+            "final_layer_uncertainty_paired_delta.csv",
+            "final_layer_uncertainty_distribution_summary.csv",
+            "final_layer_uncertainty_distribution_metadata.json",
+            *(path.name for path in figure_paths),
+        ],
+    }
+    (output / "final_layer_uncertainty_distribution_metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return output
+
+
 def _load_prices(
     path: Path,
     indices: Iterable[str] = INDEX_ORDER,
@@ -187,6 +799,592 @@ def _load_prices(
     if not valid_rows:
         raise ValueError(f"price CSV contains no complete price rows: {path}")
     return valid_rows
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _parse_generated_answer(generated_text: Any) -> dict[str, Any]:
+    """Extract a finite numeric answer from a generated JSON object."""
+    if not isinstance(generated_text, str):
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": "generated_text_not_string",
+        }
+    object_start = generated_text.find("{")
+    if object_start < 0:
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": "json_object_not_found",
+        }
+    try:
+        payload, _end = json.JSONDecoder().raw_decode(generated_text[object_start:])
+    except json.JSONDecodeError:
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": "malformed_json",
+        }
+    if not isinstance(payload, dict):
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": "json_payload_not_object",
+        }
+    answer = payload.get("answer")
+    if answer is None:
+        reason = "answer_missing" if "answer" not in payload else "answer_null"
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": reason,
+        }
+    if isinstance(answer, bool) or not isinstance(answer, (int, float)):
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": "answer_not_numeric",
+        }
+    parsed_answer = float(answer)
+    if not math.isfinite(parsed_answer):
+        return {
+            "parsed_answer": None,
+            "confidence": None,
+            "parse_status": "invalid",
+            "parse_reason": "answer_not_finite",
+        }
+    confidence = payload.get("confidence")
+    parsed_confidence = (
+        float(confidence)
+        if not isinstance(confidence, bool)
+        and isinstance(confidence, (int, float))
+        and math.isfinite(float(confidence))
+        else None
+    )
+    return {
+        "parsed_answer": parsed_answer,
+        "confidence": parsed_confidence,
+        "parse_status": "valid",
+        "parse_reason": None,
+    }
+
+
+def _sampling_condition(prompt_column: str) -> tuple[str, str]:
+    for context in CONTEXT_ORDER:
+        prefix = f"prompt_{context}_context_"
+        if prompt_column.startswith(prefix) and len(prompt_column) > len(prefix):
+            return prompt_column[len(prefix) :], context
+    raise ValueError(f"invalid sampling prompt column: {prompt_column!r}")
+
+
+def _load_price_lookup(
+    path: Path,
+    indices: Iterable[str],
+) -> dict[tuple[str, str], float]:
+    rows = _load_prices(path, indices)
+    lookup: dict[tuple[str, str], float] = {}
+    for row in rows:
+        date = str(row["Date"])
+        for index in indices:
+            key = (date, index)
+            if key in lookup:
+                raise ValueError(f"duplicate close price for {date}/{index}: {path}")
+            value = float(row[index])
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"close price must be finite and positive for {date}/{index}")
+            lookup[key] = value
+    return lookup
+
+
+def load_price_distribution_samples(
+    sampling_root: str | Path,
+    prices_path: str | Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load and normalize every record in a complete multi-run artifact."""
+    root = Path(sampling_root)
+    manifest_path = root / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(manifest_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError(f"expected JSON object in {manifest_path}")
+
+    runs = manifest.get("runs")
+    run_indices = manifest.get("run_indices")
+    if not isinstance(runs, int) or runs < 1:
+        raise ValueError("sampling manifest must contain a positive runs value")
+    if run_indices != list(range(runs)):
+        raise ValueError("sampling manifest run_indices must be contiguous from zero")
+
+    condition_counts = manifest.get("condition_counts")
+    selected_dates = manifest.get("selected_dates")
+    records_per_run = manifest.get("records_per_run")
+    if not isinstance(condition_counts, dict) or not condition_counts:
+        raise ValueError("sampling manifest has no condition_counts")
+    if not isinstance(selected_dates, list) or not selected_dates:
+        raise ValueError("sampling manifest has no selected_dates")
+    if len(set(selected_dates)) != len(selected_dates):
+        raise ValueError("sampling manifest contains duplicate selected_dates")
+    if not isinstance(records_per_run, int) or records_per_run < 1:
+        raise ValueError("sampling manifest has no valid records_per_run")
+
+    conditions: dict[str, tuple[str, str]] = {}
+    for prompt_column, count in condition_counts.items():
+        if not isinstance(prompt_column, str) or count != len(selected_dates):
+            raise ValueError("sampling condition counts must match selected_dates")
+        conditions[prompt_column] = _sampling_condition(prompt_column)
+    indices = tuple(dict.fromkeys(index for index, _context in conditions.values()))
+    if records_per_run != len(selected_dates) * len(conditions):
+        raise ValueError("sampling manifest records_per_run does not match its conditions")
+
+    expected_directories = {f"run_{run_index:03d}" for run_index in run_indices}
+    actual_directories = {
+        path.name
+        for path in root.iterdir()
+        if path.is_dir() and path.name.startswith("run_")
+    }
+    if actual_directories != expected_directories:
+        missing = sorted(expected_directories - actual_directories)
+        unexpected = sorted(actual_directories - expected_directories)
+        raise ValueError(
+            f"sampling run directories do not match manifest; missing={missing}, "
+            f"unexpected={unexpected}"
+        )
+
+    run_metadata = manifest.get("run_directories")
+    if not isinstance(run_metadata, list) or len(run_metadata) != runs:
+        raise ValueError("sampling manifest run_directories does not match runs")
+    run_seeds: dict[int, int | None] = {}
+    run_directories: dict[int, str] = {}
+    expected_written: dict[int, int] = {}
+    for entry in run_metadata:
+        if not isinstance(entry, dict):
+            raise ValueError("sampling manifest run directory entry must be an object")
+        run_index = entry.get("run_index")
+        if run_index not in run_indices or run_index in run_seeds:
+            raise ValueError("sampling manifest has invalid or duplicate run_index")
+        directory = entry.get("directory")
+        expected_directory = f"run_{run_index:03d}"
+        if directory != expected_directory:
+            raise ValueError(
+                f"sampling manifest directory for run {run_index} must be "
+                f"{expected_directory!r}"
+            )
+        run_seeds[run_index] = entry.get("run_seed")
+        run_directories[run_index] = directory
+        expected_written[run_index] = entry.get("records_written")
+    if any(count != records_per_run for count in expected_written.values()):
+        raise ValueError("sampling manifest records_written does not match records_per_run")
+
+    prices = _load_price_lookup(Path(prices_path), indices)
+    expected_keys = {
+        (str(date), prompt_column)
+        for date in selected_dates
+        for prompt_column in conditions
+    }
+    samples: list[dict[str, Any]] = []
+    for run_index in run_indices:
+        run_path = root / run_directories[run_index] / "generated_token_attribution.jsonl"
+        if not run_path.is_file():
+            raise FileNotFoundError(run_path)
+        seen_keys: set[tuple[str, str]] = set()
+        row_count = 0
+        with run_path.open(encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"invalid JSON in {run_path}:{line_number}") from exc
+                if not isinstance(row, dict):
+                    raise ValueError(f"expected JSON object in {run_path}:{line_number}")
+                row_count += 1
+                if row.get("run_index") != run_index:
+                    raise ValueError(f"run_index mismatch in {run_path}:{line_number}")
+                date = str(row.get("date", ""))
+                prompt_column = str(row.get("prompt_column", ""))
+                key = (date, prompt_column)
+                if key not in expected_keys:
+                    raise ValueError(f"unexpected date/condition in {run_path}:{line_number}")
+                if key in seen_keys:
+                    raise ValueError(f"duplicate date/condition in {run_path}:{line_number}")
+                seen_keys.add(key)
+                index, context = conditions[prompt_column]
+                if row.get("index") != index or row.get("context") != context:
+                    raise ValueError(f"condition fields disagree in {run_path}:{line_number}")
+                price_key = (date, index)
+                if price_key not in prices:
+                    raise ValueError(f"missing close price for {date}/{index}")
+
+                parsed = _parse_generated_answer(row.get("generated_text"))
+                answer = parsed["parsed_answer"]
+                actual_close = prices[price_key]
+                absolute_percentage_error = (
+                    abs(answer - actual_close) / actual_close * 100.0
+                    if answer is not None
+                    else None
+                )
+                samples.append(
+                    {
+                        "run_index": run_index,
+                        "run_seed": run_seeds[run_index],
+                        "sample_index": row.get("sample_index"),
+                        "date": date,
+                        "index": index,
+                        "context": context,
+                        "prompt_column": prompt_column,
+                        "generated_text": row.get("generated_text"),
+                        **parsed,
+                        "actual_close": actual_close,
+                        "absolute_percentage_error": absolute_percentage_error,
+                    }
+                )
+        if row_count != records_per_run or seen_keys != expected_keys:
+            raise ValueError(f"incomplete sampling records in {run_path}")
+
+    return samples, manifest
+
+
+def summarize_price_distributions(
+    samples: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Summarize price samples by date, index, and context."""
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for sample in samples:
+        groups[(sample["date"], sample["index"], sample["context"])].append(sample)
+
+    index_positions = {index: position for position, index in enumerate(INDEX_ORDER)}
+    context_positions = {context: position for position, context in enumerate(CONTEXT_ORDER)}
+    result: list[dict[str, Any]] = []
+    for (date, index, context), rows in groups.items():
+        actual_values = {float(row["actual_close"]) for row in rows}
+        if len(actual_values) != 1:
+            raise ValueError(f"inconsistent close prices for {date}/{index}/{context}")
+        values = [
+            float(row["parsed_answer"])
+            for row in rows
+            if row["parsed_answer"] is not None
+        ]
+        errors = [
+            float(row["absolute_percentage_error"])
+            for row in rows
+            if row["absolute_percentage_error"] is not None
+        ]
+        quantiles = (
+            np.percentile(values, [5, 25, 50, 75, 95], method="linear").tolist()
+            if values
+            else [None] * 5
+        )
+        result.append(
+            {
+                "date": date,
+                "index": index,
+                "context": context,
+                "actual_close": next(iter(actual_values)),
+                "n_total": len(rows),
+                "n_valid": len(values),
+                "n_invalid": len(rows) - len(values),
+                "validity_rate": len(values) / len(rows),
+                "min": min(values) if values else None,
+                "q05": quantiles[0],
+                "q25": quantiles[1],
+                "median": quantiles[2],
+                "q75": quantiles[3],
+                "q95": quantiles[4],
+                "max": max(values) if values else None,
+                "median_absolute_percentage_error": (
+                    float(np.median(errors)) if errors else None
+                ),
+            }
+        )
+    return sorted(
+        result,
+        key=lambda row: (
+            row["date"],
+            index_positions.get(row["index"], len(index_positions)),
+            context_positions.get(row["context"], len(context_positions)),
+        ),
+    )
+
+
+def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows({field: row.get(field) for field in fieldnames} for row in rows)
+
+
+def plot_price_distributions(
+    summaries: Iterable[dict[str, Any]],
+    output_dir: Path,
+) -> list[Path]:
+    """Plot actual closes, generated price bands, and MdAPE for each index."""
+    import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    rows = list(summaries)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    colors = {"without": "#eb6834", "with": "#2a78d6"}
+    line_styles = {"without": "--", "with": "-"}
+    markers = {"without": "s", "with": "o"}
+    paths: list[Path] = []
+    available_indices = set(str(row["index"]) for row in rows)
+    indices = [index for index in INDEX_ORDER if index in available_indices]
+    indices.extend(sorted(available_indices - set(indices)))
+
+    for index in indices:
+        market_rows = [row for row in rows if row["index"] == index]
+        if not market_rows:
+            continue
+        figure = plt.figure(figsize=(13, 10.5), facecolor="#fcfcfb")
+        grid = figure.add_gridspec(3, 1, height_ratios=(1, 1, 0.78), hspace=0.12)
+        without_axis = figure.add_subplot(grid[0, 0])
+        with_axis = figure.add_subplot(
+            grid[1, 0], sharex=without_axis, sharey=without_axis
+        )
+        error_axis = figure.add_subplot(grid[2, 0], sharex=without_axis)
+        price_axes = {"without": without_axis, "with": with_axis}
+
+        invalid_total = 0
+        for context in CONTEXT_ORDER:
+            axis = price_axes[context]
+            series = sorted(
+                (row for row in market_rows if row["context"] == context),
+                key=lambda row: row["date"],
+            )
+            dates = [datetime.strptime(row["date"], "%Y-%m-%d") for row in series]
+            actual = np.asarray([row["actual_close"] for row in series], dtype=float)
+            q05 = np.asarray([row["q05"] for row in series], dtype=float)
+            q25 = np.asarray([row["q25"] for row in series], dtype=float)
+            median = np.asarray([row["median"] for row in series], dtype=float)
+            q75 = np.asarray([row["q75"] for row in series], dtype=float)
+            q95 = np.asarray([row["q95"] for row in series], dtype=float)
+            invalid_total += sum(int(row["n_invalid"]) for row in series)
+
+            axis.fill_between(dates, q05, q95, color=colors[context], alpha=0.10)
+            axis.fill_between(dates, q25, q75, color=colors[context], alpha=0.22)
+            axis.plot(
+                dates,
+                median,
+                color=colors[context],
+                linewidth=2.0,
+                solid_capstyle="round",
+            )
+            axis.plot(
+                dates,
+                actual,
+                color="#0b0b0b",
+                linewidth=2.3,
+                solid_capstyle="round",
+                zorder=4,
+            )
+            axis.set_title(
+                "Without context" if context == "without" else "With context",
+                loc="left",
+                fontsize=11,
+                fontweight="bold",
+            )
+            axis.set_ylabel("Close price")
+            axis.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+            axis.spines[["top", "right"]].set_visible(False)
+            axis.tick_params(axis="x", labelbottom=False)
+
+        for context in CONTEXT_ORDER:
+            series = sorted(
+                (row for row in market_rows if row["context"] == context),
+                key=lambda row: row["date"],
+            )
+            dates = [datetime.strptime(row["date"], "%Y-%m-%d") for row in series]
+            errors = [row["median_absolute_percentage_error"] for row in series]
+            error_axis.plot(
+                dates,
+                errors,
+                color=colors[context],
+                linestyle=line_styles[context],
+                linewidth=2.0,
+                marker=markers[context],
+                markersize=5.5,
+                markeredgecolor="#fcfcfb",
+                markeredgewidth=1.0,
+                label=(
+                    "Without context MdAPE"
+                    if context == "without"
+                    else "With context MdAPE"
+                ),
+            )
+        error_axis.set_ylim(bottom=0)
+        error_axis.set_ylabel("MdAPE (%)")
+        error_axis.set_xlabel("Date")
+        error_axis.grid(axis="y", color="#e1e0d9", linewidth=0.8)
+        error_axis.spines[["top", "right"]].set_visible(False)
+        error_axis.legend(frameon=False, ncol=2, loc="upper left")
+
+        locator = mdates.AutoDateLocator(minticks=7, maxticks=12)
+        error_axis.xaxis.set_major_locator(locator)
+        error_axis.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+        without_axis.legend(
+            handles=[
+                Line2D([0], [0], color="#0b0b0b", linewidth=2.3, label="Actual close"),
+                Line2D([0], [0], color=colors["without"], linewidth=2.0, label="LLM median"),
+                Patch(facecolor=colors["without"], alpha=0.22, label="25–75%"),
+                Patch(facecolor=colors["without"], alpha=0.10, label="5–95%"),
+            ],
+            frameon=False,
+            ncol=4,
+            loc="upper left",
+        )
+        with_axis.legend(
+            handles=[
+                Line2D([0], [0], color="#0b0b0b", linewidth=2.3, label="Actual close"),
+                Line2D([0], [0], color=colors["with"], linewidth=2.0, label="LLM median"),
+                Patch(facecolor=colors["with"], alpha=0.22, label="25–75%"),
+                Patch(facecolor=colors["with"], alpha=0.10, label="5–95%"),
+            ],
+            frameon=False,
+            ncol=4,
+            loc="upper left",
+        )
+        figure.suptitle(
+            f"{_index_label(index)} · Actual close and LLM price distribution",
+            fontsize=15,
+            fontweight="bold",
+            y=0.985,
+        )
+        figure.text(
+            0.01,
+            0.012,
+            (
+                "Bands summarize the central 90% and 50% of valid generated prices; "
+                f"{invalid_total} invalid outputs are excluded and retained in CSV. "
+                "Descriptive sampling variability; not a causal estimate."
+            ),
+            fontsize=8.5,
+            color="#52514e",
+        )
+        figure.subplots_adjust(left=0.09, right=0.985, top=0.94, bottom=0.09)
+        output_path = output_dir / f"{index}_price_distribution.png"
+        figure.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="#fcfcfb")
+        plt.close(figure)
+        paths.append(output_path)
+    return paths
+
+
+def visualize_price_distributions(
+    *,
+    sampling_root: str | Path,
+    prices_path: str | Path = DEFAULT_INPUT,
+    output_dir: str | Path = DEFAULT_PRICE_DISTRIBUTION_OUTPUT,
+) -> Path:
+    """Create research figures and traceable tables for multi-run prices."""
+    root = Path(sampling_root)
+    prices = Path(prices_path)
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    samples, manifest = load_price_distribution_samples(root, prices)
+    summaries = summarize_price_distributions(samples)
+
+    sample_fields = [
+        "run_index",
+        "run_seed",
+        "sample_index",
+        "date",
+        "index",
+        "context",
+        "prompt_column",
+        "generated_text",
+        "parsed_answer",
+        "confidence",
+        "parse_status",
+        "parse_reason",
+        "actual_close",
+        "absolute_percentage_error",
+    ]
+    summary_fields = [
+        "date",
+        "index",
+        "context",
+        "actual_close",
+        "n_total",
+        "n_valid",
+        "n_invalid",
+        "validity_rate",
+        "min",
+        "q05",
+        "q25",
+        "median",
+        "q75",
+        "q95",
+        "max",
+        "median_absolute_percentage_error",
+    ]
+    _write_csv(output / "price_distribution_samples.csv", samples, sample_fields)
+    _write_csv(output / "price_distribution_summary.csv", summaries, summary_fields)
+    figure_paths = plot_price_distributions(summaries, output)
+
+    valid_count = sum(sample["parse_status"] == "valid" for sample in samples)
+    metadata = {
+        "sampling_root": str(root),
+        "sampling_manifest": str(root / "manifest.json"),
+        "sampling_manifest_sha256": _sha256_file(root / "manifest.json"),
+        "prices": str(prices),
+        "prices_sha256": _sha256_file(prices),
+        "model": manifest.get("model"),
+        "runs": manifest.get("runs"),
+        "selected_dates": manifest.get("selected_dates"),
+        "generation": manifest.get("generation"),
+        "generation_config": manifest.get("generation_config"),
+        "records_total": len(samples),
+        "records_valid": valid_count,
+        "records_invalid": len(samples) - valid_count,
+        "conditions": sorted(manifest.get("condition_counts", {})),
+        "parser": {
+            "strategy": "first_json_object",
+            "numeric_answer_only": True,
+            "finite_answer_only": True,
+            "string_coercion": False,
+        },
+        "quantiles": {
+            "values": [0.05, 0.25, 0.5, 0.75, 0.95],
+            "method": "numpy.percentile(method=linear)",
+            "invalid_values_excluded": True,
+        },
+        "error_metric": {
+            "name": "median_absolute_percentage_error",
+            "formula": "median(abs(answer - actual_close) / actual_close * 100)",
+            "aggregation": "per date, index, and context",
+        },
+        "interpretation": (
+            "Figures describe generated-price sampling variability and prediction "
+            "error; they are not causal estimates."
+        ),
+        "outputs": [
+            "price_distribution_samples.csv",
+            "price_distribution_summary.csv",
+            "price_distribution_metadata.json",
+            *(path.name for path in figure_paths),
+        ],
+    }
+    (output / "price_distribution_metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return output
 
 
 def _market_returns(
