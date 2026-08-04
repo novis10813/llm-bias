@@ -1,5 +1,8 @@
 # 8-K counterfactual entity dataset
 
+**Status:** protocol and generation workflow implemented; validated dataset review
+and promotion remain pending.
+
 這份 workflow 把已清理的 8-K earnings events 轉成「內容與正確答案不變、只改
 entity identity」的 span-patching pairs。實作位於
 `llm_bias/counterfactual_data/`，CLI 是 `prepare-counterfactual-data`。
@@ -15,7 +18,8 @@ margin = logit(positive) - logit(negative)
 ```
 
 因此 bias pair 不使用 factual pair 的 `source_answer → target_answer`
-normalized transfer。Patching runner 另外輸出：
+normalized transfer。Patching runner 另外輸出；完整的 patch execution、artifact
+與 dashboard contract 見 [Counterfactual residual activation patching](counterfactual-patching.md)：
 
 - `direct_entity_effect = target_margin - source_margin`
 - `causal_patch_effect = patched_margin - source_margin`
@@ -57,7 +61,7 @@ uv run prepare-counterfactual-data review-bundle --count 200
 uv run prepare-counterfactual-data promote \
   --review artifacts/counterfactual_data/8k_earnings_v1/review/reviewed.jsonl
 
-# 6. 建立五種 contrast、雙向 pair
+# 6. 建立四種 condition families、五種 pairing strategies 與雙向 pair
 uv run prepare-counterfactual-data build-pairs
 
 # 7. 針對每個實驗模型產生 tokenizer-specific spans
@@ -150,7 +154,7 @@ Promotion 只保留包含 event facts 的原文句子作為 `filing_excerpt`，�
 
 `specificity_template` 使用同一份 entity redaction，但保留日期與數字，可用於純
 數字抽取或 event classification holdout。它標記 `specificity_flag=true`；V1
-不為它展開完整五種 contrasts。
+不為它展開完整 condition families 與 pairing strategies。
 
 ## Review gate
 
@@ -175,7 +179,7 @@ identity 都會使 promotion 拒絕；未通過 gate 的資料不會生成 valid
 
 ## Pairing
 
-每個 validated content 最多建立五種 contrast，並 materialize forward/reverse：
+每個 validated content 最多建立四種 condition families、五種 pairing strategies，並 materialize forward/reverse：
 
 | Condition | Strategy | 用途 |
 |---|---|---|
