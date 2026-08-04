@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import math
 import re
 import subprocess
 from collections import Counter
@@ -173,6 +174,8 @@ def load_prompt_table(
             raise ValueError(f"{input_path} has no header")
         resolved = detect_dataset_format(reader.fieldnames, dataset_format)
         if resolved == "legacy-wide":
+            if "Date" not in reader.fieldnames:
+                raise ValueError("legacy-wide CSV requires a Date column")
             columns = discover_prompt_columns(reader.fieldnames, selected_columns)
             rows = []
             for row_index, row in enumerate(reader):
@@ -199,16 +202,32 @@ def load_prompt_table(
                 if pair_id in seen:
                     raise ValueError(f"duplicate return-pairs pair_id: {pair_id}")
                 seen.add(pair_id)
-                for condition, prompt_key, ticker_key in (
-                    ("original", "prompt", "ticker"),
-                    ("counterfactual", "counterfactual_prompt", "peer_ticker"),
+                try:
+                    fwd_return_1d = float(row["fwd_return_1d"])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"return-pairs row {pair_index} has invalid fwd_return_1d"
+                    ) from exc
+                if not math.isfinite(fwd_return_1d):
+                    raise ValueError(
+                        f"return-pairs row {pair_index} has non-finite fwd_return_1d"
+                    )
+                target_label = row["return_label"].strip()
+                if target_label not in RETURN_LABELS:
+                    raise ValueError(
+                        f"return-pairs row {pair_index} has invalid return_label: "
+                        f"{target_label!r}"
+                    )
+                for condition, prompt_key in (
+                    ("original", "prompt"),
+                    ("counterfactual", "counterfactual_prompt"),
                 ):
                     expanded = dict(row)
                     expanded.update({
                         "input_schema": "return-pairs", "pair_id": pair_id,
-                        "filing_date": row["filing_date"], "ticker": row[ticker_key],
+                        "filing_date": row["filing_date"], "ticker": row["ticker"],
                         "peer_ticker": row["peer_ticker"], "condition": condition,
-                        "target_label": row["return_label"], "fwd_return_1d": row["fwd_return_1d"],
+                        "target_label": target_label, "fwd_return_1d": fwd_return_1d,
                         "prompt_column": condition, "prompt": row[prompt_key],
                         "Date": row["filing_date"], "index": "return_pair", "context": condition,
                     })

@@ -68,6 +68,9 @@ def test_independent_cli_command_sets():
         "visualize",
         "plot-price-distributions",
         "plot-uncertainty-distributions",
+        "inspect-input",
+        "evaluate-return-predictions",
+        "visualize-return-predictions",
         "serve",
     }
     assert "fit-lens" not in patch_choices

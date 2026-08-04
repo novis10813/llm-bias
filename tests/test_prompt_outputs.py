@@ -161,10 +161,15 @@ def test_return_pairs_expand_by_pair_and_preserve_identity(tmp_path):
     assert len(rows) == 4
     assert {row["pair_id"] for row in rows} == {"1|a.txt|item_1", "2|a.txt|item_1"}
     assert [row["condition"] for row in rows[:2]] == ["original", "counterfactual"]
+    assert [(row["ticker"], row["peer_ticker"]) for row in rows[:2]] == [
+        ("AAA", "BBB"),
+        ("AAA", "BBB"),
+    ]
+    assert [row["fwd_return_1d"] for row in rows[:2]] == [0.0, 0.0]
 
 
 def test_auto_does_not_treat_partial_pair_schema_as_return_pairs(tmp_path):
     path = tmp_path / "legacy.csv"
     path.write_text("cik,prompt_without_context_x\n1,hello\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="no prompt_with_context"):
+    with pytest.raises(ValueError, match="requires a Date column"):
         load_prompt_table(path, dataset_format="auto")

@@ -141,7 +141,7 @@ ${RUN_ROOT}/
 | `INPUT_CSV` | `sp500_r1k_r2k_entityBiasPrompt.csv` |
 | `RUN_ROOT` | `artifacts/prompt_analysis/qwen3.5-4b` |
 | `READOUT_BATCH_SIZE` | `32` |
-| `READOUT_MAX_SEQ_LEN` | `256` |
+| `READOUT_MAX_SEQ_LEN` | legacy/auto：`256`；明確設定 `DATASET_FORMAT=return-pairs`：`512` |
 | `TOP_K` | `15` |
 | `ATTR_SAMPLE_PER_CONDITION` | `32` |
 | `ATTR_MAX_NEW_TOKENS` | `64` |
@@ -154,6 +154,10 @@ ${RUN_ROOT}/
 | `RUN_READOUT` | `1` |
 | `SESSION` | `prompt_analysis` |
 | `RUN_IN_TMUX` | `1` |
+
+Return-pair 的 system instruction 與 user question 合併後通常超過 256 tokens；runner 在明確設定
+`DATASET_FORMAT=return-pairs` 時使用 512，避免右側 truncation 移除 user question 或 assistant
+generation marker。Legacy/auto workflow 維持原本的 256 預設。
 
 預設 `ATTR_RUNS=1` 且 `ATTR_TEMPERATURE=0` 使用 deterministic greedy generation。若要在同一批
 shared dates 上重複 sampling，可設定 `ATTR_RUNS=30`、`ATTR_TEMPERATURE=0.7`、固定

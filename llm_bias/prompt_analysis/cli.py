@@ -115,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--model", required=True)
     validate.add_argument("--output-dir", default=DEFAULT_VALIDATION_OUTPUT)
     validate.add_argument("--seed", type=int, default=0)
+    validate.add_argument("--max-seq-len", type=int)
 
     visual = commands.add_parser(
         "visualize", help="build uncertainty plots and an attribution dashboard"
@@ -223,6 +224,7 @@ def main() -> None:
             model_name=args.model,
             output_dir=args.output_dir,
             seed=args.seed,
+            max_seq_len=args.max_seq_len,
         )
     elif args.command == "visualize":
         visualize_prompt_results(

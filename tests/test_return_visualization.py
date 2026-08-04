@@ -9,26 +9,26 @@ from llm_bias.prompt_analysis.return_visualization import (
 )
 
 
-LABELS = ["large_down", "small_down", "flat", "small_up", "large_up"]
+LABELS = ["very bearish", "bearish", "neutral", "bullish", "very bullish"]
 
 
 def _attribution_rows():
     rows = []
     for pair_id, original, counterfactual in (
-        ("p1", "large_down", "small_down"),
-        ("p2", "flat", "flat"),
-        ("p3", "small_down", "small_down"),
-        ("p4", "small_up", "small_up"),
-        ("p5", "large_up", "large_up"),
+        ("p1", "very bearish", "bearish"),
+        ("p2", "neutral", "neutral"),
+        ("p3", "bearish", "bearish"),
+        ("p4", "bullish", "bullish"),
+        ("p5", "very bullish", "very bullish"),
     ):
         for condition, predicted in (("original", original), ("counterfactual", counterfactual)):
             rows.append(
                 {
                     "pair_id": pair_id,
                     "condition": condition,
-                    "target_label": original if pair_id == "p1" else "flat",
+                    "target_label": original if pair_id == "p1" else "neutral",
                     "predicted_label": predicted,
-                    "predicted_confidence": 0.8 if condition == "original" else 0.6,
+                    "predicted_confidence": 80 if condition == "original" else 60,
                     "parse_status": "valid",
                     "ticker": "AAA",
                     "peer_ticker": "BBB",
@@ -61,12 +61,14 @@ def _uncertainty_rows():
     return rows
 
 
-def test_prediction_flips_pair_only_by_pair_id_and_excludes_invalid():
+def test_prediction_flips_pair_only_by_pair_id_and_retains_invalid_pairs():
     rows = build_prediction_flip_rows(_attribution_rows())
-    assert len(rows) == 2
+    assert len(rows) == 5
     assert rows[0]["pair_id"] == "p1"
     assert rows[0]["prediction_flip"] is True
-    assert rows[1]["prediction_flip"] is False
+    assert sum(row["prediction_flip"] for row in rows) == 1
+    assert rows[-1]["valid_counterfactual"] is False
+    assert rows[-1]["prediction_flip"] is False
 
 
 def test_uncertainty_uses_final_output_layer_and_pairs_by_pair_id():
