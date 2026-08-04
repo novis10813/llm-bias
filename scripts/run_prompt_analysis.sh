@@ -15,7 +15,13 @@ MAX_ROWS="${MAX_ROWS:-}"
 RUN_ROOT="${RUN_ROOT:-artifacts/prompt_analysis/${MODEL_SLUG}}"
 LENS="${LENS:-artifacts/lenses/${MODEL_SLUG}/jacobian_lens.pt}"
 READOUT_BATCH_SIZE="${READOUT_BATCH_SIZE:-32}"
-READOUT_MAX_SEQ_LEN="${READOUT_MAX_SEQ_LEN:-256}"
+if [[ -z "${READOUT_MAX_SEQ_LEN:-}" ]]; then
+    if [[ "${DATASET_FORMAT}" == "return-pairs" ]]; then
+        READOUT_MAX_SEQ_LEN=512
+    else
+        READOUT_MAX_SEQ_LEN=256
+    fi
+fi
 TOP_K="${TOP_K:-15}"
 ATTR_SAMPLE_PER_CONDITION="${ATTR_SAMPLE_PER_CONDITION:-32}"
 ATTR_MAX_NEW_TOKENS="${ATTR_MAX_NEW_TOKENS:-64}"

@@ -14,7 +14,8 @@ from typing import Any, Iterable
 
 import numpy as np
 
-CONDITIONS = ("original", "counterfactual")
+from llm_bias.prompt_analysis.return_evaluation import CONDITIONS, LABELS
+
 ATTRIBUTION_FIELDS = {
     "pair_id", "condition", "target_label", "predicted_label", "predicted_confidence",
     "parse_status", "ticker", "peer_ticker", "filing_date",
@@ -54,15 +55,28 @@ def _validate_attribution(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]
         if key in seen:
             raise ValueError(f"duplicate attribution record for {pair_id}/{condition}")
         seen.add(key)
+        target_label = row["target_label"]
+        if target_label not in LABELS:
+            raise ValueError(f"unknown target_label for {pair_id}: {target_label!r}")
+        parse_status = row["parse_status"]
+        if parse_status not in {"valid", "invalid"}:
+            raise ValueError(f"invalid parse_status for {pair_id}: {parse_status!r}")
         confidence = row["predicted_confidence"]
-        try:
-            confidence = float(confidence)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid predicted_confidence for {pair_id}") from exc
-        if not math.isfinite(confidence) or not 0 <= confidence <= 1:
-            raise ValueError(f"predicted_confidence must be in [0, 1] for {pair_id}")
+        if parse_status == "valid":
+            if row["predicted_label"] not in LABELS:
+                raise ValueError(
+                    f"unknown predicted_label for {pair_id}: {row['predicted_label']!r}"
+                )
+            if (
+                isinstance(confidence, bool)
+                or not isinstance(confidence, int)
+                or not 0 <= confidence <= 100
+            ):
+                raise ValueError(
+                    f"predicted_confidence must be an integer in [0, 100] for {pair_id}"
+                )
         normalized = dict(row)
-        normalized.update({"pair_id": pair_id, "condition": condition, "predicted_confidence": confidence})
+        normalized.update({"pair_id": pair_id, "condition": condition})
         result.append(normalized)
     if not result:
         raise ValueError("attribution artifact is empty")
@@ -196,9 +210,7 @@ def plot_return_prediction_figures(rows: Iterable[dict[str, Any]], output_dir: P
     import matplotlib.pyplot as plt
 
     rows = list(rows)
-    labels = sorted({str(r["target_label"]) for r in rows})
-    if len(labels) != 5:
-        raise ValueError(f"expected five target labels, found {len(labels)}")
+    labels = list(LABELS)
     output_dir.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     figure, axes = plt.subplots(1, 2, figsize=(13, 5.5), constrained_layout=True)
@@ -224,7 +236,7 @@ def plot_return_prediction_figures(rows: Iterable[dict[str, Any]], output_dir: P
 
     figure, axis = plt.subplots(figsize=(9, 5.5), constrained_layout=True)
     confidence = [[r["predicted_confidence"] for r in rows if r["condition"] == condition and r["parse_status"] == "valid"] for condition in CONDITIONS]
-    axis.boxplot(confidence, labels=[condition.title() for condition in CONDITIONS], patch_artist=True, boxprops={"facecolor": "#d9e8f7"}); axis.set_ylabel("Predicted confidence"); axis.set_ylim(0, 1.02); axis.set_title("Confidence by condition", loc="left", fontweight="bold"); _style(axis)
+    axis.boxplot(confidence, tick_labels=[condition.title() for condition in CONDITIONS], patch_artist=True, boxprops={"facecolor": "#d9e8f7"}); axis.set_ylabel("Predicted confidence (%)"); axis.set_ylim(0, 102); axis.set_title("Confidence by condition", loc="left", fontweight="bold"); _style(axis)
     path = output_dir / "return_prediction_confidence.png"; figure.savefig(path, dpi=220, facecolor="#fcfcfb"); plt.close(figure); paths.append(path)
     return paths
 

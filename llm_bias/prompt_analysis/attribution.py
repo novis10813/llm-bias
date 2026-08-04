@@ -23,7 +23,12 @@ RETURN_LABELS = {"very bullish", "bullish", "neutral", "bearish", "very bearish"
 
 def parse_generated_return_answer(text: Any) -> dict[str, Any]:
     """Parse the strict categorical return answer without aborting generation."""
-    result = {"label": None, "confidence": None, "parse_status": "invalid", "parse_reason": None}
+    result = {
+        "predicted_label": None,
+        "predicted_confidence": None,
+        "parse_status": "invalid",
+        "parse_reason": None,
+    }
     if not isinstance(text, str):
         result["parse_reason"] = "generated_text_not_string"
         return result
@@ -46,7 +51,12 @@ def parse_generated_return_answer(text: Any) -> dict[str, Any]:
     if isinstance(confidence, bool) or not isinstance(confidence, int) or not 0 <= confidence <= 100:
         result["parse_reason"] = "invalid_confidence"
         return result
-    return {"label": label, "confidence": confidence, "parse_status": "valid", "parse_reason": None}
+    return {
+        "predicted_label": label,
+        "predicted_confidence": confidence,
+        "parse_status": "valid",
+        "parse_reason": None,
+    }
 
 
 def _sample_rows(rows: list[dict[str, str]], count: int) -> list[dict[str, str]]:

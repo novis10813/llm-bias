@@ -141,15 +141,32 @@ def _visible_output_token(token: str) -> bool:
     return not token.startswith("<|")
 
 
+def _resolve_max_seq_len(source: Path, requested: int | None) -> int:
+    if requested is not None:
+        if requested < 1:
+            raise ValueError("max_seq_len must be positive when provided")
+        return requested
+    metadata_path = source.parent / "metadata.json"
+    if not metadata_path.is_file():
+        return 256
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    value = metadata.get("max_seq_len", 256)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"invalid max_seq_len in {metadata_path}")
+    return value
+
+
 def evaluate_semantic_scope(
     *,
     attribution_path: str | Path = DEFAULT_ATTRIBUTION,
     model_name: str = DEFAULT_MODEL,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     seed: int = 0,
+    max_seq_len: int | None = None,
 ) -> Path:
     """Evaluate Semantic Scope and a random baseline with prompt ablations."""
     source = Path(attribution_path)
+    resolved_max_seq_len = _resolve_max_seq_len(source, max_seq_len)
     rows = _read_jsonl(source)
     if not rows:
         raise ValueError(f"no attribution rows found in {source}")
@@ -183,13 +200,13 @@ def evaluate_semantic_scope(
                 formatted,
                 return_tensors="pt",
                 truncation=True,
-                max_length=256,
+                max_length=resolved_max_seq_len,
             ).input_ids.to(model.device)
             raw_ids = tokenizer(
                 prompt,
                 return_tensors="pt",
                 truncation=True,
-                max_length=256,
+                max_length=resolved_max_seq_len,
             ).input_ids
             input_start, input_end = find_token_subsequence(
                 prompt_ids[0].tolist(), raw_ids[0].tolist()
@@ -310,6 +327,7 @@ def evaluate_semantic_scope(
         "aopc": "trapezoidal_integral_of_log_probability_delta_from_zero_rate",
         "target_scope": "visible_greedy_generated_output_tokens",
         "seed": seed,
+        "max_seq_len": resolved_max_seq_len,
         "n_rows": len(rows),
         "n_output_tokens": total_tokens,
     }

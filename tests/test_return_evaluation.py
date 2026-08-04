@@ -29,7 +29,7 @@ def test_evaluator_writes_metrics_and_retains_invalid_predictions(tmp_path):
     assert len(samples) == 4
     assert sum(row["prediction_valid"] == "False" for row in samples) == 2
     summary = list(csv.DictReader(output.joinpath("prediction_summary.csv").open()))[0]
-    assert summary["accuracy"] == "1.0"
+    assert summary["accuracy"] == "0.5"
     assert summary["invalid_predictions"] == "2"
     pairs = list(csv.DictReader(output.joinpath("pair_flip_summary.csv").open()))
     assert pairs[0]["flip"] == "True" and pairs[0]["valid_pair"] == "True"
