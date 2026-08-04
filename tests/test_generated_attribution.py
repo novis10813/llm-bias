@@ -7,6 +7,15 @@ import torch
 from llm_bias.prompt_analysis import attribution
 
 
+def test_parse_generated_return_answer_is_strict_and_nonfatal():
+    assert attribution.parse_generated_return_answer('{"label":"neutral","confidence":80}') == {
+        "label": "neutral", "confidence": 80, "parse_status": "valid", "parse_reason": None
+    }
+    invalid = attribution.parse_generated_return_answer('{"label":"neutral","confidence":80.0}')
+    assert invalid["parse_status"] == "invalid"
+    assert invalid["parse_reason"] == "invalid_confidence"
+
+
 class _Tokenizer:
     eos_token_id = 0
     pad_token_id = 0
@@ -142,6 +151,61 @@ def test_multiple_runs_write_run_records_and_manifest(tmp_path, monkeypatch):
     assert manifest["runs"] == 2
     assert manifest["records_per_run"] == 2
     assert [item["run_index"] for item in manifest["run_directories"]] == [0, 1]
+
+
+def test_sampling_uses_shared_nonempty_dates_for_every_condition(tmp_path, monkeypatch):
+    input_path = tmp_path / "legacy.csv"
+    input_path.write_text(
+        "Date,prompt_without_context_aapl,prompt_with_context_aapl\n"
+        "2026-01-01,first,first with\n"
+        "2026-01-02,second,second with\n"
+        "2026-01-03,third,\n"
+        "2026-01-04,,fourth with\n",
+        encoding="utf-8",
+    )
+    tokenizer = _Tokenizer()
+    hf_model = _FakeHFModel()
+    wrapped = SimpleNamespace(
+        hf_model=hf_model,
+        tokenizer=tokenizer,
+        device=torch.device("cpu"),
+    )
+    monkeypatch.setattr(
+        attribution,
+        "load_lens_model",
+        lambda _model_name: (SimpleNamespace(_hf_model=object()), tokenizer, "cpu"),
+    )
+    monkeypatch.setattr(attribution, "WrappedModel", lambda *_args: wrapped)
+    monkeypatch.setattr(attribution, "format_prompt", lambda _tokenizer, prompt, **_kwargs: prompt)
+    monkeypatch.setattr(attribution, "_generate_tokens", lambda *_args, **_kwargs: torch.tensor([[1, 2, 3]]))
+    monkeypatch.setattr(
+        attribution,
+        "_attribute_generated_token",
+        lambda **_kwargs: {
+            "token_id": 3,
+            "token": "generated",
+            "logit": 0.0,
+            "log_probability": 0.0,
+            "top_input_tokens": [],
+        },
+    )
+
+    output_dir = tmp_path / "shared-date-run"
+    attribution.analyze_generated_attribution(
+        input_path=str(input_path),
+        model_name="fake",
+        output_dir=str(output_dir),
+        sample_per_condition=1,
+        max_new_tokens=1,
+    )
+
+    rows = [json.loads(line) for line in (output_dir / "generated_token_attribution.jsonl").read_text().splitlines()]
+    assert len(rows) == 2
+    assert {row["date"] for row in rows} == {"2026-01-01"}
+    assert {row["prompt_column"] for row in rows} == {
+        "prompt_without_context_aapl",
+        "prompt_with_context_aapl",
+    }
 
 
 def test_greedy_repeated_runs_are_rejected_before_model_load(tmp_path, monkeypatch):

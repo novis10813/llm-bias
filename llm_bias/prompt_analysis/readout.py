@@ -19,7 +19,7 @@ from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
-from llm_bias.core.prompting import decode_token, format_prompt
+from llm_bias.core.prompting import decode_token, format_messages, format_prompt
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/readout"
@@ -36,11 +36,36 @@ INDEX_LABELS = {
 
 @dataclass(frozen=True)
 class PromptColumn:
-    """A prompt CSV column and the experimental condition encoded in its name."""
+    """A prompt column and its condition metadata."""
 
     name: str
     index: str
     context: str
+    condition: str | None = None
+
+
+RETURN_PAIR_REQUIRED = (
+    "cik", "filename", "item", "filing_date", "ticker", "peer_ticker",
+    "system_prompt", "prompt", "counterfactual_prompt", "return_label",
+    "fwd_return_1d",
+)
+RETURN_LABELS = ("very bullish", "bullish", "neutral", "bearish", "very bearish")
+
+
+def detect_dataset_format(fieldnames: Iterable[str], dataset_format: str = "auto") -> str:
+    """Select a dataset schema without guessing from partial columns."""
+    if dataset_format not in {"auto", "legacy-wide", "return-pairs"}:
+        raise ValueError("dataset_format must be auto, legacy-wide, or return-pairs")
+    names = set(fieldnames)
+    complete = set(RETURN_PAIR_REQUIRED) <= names
+    if dataset_format == "return-pairs":
+        missing = [name for name in RETURN_PAIR_REQUIRED if name not in names]
+        if missing:
+            raise ValueError(f"return-pairs CSV is missing required columns: {', '.join(missing)}")
+        return dataset_format
+    if dataset_format == "auto" and complete:
+        return "return-pairs"
+    return "legacy-wide"
 
 
 def discover_prompt_columns(
@@ -138,17 +163,56 @@ def load_prompt_table(
     input_path: Path,
     selected_columns: Iterable[str] | None = None,
     max_rows: int | None = None,
+    *,
+    dataset_format: str = "auto",
 ) -> tuple[list[PromptColumn], list[dict[str, str]]]:
+    """Load legacy-wide rows or expand each return pair into two conditions."""
     with input_path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError(f"{input_path} has no header")
-        columns = discover_prompt_columns(reader.fieldnames, selected_columns)
-        rows = []
-        for row_index, row in enumerate(reader):
-            if max_rows is not None and row_index >= max_rows:
-                break
-            rows.append(row)
+        resolved = detect_dataset_format(reader.fieldnames, dataset_format)
+        if resolved == "legacy-wide":
+            columns = discover_prompt_columns(reader.fieldnames, selected_columns)
+            rows = []
+            for row_index, row in enumerate(reader):
+                if max_rows is not None and row_index >= max_rows:
+                    break
+                rows.append(row)
+        else:
+            if selected_columns:
+                invalid = set(selected_columns) - {"original", "counterfactual"}
+                if invalid:
+                    raise ValueError("return-pairs prompt columns must be original or counterfactual")
+            columns = [
+                PromptColumn("original", "return_pair", "original", "original"),
+                PromptColumn("counterfactual", "return_pair", "counterfactual", "counterfactual"),
+            ]
+            rows = []
+            seen: set[str] = set()
+            for pair_index, row in enumerate(reader):
+                if max_rows is not None and pair_index >= max_rows:
+                    break
+                pair_id = "|".join(row[name].strip() for name in ("cik", "filename", "item"))
+                if not all(row[name].strip() for name in ("cik", "filename", "item")):
+                    raise ValueError(f"return-pairs row {pair_index} has empty pair identity field")
+                if pair_id in seen:
+                    raise ValueError(f"duplicate return-pairs pair_id: {pair_id}")
+                seen.add(pair_id)
+                for condition, prompt_key, ticker_key in (
+                    ("original", "prompt", "ticker"),
+                    ("counterfactual", "counterfactual_prompt", "peer_ticker"),
+                ):
+                    expanded = dict(row)
+                    expanded.update({
+                        "input_schema": "return-pairs", "pair_id": pair_id,
+                        "filing_date": row["filing_date"], "ticker": row[ticker_key],
+                        "peer_ticker": row["peer_ticker"], "condition": condition,
+                        "target_label": row["return_label"], "fwd_return_1d": row["fwd_return_1d"],
+                        "prompt_column": condition, "prompt": row[prompt_key],
+                        "Date": row["filing_date"], "index": "return_pair", "context": condition,
+                    })
+                    rows.append(expanded)
     if not rows:
         raise ValueError(f"{input_path} contains no data rows")
     return columns, rows
@@ -159,11 +223,15 @@ def _prepare_prompt(
     prompt: str,
     use_chat_template: bool,
     enable_thinking: bool = False,
+    *,
+    system_prompt: str | None = None,
 ) -> str:
-    """Backward-compatible local alias for shared prompt formatting."""
-    return format_prompt(
+    """Format a prompt, using a genuine system turn for return pairs."""
+    if system_prompt is None:
+        return format_prompt(tokenizer, prompt, use_chat_template=use_chat_template, enable_thinking=enable_thinking)
+    return format_messages(
         tokenizer,
-        prompt,
+        [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
         use_chat_template=use_chat_template,
         enable_thinking=enable_thinking,
     )
@@ -187,11 +255,13 @@ def _analyze_column(
 ) -> tuple[list[dict[str, Any]], int, int]:
     """Analyze one condition, returning exact mean-distribution top-k by layer."""
     examples = [
-        (row_index, row.get("Date", ""), prompt)
+        (row_index, row.get("Date", ""), prompt, row)
         for row_index, row in enumerate(rows)
-        if (prompt := (row.get(column.name) or "").strip())
+        if (prompt := (row.get(column.name) or row.get("prompt", "")).strip())
+        and (row.get("condition") in (None, column.condition or column.context))
     ]
-    skipped = len(rows) - len(examples)
+    eligible_rows = [row for row in rows if row.get("condition") in (None, column.condition or column.context)]
+    skipped = len(eligible_rows) - len(examples)
     if not examples:
         raise ValueError(f"{column.name} contains no non-empty prompts")
 
@@ -203,9 +273,10 @@ def _analyze_column(
         encoded = tokenizer(
             [
                 _prepare_prompt(
-                    tokenizer, prompt, use_chat_template, enable_thinking
+                    tokenizer, prompt, use_chat_template, enable_thinking,
+                    system_prompt=(row.get("system_prompt") or None),
                 )
-                for _row_index, _date, prompt in batch
+                for _row_index, _date, prompt, row in batch
             ],
             return_tensors="pt",
             padding=True,
@@ -310,7 +381,7 @@ def _analyze_column(
             )
 
         if prompt_output is not None:
-            for (row_index, date, _prompt), readouts in zip(
+            for (row_index, date, _prompt, row), readouts in zip(
                 batch, prompt_readouts, strict=True
             ):
                 _write_json_line(
@@ -322,10 +393,11 @@ def _analyze_column(
                         "index": column.index,
                         "context": column.context,
                         "layers": readouts,
+                        **({key: row[key] for key in ("input_schema", "pair_id", "filing_date", "ticker", "peer_ticker", "condition", "target_label", "fwd_return_1d") if key in row}),
                     },
                 )
         if uncertainty_output is not None:
-            for (row_index, date, _prompt), readouts in zip(
+            for (row_index, date, _prompt, row), readouts in zip(
                 batch, uncertainty_readouts, strict=True
             ):
                 _write_json_line(
@@ -337,6 +409,7 @@ def _analyze_column(
                         "index": column.index,
                         "context": column.context,
                         "layers": readouts,
+                        **({key: row[key] for key in ("input_schema", "pair_id", "filing_date", "ticker", "peer_ticker", "condition", "target_label", "fwd_return_1d") if key in row}),
                     },
                 )
         processed = min(batch_start + len(batch), len(examples))
@@ -442,9 +515,10 @@ def _attribute_column(
 ) -> list[dict[str, Any]]:
     """Aggregate output-token gradient × input attribution by ID and position."""
     examples = [
-        prompt
+        row
         for row in rows
-        if (prompt := (row.get(column.name) or "").strip())
+        if (row.get(column.name) or row.get("prompt", "")).strip()
+        and (row.get("condition") in (None, column.condition or column.context))
     ]
     if max_examples is not None and len(examples) > max_examples:
         # Deterministic spread across the date-sorted CSV rather than a
@@ -471,13 +545,15 @@ def _attribute_column(
     final_layer = model.n_layers - 1
 
     for batch_start in range(0, len(examples), batch_size):
-        prompts = examples[batch_start : batch_start + batch_size]
+        prompt_rows = examples[batch_start : batch_start + batch_size]
+        prompts = [(row.get(column.name) or row.get("prompt", "")).strip() for row in prompt_rows]
         encoded = tokenizer(
             [
                 _prepare_prompt(
-                    tokenizer, prompt, use_chat_template, enable_thinking
+                    tokenizer, prompt, use_chat_template, enable_thinking,
+                    system_prompt=(row.get("system_prompt") or None),
                 )
-                for prompt in prompts
+                for prompt, row in zip(prompts, prompt_rows, strict=True)
             ],
             return_tensors="pt",
             padding=True,
@@ -793,6 +869,7 @@ def analyze_prompt_outputs(
     enable_thinking: bool = False,
     attribution_output_top_k: int | None = None,
     attribution_max_rows: int | None = None,
+    dataset_format: str = "auto",
 ) -> Path:
     """Run batched final-position J-space readout and save compact artifacts."""
     if top_k < 1:
@@ -818,7 +895,7 @@ def analyze_prompt_outputs(
     lens_source = Path(lens_path)
     if not lens_source.is_file():
         raise FileNotFoundError(lens_source)
-    columns, rows = load_prompt_table(source, prompt_columns, max_rows)
+    columns, rows = load_prompt_table(source, prompt_columns, max_rows, dataset_format=dataset_format)
 
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
@@ -950,6 +1027,7 @@ def analyze_prompt_outputs(
         "batch_size": batch_size,
         "max_seq_len": max_seq_len,
         "max_rows": max_rows,
+        "dataset_format": dataset_format,
         "prompt_columns": [column.name for column in columns],
         "layers": layers,
         "missing_layers": missing_layers,

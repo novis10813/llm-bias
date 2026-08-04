@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 from llm_bias.prompt_analysis.attribution import (
     DEFAULT_OUTPUT_DIR as DEFAULT_ATTRIBUTION_OUTPUT,
@@ -13,6 +14,7 @@ from llm_bias.prompt_analysis.readout import (
     DEFAULT_OUTPUT_DIR as DEFAULT_READOUT_OUTPUT,
     analyze_prompt_outputs,
 )
+from llm_bias.prompt_analysis.input_inspection import inspect_input_to_json
 from llm_bias.prompt_analysis.return_evaluation import evaluate_return_predictions
 from llm_bias.prompt_analysis.validation import (
     DEFAULT_OUTPUT_DIR as DEFAULT_VALIDATION_OUTPUT,
@@ -34,6 +36,12 @@ from llm_bias.prompt_analysis.visualization import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    inspect = commands.add_parser(
+        "inspect-input", help="validate prompt CSV compatibility without model inference"
+    )
+    inspect.add_argument("--input", required=True)
+    inspect.add_argument("--output", help="write the machine-readable JSON report here")
 
     readout = commands.add_parser(
         "readout", help="compute per-layer next-token readouts for prompt columns"
@@ -72,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="use_chat_template",
     )
     readout.add_argument("--enable-thinking", action="store_true")
+    readout.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
 
     attribute = commands.add_parser(
         "attribute", help="generate output tokens and attribute them to prompt tokens"
@@ -90,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     attribute.add_argument("--seed", type=int)
     attribute.add_argument("--top-p", type=float, default=1.0)
     attribute.add_argument("--top-k", type=int, default=0)
+    attribute.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
 
     evaluate_return = commands.add_parser(
         "evaluate-return-predictions", help="score five-class return predictions from attribution JSONL"
@@ -151,7 +161,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.command == "readout":
+    if args.command == "inspect-input":
+        report = inspect_input_to_json(args.input, args.output)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if report["errors"]:
+            raise SystemExit(1)
+    elif args.command == "readout":
         analyze_prompt_outputs(
             input_path=args.input,
             model_name=args.model,
@@ -171,6 +186,7 @@ def main() -> None:
             enable_thinking=args.enable_thinking,
             attribution_output_top_k=args.attribution_output_top_k,
             attribution_max_rows=args.attribution_max_rows,
+            dataset_format=args.dataset_format,
         )
     elif args.command == "attribute":
         analyze_generated_attribution(
@@ -188,6 +204,7 @@ def main() -> None:
             seed=args.seed,
             top_p=args.top_p,
             top_k=args.top_k,
+            dataset_format=args.dataset_format,
         )
     elif args.command == "evaluate-return-predictions":
         evaluate_return_predictions(args.attribution, args.output_dir)

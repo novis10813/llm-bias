@@ -10,6 +10,8 @@ MODEL="${MODEL:-.cache/models/qwen3.5-4b}"
 MODEL_SLUG="${MODEL%/}"
 MODEL_SLUG="${MODEL_SLUG##*/}"
 INPUT_CSV="${INPUT_CSV:-sp500_r1k_r2k_entityBiasPrompt.csv}"
+DATASET_FORMAT="${DATASET_FORMAT:-auto}"
+MAX_ROWS="${MAX_ROWS:-}"
 RUN_ROOT="${RUN_ROOT:-artifacts/prompt_analysis/${MODEL_SLUG}}"
 LENS="${LENS:-artifacts/lenses/${MODEL_SLUG}/jacobian_lens.pt}"
 READOUT_BATCH_SIZE="${READOUT_BATCH_SIZE:-32}"
@@ -50,7 +52,7 @@ if [[ "${RUN_IN_TMUX}" == "1" && -z "${TMUX:-}" ]]; then
     mkdir -p "${RUN_ROOT}"
     # Pass the current configuration into the detached child safely.
     env_args=(
-        "MODEL=${MODEL}" "INPUT_CSV=${INPUT_CSV}" "RUN_ROOT=${RUN_ROOT}"
+        "MODEL=${MODEL}" "INPUT_CSV=${INPUT_CSV}" "DATASET_FORMAT=${DATASET_FORMAT}" "MAX_ROWS=${MAX_ROWS}" "RUN_ROOT=${RUN_ROOT}"
         "LENS=${LENS}" "READOUT_BATCH_SIZE=${READOUT_BATCH_SIZE}"
         "READOUT_MAX_SEQ_LEN=${READOUT_MAX_SEQ_LEN}" "TOP_K=${TOP_K}"
         "ATTR_SAMPLE_PER_CONDITION=${ATTR_SAMPLE_PER_CONDITION}"
@@ -85,7 +87,9 @@ if [[ "${RUN_READOUT}" == "1" ]]; then
         --top-k "${TOP_K}" \
         --batch-size "${READOUT_BATCH_SIZE}" \
         --max-seq-len "${READOUT_MAX_SEQ_LEN}" \
+        --dataset-format "${DATASET_FORMAT}" \
         --no-input-attribution \
+        ${MAX_ROWS:+--max-rows "${MAX_ROWS}"} \
         --output-dir "${RUN_ROOT}/per_date"
 else
     echo "[1/2] Skipping readout (RUN_READOUT=${RUN_READOUT})"
@@ -99,6 +103,7 @@ attribute_args=(
     --sample-per-condition "${ATTR_SAMPLE_PER_CONDITION}"
     --max-new-tokens "${ATTR_MAX_NEW_TOKENS}"
     --max-seq-len "${READOUT_MAX_SEQ_LEN}"
+    --dataset-format "${DATASET_FORMAT}"
     --runs "${ATTR_RUNS}"
     --temperature "${ATTR_TEMPERATURE}"
     --top-p "${ATTR_TOP_P}"

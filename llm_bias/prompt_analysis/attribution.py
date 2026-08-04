@@ -14,10 +14,39 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.model import WrappedModel
 
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
-from llm_bias.core.prompting import decode_token, find_token_subsequence, format_prompt
+from llm_bias.core.prompting import decode_token, find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.readout import DEFAULT_INPUT, load_prompt_table
 
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/generated_attribution"
+RETURN_LABELS = {"very bullish", "bullish", "neutral", "bearish", "very bearish"}
+
+
+def parse_generated_return_answer(text: Any) -> dict[str, Any]:
+    """Parse the strict categorical return answer without aborting generation."""
+    result = {"label": None, "confidence": None, "parse_status": "invalid", "parse_reason": None}
+    if not isinstance(text, str):
+        result["parse_reason"] = "generated_text_not_string"
+        return result
+    try:
+        start = text.find("{")
+        if start < 0:
+            raise ValueError("json_object_not_found")
+        payload, _ = json.JSONDecoder().raw_decode(text[start:])
+    except (ValueError, json.JSONDecodeError):
+        result["parse_reason"] = "invalid_json"
+        return result
+    if not isinstance(payload, dict):
+        result["parse_reason"] = "json_not_object"
+        return result
+    label = payload.get("label")
+    confidence = payload.get("confidence")
+    if label not in RETURN_LABELS:
+        result["parse_reason"] = "invalid_label"
+        return result
+    if isinstance(confidence, bool) or not isinstance(confidence, int) or not 0 <= confidence <= 100:
+        result["parse_reason"] = "invalid_confidence"
+        return result
+    return {"label": label, "confidence": confidence, "parse_status": "valid", "parse_reason": None}
 
 
 def _sample_rows(rows: list[dict[str, str]], count: int) -> list[dict[str, str]]:
@@ -164,6 +193,7 @@ def analyze_generated_attribution(
     seed: int | None = None,
     top_p: float = 1.0,
     top_k: int = 0,
+    dataset_format: str = "auto",
 ) -> Path:
     if sample_per_condition < 1 or max_new_tokens < 1:
         raise ValueError("sample_per_condition and max_new_tokens must be positive")
@@ -187,7 +217,8 @@ def analyze_generated_attribution(
     source = Path(input_path)
     if not source.is_file():
         raise FileNotFoundError(source)
-    columns, rows = load_prompt_table(source, prompt_columns)
+    columns, rows = load_prompt_table(source, prompt_columns, dataset_format=dataset_format)
+    is_return_pairs = bool(rows and rows[0].get("input_schema") == "return-pairs")
     selected_dates = set(dates or ())
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
@@ -195,39 +226,28 @@ def analyze_generated_attribution(
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    # Sample the same dates for every condition.  This is important for real
-    # market tables where a ticker can have missing prompt rows: sampling each
-    # column independently would leave the dashboard with too few common dates
-    # to select crash/normal examples.
+    # Legacy samples shared dates; return-pairs sample pair IDs so duplicate
+    # filing dates never collapse distinct filing-item identities.
     effective_dates = set(selected_dates)
-    if not selected_dates:
-        date_sets = [
-            {
-                row.get("Date", "")
-                for row in rows
-                if (row.get(column.name) or "").strip() and row.get("Date", "")
-            }
-            for column in columns
-        ]
+    effective_pairs: set[str] = set()
+    if is_return_pairs:
+        pair_ids = sorted({row["pair_id"] for row in rows})
+        effective_pairs = {row["pair_id"] for row in _sample_rows([{"pair_id": p} for p in pair_ids], sample_per_condition)} if not selected_dates else {row["pair_id"] for row in rows if row.get("filing_date") in selected_dates}
+    elif not selected_dates:
+        date_sets = [{row.get("Date", "") for row in rows if (row.get(column.name) or "").strip() and row.get("Date", "")} for column in columns]
         common_dates = set.intersection(*date_sets) if date_sets else set()
         if not common_dates:
             raise ValueError("prompt columns have no common non-empty dates to sample")
-        shared_rows = [{"Date": date} for date in sorted(common_dates)]
-        effective_dates = {
-            row["Date"] for row in _sample_rows(shared_rows, sample_per_condition)
-        }
+        effective_dates = {row["Date"] for row in _sample_rows([{"Date": date} for date in sorted(common_dates)], sample_per_condition)}
 
     candidates_by_column = {
         column.name: [
-            row
-            for row in rows
-            if (row.get(column.name) or "").strip()
-            and (
-                not effective_dates
-                or row.get("Date", "") in effective_dates
-            )
-        ]
-        for column in columns
+            row for row in rows
+            if (row.get(column.name) or row.get("prompt", "")).strip()
+            and (not effective_pairs or row.get("pair_id") in effective_pairs)
+            and (not effective_dates or row.get("Date", row.get("filing_date", "")) in effective_dates)
+            and (row.get("condition") in (None, column.condition or column.context))
+        ] for column in columns
     }
     condition_counts = {
         name: len(candidates) for name, candidates in candidates_by_column.items()
@@ -271,13 +291,16 @@ def analyze_generated_attribution(
         with temporary.open("w", encoding="utf-8") as handle:
             for column in columns:
                 for sample_index, row in enumerate(candidates_by_column[column.name]):
-                    prompt = (row.get(column.name) or "").strip()
-                    formatted = format_prompt(
+                    prompt = (row.get(column.name) or row.get("prompt", "")).strip()
+                    system_prompt = row.get("system_prompt") or None
+                    formatted = (format_messages(
                         tokenizer,
-                        prompt,
+                        [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
                         use_chat_template=True,
                         enable_thinking=False,
-                    )
+                    ) if system_prompt else format_prompt(
+                        tokenizer, prompt, use_chat_template=True, enable_thinking=False
+                    ))
                     encoded = tokenizer(
                         formatted,
                         return_tensors="pt",
@@ -335,6 +358,9 @@ def analyze_generated_attribution(
                                     generated_ids[0].tolist(), skip_special_tokens=False
                                 ),
                                 "generated_tokens": token_records,
+                                **(parse_generated_return_answer(tokenizer.decode(generated_ids[0].tolist(), skip_special_tokens=False)) if is_return_pairs else {}),
+                                **({key: row[key] for key in ("input_schema", "pair_id", "filing_date", "ticker", "peer_ticker", "condition", "target_label", "fwd_return_1d", "system_prompt") if key in row}),
+                                **({"attribution_scope": "user_message"} if is_return_pairs else {}),
                             },
                             ensure_ascii=False,
                             separators=(",", ":"),

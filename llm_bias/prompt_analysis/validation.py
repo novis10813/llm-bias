@@ -15,7 +15,7 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.model import WrappedModel
 
 from llm_bias.core.model import DEFAULT_MODEL, load_model
-from llm_bias.core.prompting import find_token_subsequence, format_prompt
+from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
 
 DEFAULT_ATTRIBUTION = (
     "artifacts/prompt_analysis/generated_attribution/"
@@ -170,12 +170,15 @@ def evaluate_semantic_scope(
             prompt = str(row.get("prompt", "")).strip()
             if not prompt:
                 raise ValueError(f"attribution row {row_index} has no prompt")
-            formatted = format_prompt(
+            system_prompt = row.get("system_prompt")
+            formatted = (format_messages(
                 tokenizer,
-                prompt,
+                [{"role": "system", "content": str(system_prompt)}, {"role": "user", "content": prompt}],
                 use_chat_template=True,
                 enable_thinking=False,
-            )
+            ) if system_prompt else format_prompt(
+                tokenizer, prompt, use_chat_template=True, enable_thinking=False
+            ))
             prompt_ids = tokenizer(
                 formatted,
                 return_tensors="pt",
@@ -272,6 +275,7 @@ def evaluate_semantic_scope(
                         "index": row.get("index", ""),
                         "context": row.get("context", ""),
                         "prompt_column": row.get("prompt_column", ""),
+                        **({key: row[key] for key in ("input_schema", "pair_id", "filing_date", "ticker", "peer_ticker", "condition", "target_label", "fwd_return_1d") if key in row}),
                         "input_span_length": len(input_positions),
                         "ablation": "zero_input_embedding",
                         "rates": list(ABLATION_RATES),
