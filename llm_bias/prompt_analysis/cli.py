@@ -28,6 +28,7 @@ from llm_bias.prompt_analysis.visualization import (
     visualize_uncertainty_distributions,
     visualize_prompt_results,
 )
+from llm_bias.prompt_analysis.return_visualization import visualize_return_predictions
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -129,6 +130,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir", default=DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT
     )
 
+    return_predictions = commands.add_parser(
+        "visualize-return-predictions",
+        help="plot five-class original/counterfactual return predictions and uncertainty",
+    )
+    return_predictions.add_argument("--attribution", required=True)
+    return_predictions.add_argument("--uncertainty", required=True)
+    return_predictions.add_argument("--output-dir", required=True)
+
     serve = commands.add_parser(
         "serve", help="serve an interactive Jacobian-lens prompt explorer"
     )
@@ -209,6 +218,12 @@ def main() -> None:
     elif args.command == "plot-uncertainty-distributions":
         visualize_uncertainty_distributions(
             uncertainty_paths=uncertainty_paths_from_root(args.uncertainty_root),
+            output_dir=args.output_dir,
+        )
+    elif args.command == "visualize-return-predictions":
+        visualize_return_predictions(
+            attribution_path=args.attribution,
+            uncertainty_path=args.uncertainty,
             output_dir=args.output_dir,
         )
     elif args.command == "serve":
