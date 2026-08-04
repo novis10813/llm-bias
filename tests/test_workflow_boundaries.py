@@ -72,6 +72,28 @@ def test_independent_cli_command_sets():
     }
     assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
+    readout_defaults = prompt_parser().parse_args(
+        ["readout", "--model", "fake", "--lens", "fake-lens.pt"]
+    )
+    assert readout_defaults.input == "sp500_r1k_r2k_entityBiasPrompt.csv"
+    assert readout_defaults.top_k == 15
+    assert readout_defaults.batch_size == 32
+    assert readout_defaults.max_seq_len == 256
+    assert readout_defaults.use_chat_template is True
+    assert readout_defaults.enable_thinking is False
+    assert readout_defaults.save_prompt_topk is True
+    assert readout_defaults.save_prompt_uncertainty is True
+    assert readout_defaults.compute_input_attribution is True
+
+    attribute_defaults = prompt_parser().parse_args(["attribute", "--model", "fake"])
+    assert attribute_defaults.input == "sp500_r1k_r2k_entityBiasPrompt.csv"
+    assert attribute_defaults.sample_per_condition == 32
+    assert attribute_defaults.max_new_tokens == 64
+    assert attribute_defaults.runs == 1
+    assert attribute_defaults.temperature == 0.0
+    assert attribute_defaults.top_p == 1.0
+    assert attribute_defaults.top_k == 0
+
     attribute_args = prompt_parser().parse_args(
         [
             "attribute",

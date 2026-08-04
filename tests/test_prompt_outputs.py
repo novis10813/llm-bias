@@ -38,16 +38,36 @@ def test_discover_prompt_columns_parses_context_and_index():
     ]
 
 
+def test_discover_prompt_columns_is_strict_and_ignores_extra_csv_fields():
+    columns = discover_prompt_columns(
+        [
+            "Date",
+            "prompt_without_context_sp500",
+            "prompt_with_context_aapl",
+            "notes",
+            "prompt_with_context",
+            "prompt_with_context_aapl_extra",
+        ]
+    )
+
+    assert [column.name for column in columns] == [
+        "prompt_without_context_sp500",
+        "prompt_with_context_aapl",
+        "prompt_with_context_aapl_extra",
+    ]
+
+
 def test_discover_prompt_columns_rejects_invalid_selected_column():
     with pytest.raises(ValueError, match="must match"):
         discover_prompt_columns(["prompt_sp500"], ["prompt_sp500"])
 
 
-def test_load_prompt_table_supports_bom_and_generic_index_names(tmp_path):
+def test_load_prompt_table_supports_bom_quoted_multiline_empty_and_extra_fields(tmp_path):
     path = tmp_path / "prompts.csv"
     path.write_text(
-        "﻿Date,prompt_without_context_aapl,prompt_with_context_sp500\n"
-        "2026-01-01,plain,with context\n",
+        "﻿Date,prompt_without_context_aapl,prompt_with_context_sp500,notes\n"
+        "2026-01-01,\"plain\",\"with\ncontext\",legacy\n"
+        "2026-01-02,,\"  \",extra\n",
         encoding="utf-8",
     )
 
@@ -61,8 +81,15 @@ def test_load_prompt_table_supports_bom_and_generic_index_names(tmp_path):
         {
             "Date": "2026-01-01",
             "prompt_without_context_aapl": "plain",
-            "prompt_with_context_sp500": "with context",
-        }
+            "prompt_with_context_sp500": "with\ncontext",
+            "notes": "legacy",
+        },
+        {
+            "Date": "2026-01-02",
+            "prompt_without_context_aapl": "",
+            "prompt_with_context_sp500": "  ",
+            "notes": "extra",
+        },
     ]
 
 
