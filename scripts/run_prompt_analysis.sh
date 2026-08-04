@@ -17,16 +17,25 @@ READOUT_MAX_SEQ_LEN="${READOUT_MAX_SEQ_LEN:-256}"
 TOP_K="${TOP_K:-15}"
 ATTR_SAMPLE_PER_CONDITION="${ATTR_SAMPLE_PER_CONDITION:-32}"
 ATTR_MAX_NEW_TOKENS="${ATTR_MAX_NEW_TOKENS:-64}"
+ATTR_RUNS="${ATTR_RUNS:-1}"
+ATTR_TEMPERATURE="${ATTR_TEMPERATURE:-0}"
+ATTR_SEED="${ATTR_SEED:-}"
+ATTR_TOP_P="${ATTR_TOP_P:-1.0}"
+ATTR_TOP_K="${ATTR_TOP_K:-0}"
+ATTR_OUTPUT_DIR="${ATTR_OUTPUT_DIR:-${RUN_ROOT}/generated_attribution}"
+RUN_READOUT="${RUN_READOUT:-1}"
 SESSION="${SESSION:-prompt_analysis}"
 RUN_IN_TMUX="${RUN_IN_TMUX:-1}"
 
 command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
 [[ -f "${INPUT_CSV}" ]] || { echo "Missing input CSV: ${INPUT_CSV}" >&2; exit 1; }
-[[ -f "${LENS}" ]] || {
-    echo "Missing Jacobian lens: ${LENS}" >&2
-    echo "Fit it first with the fit-jacobian-lens CLI or set LENS." >&2
-    exit 1
-}
+if [[ "${RUN_READOUT}" == "1" ]]; then
+    [[ -f "${LENS}" ]] || {
+        echo "Missing Jacobian lens: ${LENS}" >&2
+        echo "Fit it first with the fit-jacobian-lens CLI or set LENS." >&2
+        exit 1
+    }
+fi
 
 if [[ "${RUN_IN_TMUX}" == "1" && -z "${TMUX:-}" ]]; then
     command -v tmux >/dev/null || {
@@ -46,7 +55,10 @@ if [[ "${RUN_IN_TMUX}" == "1" && -z "${TMUX:-}" ]]; then
         "READOUT_MAX_SEQ_LEN=${READOUT_MAX_SEQ_LEN}" "TOP_K=${TOP_K}"
         "ATTR_SAMPLE_PER_CONDITION=${ATTR_SAMPLE_PER_CONDITION}"
         "ATTR_MAX_NEW_TOKENS=${ATTR_MAX_NEW_TOKENS}"
-        "SESSION=${SESSION}"
+        "ATTR_RUNS=${ATTR_RUNS}" "ATTR_TEMPERATURE=${ATTR_TEMPERATURE}"
+        "ATTR_SEED=${ATTR_SEED}" "ATTR_TOP_P=${ATTR_TOP_P}"
+        "ATTR_TOP_K=${ATTR_TOP_K}" "ATTR_OUTPUT_DIR=${ATTR_OUTPUT_DIR}"
+        "RUN_READOUT=${RUN_READOUT}" "SESSION=${SESSION}"
         "RUN_IN_TMUX=0"
     )
     command=(env)
@@ -64,24 +76,38 @@ fi
 
 mkdir -p "${RUN_ROOT}"
 
-echo "[1/2] Per-date top-k and uncertainty for all prompt columns"
-uv run prompt-analysis readout \
-    --model "${MODEL}" \
-    --lens "${LENS}" \
-    --input "${INPUT_CSV}" \
-    --top-k "${TOP_K}" \
-    --batch-size "${READOUT_BATCH_SIZE}" \
-    --max-seq-len "${READOUT_MAX_SEQ_LEN}" \
-    --no-input-attribution \
-    --output-dir "${RUN_ROOT}/per_date"
+if [[ "${RUN_READOUT}" == "1" ]]; then
+    echo "[1/2] Per-date top-k and uncertainty for all prompt columns"
+    uv run prompt-analysis readout \
+        --model "${MODEL}" \
+        --lens "${LENS}" \
+        --input "${INPUT_CSV}" \
+        --top-k "${TOP_K}" \
+        --batch-size "${READOUT_BATCH_SIZE}" \
+        --max-seq-len "${READOUT_MAX_SEQ_LEN}" \
+        --no-input-attribution \
+        --output-dir "${RUN_ROOT}/per_date"
+else
+    echo "[1/2] Skipping readout (RUN_READOUT=${RUN_READOUT})"
+fi
 
 echo "[2/2] Sampled generated-token attribution for all prompt columns"
-uv run prompt-analysis attribute \
-    --model "${MODEL}" \
-    --input "${INPUT_CSV}" \
-    --sample-per-condition "${ATTR_SAMPLE_PER_CONDITION}" \
-    --max-new-tokens "${ATTR_MAX_NEW_TOKENS}" \
-    --max-seq-len "${READOUT_MAX_SEQ_LEN}" \
-    --output-dir "${RUN_ROOT}/generated_attribution"
+attribute_args=(
+    uv run prompt-analysis attribute
+    --model "${MODEL}"
+    --input "${INPUT_CSV}"
+    --sample-per-condition "${ATTR_SAMPLE_PER_CONDITION}"
+    --max-new-tokens "${ATTR_MAX_NEW_TOKENS}"
+    --max-seq-len "${READOUT_MAX_SEQ_LEN}"
+    --runs "${ATTR_RUNS}"
+    --temperature "${ATTR_TEMPERATURE}"
+    --top-p "${ATTR_TOP_P}"
+    --top-k "${ATTR_TOP_K}"
+    --output-dir "${ATTR_OUTPUT_DIR}"
+)
+if [[ -n "${ATTR_SEED}" ]]; then
+    attribute_args+=(--seed "${ATTR_SEED}")
+fi
+"${attribute_args[@]}"
 
 echo "Experiment complete: ${RUN_ROOT}"

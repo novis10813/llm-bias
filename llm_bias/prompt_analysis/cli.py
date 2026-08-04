@@ -80,6 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
     attribute.add_argument("--max-seq-len", type=int, default=256)
     attribute.add_argument("--prompt-column", action="append", dest="prompt_columns")
     attribute.add_argument("--date", action="append", dest="dates")
+    attribute.add_argument("--runs", type=int, default=1)
+    attribute.add_argument("--temperature", type=float, default=0.0)
+    attribute.add_argument("--seed", type=int)
+    attribute.add_argument("--top-p", type=float, default=1.0)
+    attribute.add_argument("--top-k", type=int, default=0)
 
     validate = commands.add_parser(
         "validate-attribution", help="evaluate Semantic Scope with input ablations"
@@ -148,6 +153,11 @@ def main() -> None:
             max_seq_len=args.max_seq_len,
             prompt_columns=args.prompt_columns,
             dates=args.dates,
+            runs=args.runs,
+            temperature=args.temperature,
+            seed=args.seed,
+            top_p=args.top_p,
+            top_k=args.top_k,
         )
     elif args.command == "validate-attribution":
         evaluate_semantic_scope(

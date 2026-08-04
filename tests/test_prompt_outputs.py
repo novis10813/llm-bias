@@ -5,6 +5,7 @@ from llm_bias.prompt_analysis.readout import (
     _batched_output_gradients,
     _prepare_prompt,
     discover_prompt_columns,
+    load_prompt_table,
     topk_token_records,
 )
 
@@ -40,6 +41,29 @@ def test_discover_prompt_columns_parses_context_and_index():
 def test_discover_prompt_columns_rejects_invalid_selected_column():
     with pytest.raises(ValueError, match="must match"):
         discover_prompt_columns(["prompt_sp500"], ["prompt_sp500"])
+
+
+def test_load_prompt_table_supports_bom_and_generic_index_names(tmp_path):
+    path = tmp_path / "prompts.csv"
+    path.write_text(
+        "﻿Date,prompt_without_context_aapl,prompt_with_context_sp500\n"
+        "2026-01-01,plain,with context\n",
+        encoding="utf-8",
+    )
+
+    columns, rows = load_prompt_table(path)
+
+    assert [(column.index, column.context) for column in columns] == [
+        ("aapl", "without"),
+        ("sp500", "with"),
+    ]
+    assert rows == [
+        {
+            "Date": "2026-01-01",
+            "prompt_without_context_aapl": "plain",
+            "prompt_with_context_sp500": "with context",
+        }
+    ]
 
 
 def test_topk_token_records_ranks_mean_distribution():

@@ -134,10 +134,10 @@ def _dependency_revisions(root: Path) -> dict[str, str]:
     return revisions
 
 
-def _read_csv(
+def load_prompt_table(
     input_path: Path,
-    selected_columns: Iterable[str] | None,
-    max_rows: int | None,
+    selected_columns: Iterable[str] | None = None,
+    max_rows: int | None = None,
 ) -> tuple[list[PromptColumn], list[dict[str, str]]]:
     with input_path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -818,7 +818,7 @@ def analyze_prompt_outputs(
     lens_source = Path(lens_path)
     if not lens_source.is_file():
         raise FileNotFoundError(lens_source)
-    columns, rows = _read_csv(source, prompt_columns, max_rows)
+    columns, rows = load_prompt_table(source, prompt_columns, max_rows)
 
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)

@@ -70,6 +70,28 @@ def test_independent_cli_command_sets():
     }
     assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
+    attribute_args = prompt_parser().parse_args(
+        [
+            "attribute",
+            "--model",
+            "fake-qwen",
+            "--runs",
+            "30",
+            "--temperature",
+            "0.7",
+            "--seed",
+            "20260803",
+            "--top-p",
+            "1.0",
+            "--top-k",
+            "0",
+        ]
+    )
+    assert attribute_args.runs == 30
+    assert attribute_args.temperature == 0.7
+    assert attribute_args.seed == 20260803
+    assert attribute_args.top_p == 1.0
+    assert attribute_args.top_k == 0
     lens_args = lens_parser().parse_args([])
     assert lens_args.output is None
     assert lens_args.layer_stride == 1

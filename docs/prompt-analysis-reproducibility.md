@@ -145,8 +145,21 @@ ${RUN_ROOT}/
 | `TOP_K` | `15` |
 | `ATTR_SAMPLE_PER_CONDITION` | `32` |
 | `ATTR_MAX_NEW_TOKENS` | `64` |
+| `ATTR_RUNS` | `1` |
+| `ATTR_TEMPERATURE` | `0`（greedy） |
+| `ATTR_SEED` | empty（不固定 seed） |
+| `ATTR_TOP_P` | `1.0` |
+| `ATTR_TOP_K` | `0` |
+| `ATTR_OUTPUT_DIR` | `${RUN_ROOT}/generated_attribution` |
+| `RUN_READOUT` | `1` |
 | `SESSION` | `prompt_analysis` |
 | `RUN_IN_TMUX` | `1` |
+
+預設 `ATTR_RUNS=1` 且 `ATTR_TEMPERATURE=0` 使用 deterministic greedy generation。若要在同一批
+shared dates 上重複 sampling，可設定 `ATTR_RUNS=30`、`ATTR_TEMPERATURE=0.7`、固定
+`ATTR_SEED`，並把 `ATTR_OUTPUT_DIR` 指向新的目錄。`runs > 1` 會建立
+`run_000/` 到 `run_029/`，每個 run 各自保存 JSONL 與 metadata，避免覆蓋既有結果；不要把
+多個 run 的 raw JSONL 直接交給只接受單一 run 的 visualizer。
 
 ## 3. Optional attribution validation
 
