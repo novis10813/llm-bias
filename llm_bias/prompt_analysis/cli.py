@@ -13,6 +13,7 @@ from llm_bias.prompt_analysis.readout import (
     DEFAULT_OUTPUT_DIR as DEFAULT_READOUT_OUTPUT,
     analyze_prompt_outputs,
 )
+from llm_bias.prompt_analysis.return_evaluation import evaluate_return_predictions
 from llm_bias.prompt_analysis.validation import (
     DEFAULT_OUTPUT_DIR as DEFAULT_VALIDATION_OUTPUT,
     evaluate_semantic_scope,
@@ -89,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
     attribute.add_argument("--seed", type=int)
     attribute.add_argument("--top-p", type=float, default=1.0)
     attribute.add_argument("--top-k", type=int, default=0)
+
+    evaluate_return = commands.add_parser(
+        "evaluate-return-predictions", help="score five-class return predictions from attribution JSONL"
+    )
+    evaluate_return.add_argument("--attribution", required=True)
+    evaluate_return.add_argument("--output-dir", required=True)
 
     validate = commands.add_parser(
         "validate-attribution", help="evaluate Semantic Scope with input ablations"
@@ -182,6 +189,8 @@ def main() -> None:
             top_p=args.top_p,
             top_k=args.top_k,
         )
+    elif args.command == "evaluate-return-predictions":
+        evaluate_return_predictions(args.attribution, args.output_dir)
     elif args.command == "validate-attribution":
         evaluate_semantic_scope(
             attribution_path=args.attribution,
