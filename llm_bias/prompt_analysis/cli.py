@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 from llm_bias.prompt_analysis.attribution import (
     DEFAULT_OUTPUT_DIR as DEFAULT_ATTRIBUTION_OUTPUT,
@@ -13,6 +14,7 @@ from llm_bias.prompt_analysis.readout import (
     DEFAULT_OUTPUT_DIR as DEFAULT_READOUT_OUTPUT,
     analyze_prompt_outputs,
 )
+from llm_bias.prompt_analysis.input_inspection import inspect_input_to_json
 from llm_bias.prompt_analysis.validation import (
     DEFAULT_OUTPUT_DIR as DEFAULT_VALIDATION_OUTPUT,
     evaluate_semantic_scope,
@@ -33,6 +35,12 @@ from llm_bias.prompt_analysis.visualization import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+
+    inspect = commands.add_parser(
+        "inspect-input", help="validate prompt CSV compatibility without model inference"
+    )
+    inspect.add_argument("--input", required=True)
+    inspect.add_argument("--output", help="write the machine-readable JSON report here")
 
     readout = commands.add_parser(
         "readout", help="compute per-layer next-token readouts for prompt columns"
@@ -146,7 +154,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.command == "readout":
+    if args.command == "inspect-input":
+        report = inspect_input_to_json(args.input, args.output)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        if report["errors"]:
+            raise SystemExit(1)
+    elif args.command == "readout":
         analyze_prompt_outputs(
             input_path=args.input,
             model_name=args.model,
