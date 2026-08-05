@@ -52,13 +52,13 @@ resolve_optional_file() {
     printf -v "${variable_name}" '%s' ""
 }
 
-# Prefer the Semantic Scope artifact used by the dashboard. Fall back to the
-# portable runner's generated-attribution output when necessary.
-resolve_optional_file ATTRIBUTION \
-    "${RUN_ROOT}/generated_attribution/generated_token_attribution.jsonl"
+# The dashboard always reads forward generated outputs. A backward artifact is
+# optional and only enables the attribution panel after parent-hash validation.
+resolve_optional_file FORWARD \
+    "${RUN_ROOT}/forward/generated_outputs.jsonl"
 
-resolve_optional_file VALIDATION \
-    "${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl"
+resolve_optional_file BACKWARD \
+    "${RUN_ROOT}/backward/generated_attribution.jsonl"
 
 combined_uncertainty=""
 for candidate in \
@@ -75,39 +75,39 @@ if [[ -z "${combined_uncertainty}" ]]; then
     exit 1
 fi
 
-if [[ -z "${ATTRIBUTION}" || ! -f "${ATTRIBUTION}" ]]; then
-    echo "Missing generated-token attribution JSONL." >&2
-    echo "Set ATTRIBUTION=/path/to/generated_token_attribution.jsonl" >&2
+if [[ -z "${FORWARD}" || ! -f "${FORWARD}" ]]; then
+    echo "Missing forward generated-output JSONL." >&2
+    echo "Set FORWARD=/path/to/forward/generated_outputs.jsonl" >&2
     exit 1
 fi
 
-if [[ -n "${VALIDATION}" && ! -f "${VALIDATION}" ]]; then
-    echo "Validation file does not exist; continuing without validation: ${VALIDATION}" >&2
-    VALIDATION=""
+if [[ -n "${BACKWARD}" && ! -f "${BACKWARD}" ]]; then
+    echo "Backward artifact does not exist; attribution panel disabled: ${BACKWARD}" >&2
+    BACKWARD=""
 fi
 
 echo "Building prompt-analysis visualizations..."
 echo "  uncertainty root: ${UNCERTAINTY_ROOT}"
-echo "  Semantic Scope: ${ATTRIBUTION}"
-if [[ -n "${VALIDATION}" ]]; then
-    echo "  validation: ${VALIDATION}"
+echo "  forward outputs: ${FORWARD}"
+if [[ -n "${BACKWARD}" ]]; then
+    echo "  backward attribution: ${BACKWARD}"
 else
-    echo "  validation: disabled"
+    echo "  attribution panel: disabled"
 fi
 echo "  output: ${OUTPUT_DIR}"
 
 visualize_args=(
     uv run prompt-analysis visualize
     --uncertainty-root "${UNCERTAINTY_ROOT}"
-    --attribution "${ATTRIBUTION}"
+    --attribution "${FORWARD}"
     --prices "${INPUT_CSV}"
     --tokenizer "${TOKENIZER}"
     --input-top-k "${INPUT_TOP_K}"
     --max-seq-len "${MAX_SEQ_LEN}"
     --output-dir "${OUTPUT_DIR}"
 )
-if [[ -n "${VALIDATION}" ]]; then
-    visualize_args+=(--validation "${VALIDATION}")
+if [[ -n "${BACKWARD}" ]]; then
+    visualize_args+=(--validation "${BACKWARD}")
 fi
 
 "${visualize_args[@]}"

@@ -13,6 +13,11 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from llm_bias.prompt_analysis.artifact_io import read_jsonl, sha256_file
+
+FORWARD_ARTIFACT_TYPE = "prompt_analysis.generated_outputs"
+BACKWARD_ARTIFACT_TYPES = {"prompt_analysis.generated_attribution", "prompt_analysis.backward"}
+
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 DEFAULT_ARTIFACT_ROOT = "artifacts/prompt_analysis"
 DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/generated_attribution/generated_token_attribution.jsonl"
@@ -1538,93 +1543,98 @@ def _prompt_tokens(
 def _attribution_panel(
     row: dict[str, Any],
     *,
+    backward: dict[str, Any] | None,
     input_top_k: int,
     tokenizer: Any | None,
     max_seq_len: int,
     validation_by_position: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    generated = row.get("generated_tokens")
+    """Build a compact panel from forward output, optionally adding backward data."""
+    legacy_backward = row if backward is None and isinstance(row.get("generated_tokens"), list) else None
+    effective_backward = backward or legacy_backward
+    generated = (effective_backward or {}).get("generated_tokens") if effective_backward is not None else None
     if not isinstance(generated, list) or not generated:
-        raise ValueError("attribution record has no generated_tokens")
+        token_ids = row.get("generated_token_ids")
+        if isinstance(token_ids, list) and token_ids:
+            generated = [
+                {"position": position, "token_id": int(token_id), "token": str(token_id)}
+                for position, token_id in enumerate(token_ids)
+            ]
+        else:
+            generated = row.get("generated_tokens")
+    if not isinstance(generated, list) or not generated:
+        raise ValueError("forward record has no generated output tokens")
 
     by_output: list[dict[int, float]] = []
     input_metadata: dict[int, dict[str, Any]] = {}
     totals: dict[int, float] = defaultdict(float)
+    attribution_enabled = backward is not None
     for output in generated:
         contributions = output.get("top_input_tokens")
+        if not attribution_enabled:
+            by_output.append({})
+            continue
         if not isinstance(contributions, list):
-            raise ValueError("generated token has no top_input_tokens")
+            raise ValueError("backward record token has no top_input_tokens")
         values: dict[int, float] = {}
         for item in contributions:
             position = int(item.get("prompt_position", item["position"]))
             attribution = float(item["attribution"])
             values[position] = attribution
             totals[position] += attribution
-            input_metadata.setdefault(
-                position,
-                {
-                    "position": position,
-                    "token_id": int(item["token_id"]),
-                    "token": str(item["token"]),
-                },
-            )
+            input_metadata.setdefault(position, {"position": position, "token_id": int(item["token_id"]), "token": str(item["token"])})
         by_output.append(values)
 
-    if tokenizer is not None:
+    if attribution_enabled and tokenizer is not None:
         prompt = str(row.get("prompt", ""))
-        if not prompt:
-            raise ValueError("attribution record has no prompt for full input display")
-        full_input_tokens = _prompt_tokens(prompt, tokenizer, max_seq_len=max_seq_len)
-        selected_positions = [item["position"] for item in full_input_tokens]
-        input_metadata = {item["position"]: item for item in full_input_tokens}
+        if prompt:
+            full_input_tokens = _prompt_tokens(prompt, tokenizer, max_seq_len=max_seq_len)
+            selected_positions = [item["position"] for item in full_input_tokens]
+            input_metadata = {item["position"]: item for item in full_input_tokens}
+        else:
+            selected_positions = sorted(sorted(totals, key=lambda position: (-totals[position], position))[:input_top_k])
+    elif attribution_enabled:
+        selected_positions = sorted(sorted(totals, key=lambda position: (-totals[position], position))[:input_top_k])
     else:
-        selected_positions = sorted(
-            sorted(totals, key=lambda position: (-totals[position], position))[:input_top_k]
-        )
-    matrix = [
-        [round(values.get(position, 0.0), 8) for position in selected_positions]
-        for values in by_output
-    ]
-    input_attribution_complete = all(
+        selected_positions = []
+    matrix = [[round(values.get(position, 0.0), 8) for position in selected_positions] for values in by_output]
+    input_attribution_complete = bool(attribution_enabled and selected_positions) and all(
         position in values for values in by_output for position in selected_positions
     )
     output_tokens = []
     for output in generated:
         output_record = {
-            "position": int(output["position"]),
-            "token_id": int(output["token_id"]),
-            "token": str(output["token"]),
-            "log_probability": float(output["log_probability"]),
+            "position": int(output.get("position", len(output_tokens))),
+            "token_id": int(output.get("token_id", -1)),
+            "token": str(output.get("token", output.get("token_id", ""))),
+            "log_probability": float(output.get("log_probability", 0.0)),
         }
         if "logit" in output:
             output_record["target_logit"] = float(output["logit"])
-        validation = (validation_by_position or {}).get(int(output["position"]))
+        validation = (validation_by_position or {}).get(output_record["position"])
         if validation is not None:
             semantic = validation.get("semantic_scope", {})
             random_baseline = validation.get("random", {})
             output_record["semantic_scope_aopc"] = float(semantic["aopc"])
             output_record["random_aopc"] = float(random_baseline["aopc"])
-            output_record["semantic_scope_log_probability_delta"] = list(
-                semantic.get("log_probability_delta", [])
-            )
-            output_record["random_log_probability_delta"] = list(
-                random_baseline.get("log_probability_delta", [])
-            )
+            output_record["semantic_scope_log_probability_delta"] = list(semantic.get("log_probability_delta", []))
+            output_record["random_log_probability_delta"] = list(random_baseline.get("log_probability_delta", []))
         output_tokens.append(output_record)
-    max_attribution = max((value for values in matrix for value in values), default=0.0)
     return {
-        "index": str(row["index"]),
-        "index_label": _index_label(str(row["index"])),
-        "context": str(row["context"]),
-        "context_label": _context_label(str(row["context"])),
-        "prompt_column": str(row["prompt_column"]),
+        "index": str(row.get("index", "")),
+        "index_label": _index_label(str(row.get("index", ""))),
+        "context": str(row.get("context", "")),
+        "context_label": _context_label(str(row.get("context", ""))),
+        "prompt_column": str(row.get("prompt_column", "")),
         "prompt": str(row.get("prompt", "")),
         "generated_text": str(row.get("generated_text", "")),
+        "prediction": {key: row.get(key) for key in ("predicted_label", "predicted_confidence", "parse_status") if key in row},
         "output_tokens": output_tokens,
         "input_tokens": [input_metadata[position] for position in selected_positions],
         "matrix": matrix,
-        "max_attribution": max_attribution,
+        "max_attribution": max((value for values in matrix for value in values), default=0.0),
         "input_attribution_complete": input_attribution_complete,
+        "attribution_enabled": attribution_enabled,
         "validation_summary": row.get("validation_summary"),
     }
 
@@ -1638,9 +1648,10 @@ def build_attribution_data(
     tokenizer: Any | None = None,
     max_seq_len: int = 256,
     validation_rows: Iterable[dict[str, Any]] | None = None,
+    backward_rows: Iterable[dict[str, Any]] | None = None,
     condition_order: Iterable[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Build the compact JSON payload used by the standalone dashboard."""
+    """Build dashboard data from forward outputs and optional backward scores."""
     if input_top_k < 1:
         raise ValueError("input_top_k must be positive")
     selected = list(selected_dates)
@@ -1651,6 +1662,12 @@ def build_attribution_data(
             if key in by_key:
                 raise ValueError(f"duplicate attribution record for {key}")
             by_key[key] = row
+    backward_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for backward in backward_rows or ():
+        key = (str(backward.get("date", "")), str(backward.get("index", "")), str(backward.get("context", "")))
+        if key in backward_by_key:
+            raise ValueError(f"duplicate backward record for {key}")
+        backward_by_key[key] = backward
     validation_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
     for validation in validation_rows or ():
         key = (
@@ -1681,6 +1698,7 @@ def build_attribution_data(
             conditions.append(
                 _attribution_panel(
                     row_for_panel,
+                    backward=backward_by_key.get((day, index, context)),
                     input_top_k=input_top_k,
                     tokenizer=tokenizer,
                     max_seq_len=max_seq_len,
@@ -1698,6 +1716,7 @@ def build_attribution_data(
         "metric": "semantic_scope_target_logit_gradient_l2_norm",
         "normalization": "none",
         "input_top_k": input_top_k,
+        "attribution_enabled": backward_rows is not None,
         "validation": "semantic_scope_aopc_with_random_baseline"
         if validation_rows is not None
         else None,
@@ -1834,10 +1853,43 @@ def plot_uncertainty(
         plt.close(entropy_figure)
 
 
+def _sidecar_metadata(path: Path) -> dict[str, Any]:
+    candidate = path.parent / "metadata.json"
+    if not candidate.is_file():
+        candidate = path.with_suffix(path.suffix + ".metadata.json")
+    if not candidate.is_file():
+        return {}
+    value = json.loads(candidate.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"artifact metadata must be an object: {candidate}")
+    return value
+
+
+def _artifact_type(path: Path, rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str | None:
+    value = metadata.get("artifact_type")
+    if isinstance(value, str):
+        return value
+    values = {row.get("artifact_type") for row in rows if row.get("artifact_type")}
+    return next(iter(values)) if len(values) == 1 else None
+
+
+def _parent_hash(metadata: dict[str, Any]) -> str | None:
+    for key in ("parent_forward_artifact_sha256", "parent_sha256", "parent_artifact_sha256"):
+        value = metadata.get(key)
+        if isinstance(value, str):
+            return value
+    for key in ("parent_forward_artifact", "parent_artifact", "parent"):
+        nested = metadata.get(key)
+        if isinstance(nested, dict) and isinstance(nested.get("sha256"), str):
+            return nested["sha256"]
+    return None
+
+
 def visualize_prompt_results(
     *,
     uncertainty_paths: dict[tuple[str, str], str | Path] | None = None,
     attribution_path: str | Path = DEFAULT_ATTRIBUTION,
+    backward_path: str | Path | None = None,
     validation_path: str | Path | None = DEFAULT_VALIDATION,
     prices_path: str | Path = DEFAULT_INPUT,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
@@ -1845,55 +1897,71 @@ def visualize_prompt_results(
     tokenizer_path: str | Path = DEFAULT_TOKENIZER,
     max_seq_len: int = 256,
 ) -> Path:
-    """Create uncertainty figures and the standalone attribution dashboard."""
+    """Create uncertainty figures and a forward-output dashboard.
+
+    Generated output panels are always available from the forward artifact.
+    Input attribution is enabled only when an explicit backward artifact whose
+    parent hash matches the forward JSONL is supplied.
+    """
     output = Path(output_dir)
     paths = uncertainty_paths or DEFAULT_UNCERTAINTY_FILES
     uncertainty = load_final_layer_uncertainty(paths)
-    attribution_rows = _read_jsonl(Path(attribution_path))
-    validation_rows = (
-        _read_jsonl(Path(validation_path))
-        if validation_path is not None and Path(validation_path).is_file()
-        else None
-    )
-    condition_order = _condition_order(uncertainty)
-    if not condition_order:
-        condition_order = _condition_order(attribution_rows)
+    forward_source = Path(attribution_path)
+    forward_rows = read_jsonl(forward_source)
+    forward_metadata = _sidecar_metadata(forward_source)
+    if _artifact_type(forward_source, forward_rows, forward_metadata) != FORWARD_ARTIFACT_TYPE:
+        raise ValueError("prompt visualization requires a forward generated-output artifact")
+    forward_hash = sha256_file(forward_source)
+    # The public CLI's optional validation slot may carry the explicit backward
+    # artifact until its parser exposes a dedicated --backward flag.
+    if backward_path is None and validation_path is not None and Path(validation_path).is_file():
+        candidate = Path(validation_path)
+        candidate_rows = read_jsonl(candidate)
+        if _artifact_type(candidate, candidate_rows, _sidecar_metadata(candidate)) in BACKWARD_ARTIFACT_TYPES:
+            backward_path, validation_path = candidate, None
+    backward_rows = None
+    backward_hash = None
+    if backward_path is not None:
+        backward_source = Path(backward_path)
+        backward_rows = read_jsonl(backward_source)
+        backward_metadata = _sidecar_metadata(backward_source)
+        if _artifact_type(backward_source, backward_rows, backward_metadata) not in BACKWARD_ARTIFACT_TYPES:
+            raise ValueError("attribution panel requires a backward artifact")
+        parent = _parent_hash(backward_metadata)
+        if parent != forward_hash:
+            raise ValueError(f"backward artifact parent hash mismatch: expected {forward_hash}, got {parent}")
+        backward_hash = sha256_file(backward_source)
+    validation_rows = _read_jsonl(Path(validation_path)) if backward_path is not None and validation_path is not None and Path(validation_path).is_file() else None
+    condition_order = _condition_order(uncertainty) or _condition_order(forward_rows)
     indices = tuple(dict.fromkeys(index for index, _context in condition_order))
-    prices = _load_prices(Path(prices_path), indices)
-    from transformers import AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path), use_fast=True)
-    selected_dates, market = select_attribution_dates(
-        attribution_rows,
-        prices,
-        condition_order=condition_order,
-    )
+    prices = _load_prices(Path(prices_path), indices) if Path(prices_path).is_file() else []
+    if prices:
+        selected_dates, market = select_attribution_dates(forward_rows, prices, condition_order=condition_order)
+    else:
+        available_dates = sorted({str(row.get("date", "")) for row in forward_rows if row.get("date")})
+        selected_dates, market = available_dates[:3], {}
+        if not selected_dates:
+            raise ValueError("forward artifact has no dates for dashboard")
+    tokenizer = None
+    if backward_rows is not None:
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path), use_fast=True)
     data = build_attribution_data(
-        attribution_rows,
+        forward_rows,
         selected_dates,
         input_top_k=input_top_k,
         market=market,
         tokenizer=tokenizer,
         max_seq_len=max_seq_len,
         validation_rows=validation_rows,
+        backward_rows=backward_rows,
         condition_order=condition_order,
     )
     plot_uncertainty(uncertainty, output, condition_order=condition_order)
     output.mkdir(parents=True, exist_ok=True)
-    (output / "attribution_dashboard.html").write_text(
-        render_attribution_html(data), encoding="utf-8"
-    )
-    (output / "attribution_selected_dates.json").write_text(
-        json.dumps(
-            {
-                "selection": "two largest negative equal-weight index returns and one closest-to-zero return",
-                "dates": selected_dates,
-                "market": market,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    (output / "attribution_dashboard.html").write_text(render_attribution_html(data), encoding="utf-8")
+    (output / "attribution_selected_dates.json").write_text(json.dumps({"selection": "two largest negative equal-weight index returns and one closest-to-zero return" if prices else "first available forward dates", "dates": selected_dates, "market": market}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    coverage = {"forward_records": len(forward_rows), "uncertainty_records": len(uncertainty), "backward_records": len(backward_rows or []), "dates": len(selected_dates), "attribution_enabled": backward_rows is not None}
+    visualization_metadata = {"source": {"forward": {"artifact": str(forward_source), "sha256": forward_hash}, "backward": ({"artifact": str(backward_path), "sha256": backward_hash} if backward_path is not None else None)}, "source_artifact": str(forward_source), "source_artifact_sha256": forward_hash, "coverage": coverage, "attribution_panel": "enabled" if backward_rows is not None else "disabled: no backward artifact", "interpretation": "Generated outputs and prediction fields are descriptive; attribution is a local first-order sensitivity readout, not a causal proof."}
+    (output / "prompt_visualization_metadata.json").write_text(json.dumps(visualization_metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return output

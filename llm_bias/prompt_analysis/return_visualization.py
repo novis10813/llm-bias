@@ -14,11 +14,17 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from llm_bias.prompt_analysis.return_evaluation import CONDITIONS, LABELS
+from llm_bias.prompt_analysis.artifact_io import read_jsonl, sha256_file
+from llm_bias.prompt_analysis.return_evaluation import (
+    CONDITIONS,
+    FORWARD_ARTIFACT_TYPE,
+    LABELS,
+    parse_return_prediction,
+)
 
-ATTRIBUTION_FIELDS = {
-    "pair_id", "condition", "target_label", "predicted_label", "predicted_confidence",
-    "parse_status", "ticker", "peer_ticker", "filing_date",
+FORWARD_FIELDS = {
+    "pair_id", "condition", "target_label", "generated_text",
+    "ticker", "peer_ticker", "filing_date",
 }
 
 
@@ -41,46 +47,35 @@ def _read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _validate_attribution(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+def _validate_forward(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize forward generated outputs and derive prediction fields."""
     result = []
     seen: set[tuple[str, str]] = set()
     for row in rows:
-        missing = ATTRIBUTION_FIELDS - row.keys()
+        missing = FORWARD_FIELDS - row.keys()
         if missing:
-            raise ValueError(f"attribution record missing fields: {sorted(missing)}")
+            raise ValueError(f"forward record missing fields: {sorted(missing)}")
         pair_id, condition = str(row["pair_id"]), str(row["condition"])
         if not pair_id or condition not in CONDITIONS:
             raise ValueError(f"invalid pair_id/condition: {pair_id!r}/{condition!r}")
         key = (pair_id, condition)
         if key in seen:
-            raise ValueError(f"duplicate attribution record for {pair_id}/{condition}")
+            raise ValueError(f"duplicate forward record for {pair_id}/{condition}")
         seen.add(key)
-        target_label = row["target_label"]
-        if target_label not in LABELS:
-            raise ValueError(f"unknown target_label for {pair_id}: {target_label!r}")
-        parse_status = row["parse_status"]
-        if parse_status not in {"valid", "invalid"}:
-            raise ValueError(f"invalid parse_status for {pair_id}: {parse_status!r}")
-        confidence = row["predicted_confidence"]
-        if parse_status == "valid":
-            if row["predicted_label"] not in LABELS:
-                raise ValueError(
-                    f"unknown predicted_label for {pair_id}: {row['predicted_label']!r}"
-                )
-            if (
-                isinstance(confidence, bool)
-                or not isinstance(confidence, int)
-                or not 0 <= confidence <= 100
-            ):
-                raise ValueError(
-                    f"predicted_confidence must be an integer in [0, 100] for {pair_id}"
-                )
+        if row["target_label"] not in LABELS:
+            raise ValueError(f"unknown target_label for {pair_id}: {row['target_label']!r}")
         normalized = dict(row)
         normalized.update({"pair_id": pair_id, "condition": condition})
+        normalized.update(parse_return_prediction(row.get("generated_text")))
         result.append(normalized)
     if not result:
-        raise ValueError("attribution artifact is empty")
+        raise ValueError("forward artifact is empty")
     return result
+
+
+def _validate_attribution(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Validate already-normalized forward records for plotting."""
+    return _validate_forward(rows)
 
 
 def _final_uncertainty(row: dict[str, Any]) -> dict[str, float | int | None]:
@@ -258,22 +253,48 @@ def plot_paired_uncertainty_delta_figures(rows: Iterable[dict[str, Any]], output
 
 
 def visualize_return_predictions(*, attribution_path: str | Path, uncertainty_path: str | Path, output_dir: str | Path) -> Path:
-    """Write PNG, compact CSV, and metadata artifacts for classification predictions."""
-    output = Path(output_dir); output.mkdir(parents=True, exist_ok=True)
-    attribution = build_return_prediction_rows(_read_jsonl(attribution_path))
-    uncertainty = _validate_uncertainty(_read_jsonl(uncertainty_path))
+    """Visualize predictions from a forward artifact and final-layer uncertainty."""
+    forward_source = Path(attribution_path)
+    uncertainty_source = Path(uncertainty_path)
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    forward_rows = read_jsonl(forward_source)
+    forward_metadata_path = forward_source.parent / "metadata.json"
+    forward_metadata = (
+        json.loads(forward_metadata_path.read_text(encoding="utf-8"))
+        if forward_metadata_path.is_file() else {}
+    )
+    artifact_type = forward_metadata.get("artifact_type") or next(
+        (row.get("artifact_type") for row in forward_rows if row.get("artifact_type")), None
+    )
+    if artifact_type != FORWARD_ARTIFACT_TYPE:
+        raise ValueError("return visualization requires a forward generated-output artifact")
+    attribution = build_return_prediction_rows(forward_rows)
+    uncertainty = _validate_uncertainty(read_jsonl(uncertainty_source))
     flip_rows = build_prediction_flip_rows(attribution)
     delta_rows = build_paired_uncertainty_delta_rows(uncertainty)
     figure_paths = plot_return_prediction_figures(attribution, output) + plot_paired_uncertainty_delta_figures(delta_rows, output)
-    attribution_fields = sorted(ATTRIBUTION_FIELDS)
-    _write_csv(output / "return_prediction_records.csv", attribution, attribution_fields)
+    fields = sorted(FORWARD_FIELDS | {"predicted_label", "predicted_confidence", "parse_status"})
+    _write_csv(output / "return_prediction_records.csv", attribution, fields)
     _write_csv(output / "return_prediction_flips.csv", flip_rows, ["pair_id", "filing_date", "original_predicted_label", "counterfactual_predicted_label", "original_target_label", "counterfactual_target_label", "original_predicted_confidence", "counterfactual_predicted_confidence", "valid_original", "valid_counterfactual", "prediction_flip"])
     _write_csv(output / "return_paired_uncertainty_delta.csv", delta_rows, ["pair_id", "filing_date", "original_entropy_nats", "counterfactual_entropy_nats", "entropy_delta_nats", "original_effective_temperature", "counterfactual_effective_temperature", "effective_temperature_delta"])
     missing_prediction = _pair_rows(attribution, value_fields=("target_label",))[1]
     missing_uncertainty = _pair_rows(uncertainty, value_fields=("entropy_nats",))[1]
+    forward_hash = sha256_file(forward_source)
+    uncertainty_hash = sha256_file(uncertainty_source)
+    coverage = {
+        "forward_records": len(attribution),
+        "uncertainty_records": len(uncertainty),
+        "prediction_pairs": len(flip_rows),
+        "uncertainty_pairs": len(delta_rows),
+        "invalid_predictions": sum(r["parse_status"] != "valid" for r in attribution),
+    }
     metadata = {
-        "artifact_contract": {"pairing_key": "pair_id", "attribution_required_fields": sorted(ATTRIBUTION_FIELDS), "uncertainty_required_fields": ["pair_id", "condition", "layers"], "final_layer_rule": "exactly one layers entry with is_output=true"},
-        "records": {"attribution": len(attribution), "uncertainty": len(uncertainty), "valid_predictions": sum(r["parse_status"] == "valid" for r in attribution), "invalid_predictions": sum(r["parse_status"] != "valid" for r in attribution), "prediction_pairs": len(flip_rows), "uncertainty_pairs": len(delta_rows)},
+        "artifact_contract": {"source_stage": "forward", "artifact_type": artifact_type, "pairing_key": "pair_id", "forward_required_fields": sorted(FORWARD_FIELDS), "uncertainty_required_fields": ["pair_id", "condition", "layers"], "final_layer_rule": "exactly one layers entry with is_output=true"},
+        "source": {"forward": {"artifact": str(forward_source), "sha256": forward_hash, "coverage": {"records": len(attribution), "pairs": len(flip_rows)}}, "uncertainty": {"artifact": str(uncertainty_source), "sha256": uncertainty_hash, "coverage": {"records": len(uncertainty), "pairs": len(delta_rows)}}},
+        "source_artifact": str(forward_source), "source_artifact_sha256": forward_hash,
+        "coverage": coverage,
+        "records": {"forward": len(attribution), "uncertainty": len(uncertainty), "valid_predictions": sum(r["parse_status"] == "valid" for r in attribution), "invalid_predictions": coverage["invalid_predictions"], "prediction_pairs": len(flip_rows), "uncertainty_pairs": len(delta_rows)},
         "labels": sorted({str(r["target_label"]) for r in attribution}),
         "missing_or_incomplete": {"prediction": missing_prediction, "uncertainty": missing_uncertainty},
         "interpretation": "Prediction flips and Jacobian readout uncertainty deltas are descriptive; uncertainty is not a causal proof.",
