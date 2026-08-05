@@ -358,6 +358,15 @@ fi
     assert output["sha256"] and output["record_count"] == 1
 
 
+def test_visualization_runner_passes_optional_validation_artifact():
+    script = (
+        Path(__file__).parents[1] / "scripts" / "visualize_prompt_analysis.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "attribution_validation/semantic_scope_aopc.jsonl" in script
+    assert "visualize_args+=(--validation \"${VALIDATION}\")" in script
+
+
 def test_load_calibration_prompts_supports_text_and_jsonl(tmp_path):
     text_path = tmp_path / "prompts.txt"
     text_path.write_text("first prompt\n\nsecond prompt\n", encoding="utf-8")

@@ -60,6 +60,9 @@ resolve_optional_file FORWARD \
 resolve_optional_file BACKWARD \
     "${RUN_ROOT}/backward/generated_token_attribution.jsonl"
 
+resolve_optional_file VALIDATION \
+    "${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl"
+
 combined_uncertainty=""
 for candidate in \
     "${UNCERTAINTY_ROOT}/readout/prompt_layer_uncertainty.jsonl" \
@@ -91,6 +94,9 @@ echo "  uncertainty root: ${UNCERTAINTY_ROOT}"
 echo "  forward outputs: ${FORWARD}"
 if [[ -n "${BACKWARD}" ]]; then
     echo "  backward attribution: ${BACKWARD}"
+    if [[ -n "${VALIDATION}" ]]; then
+        echo "  attribution validation: ${VALIDATION}"
+    fi
 else
     echo "  attribution panel: disabled"
 fi
@@ -108,6 +114,9 @@ visualize_args=(
 )
 if [[ -n "${BACKWARD}" ]]; then
     visualize_args+=(--backward "${BACKWARD}")
+    if [[ -n "${VALIDATION}" ]]; then
+        visualize_args+=(--validation "${VALIDATION}")
+    fi
 fi
 
 "${visualize_args[@]}"
