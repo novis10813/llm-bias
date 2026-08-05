@@ -18,8 +18,8 @@ from llm_bias.core.model import DEFAULT_MODEL, load_model
 from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.artifact_io import read_jsonl, sha256_file
 
-DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/backward/generated_attribution.jsonl"
-BACKWARD_ARTIFACT_TYPES = {"prompt_analysis.generated_attribution", "prompt_analysis.backward"}
+DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/backward/generated_token_attribution.jsonl"
+BACKWARD_ARTIFACT_TYPES = {"generated_token_attribution"}
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/attribution_validation"
 ABLATION_RATES = (0.0, 0.05, 0.10, 0.20)
 
@@ -39,16 +39,16 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _artifact_metadata(source: Path) -> dict[str, Any]:
+def _artifact_metadata(source: Path) -> tuple[dict[str, Any], Path | None]:
     candidate = source.parent / "metadata.json"
     if not candidate.is_file():
         candidate = source.with_suffix(source.suffix + ".metadata.json")
     if not candidate.is_file():
-        return {}
+        return {}, None
     value = json.loads(candidate.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"artifact metadata must be an object: {candidate}")
-    return value
+    return value, candidate
 
 
 def _artifact_type(rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str | None:
@@ -60,17 +60,17 @@ def _artifact_type(rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str 
 
 
 def _parent_forward(metadata: dict[str, Any]) -> tuple[str | None, str | None]:
-    path_value = metadata.get("parent_forward_artifact") or metadata.get("parent_artifact")
+    path_value = metadata.get("parent_forward_artifact") or metadata.get("parent_forward_path") or metadata.get("parent_artifact")
     if isinstance(path_value, dict):
         path_value, hash_value = path_value.get("path"), path_value.get("sha256")
     else:
-        hash_value = metadata.get("parent_forward_artifact_sha256") or metadata.get("parent_sha256")
+        hash_value = (metadata.get("parent_forward_artifact_sha256") or metadata.get("parent_forward_sha256") or metadata.get("parent_forward_hash") or metadata.get("parent_sha256"))
     return (str(path_value) if path_value else None, str(hash_value) if hash_value else None)
 
 
 def _load_backward(source: Path) -> tuple[list[dict[str, Any]], str, dict[str, Any], Path, str]:
     rows = read_jsonl(source)
-    metadata = _artifact_metadata(source)
+    metadata, metadata_path = _artifact_metadata(source)
     artifact_type = _artifact_type(rows, metadata)
     if artifact_type not in BACKWARD_ARTIFACT_TYPES:
         raise ValueError("validation requires a backward attribution artifact")
@@ -79,12 +79,34 @@ def _load_backward(source: Path) -> tuple[list[dict[str, Any]], str, dict[str, A
         raise ValueError("backward artifact is missing parent forward artifact path/hash")
     parent_path = Path(parent_path_value)
     if not parent_path.is_absolute():
-        parent_path = (source.parent / parent_path).resolve()
+        base = metadata_path.parent if metadata_path is not None else source.parent
+        parent_path = (base / parent_path).resolve()
     if not parent_path.is_file():
         raise FileNotFoundError(parent_path)
     actual_parent_hash = sha256_file(parent_path)
     if actual_parent_hash != expected_hash:
         raise ValueError(f"parent forward artifact hash mismatch: expected {expected_hash}, got {actual_parent_hash}")
+    parent_rows = read_jsonl(parent_path)
+
+    def identity(row: dict[str, Any]) -> tuple[str, ...]:
+        record_id = row.get("record_id")
+        if isinstance(record_id, str) and record_id:
+            return ("record_id", record_id)
+        return ("fields", *(str(row.get(key, "")) for key in ("pair_id", "date", "index", "context", "prompt_column", "condition")))
+
+    parent_id_list = [identity(row) for row in parent_rows]
+    backward_id_list = [identity(row) for row in rows]
+    parent_ids = set(parent_id_list)
+    backward_ids = set(backward_id_list)
+    if len(parent_ids) != len(parent_id_list) or len(backward_ids) != len(backward_id_list):
+        raise ValueError("backward artifact coverage contains duplicate records")
+    missing = sorted(parent_ids - backward_ids)
+    extra = sorted(backward_ids - parent_ids)
+    if missing or extra:
+        raise ValueError(
+            "backward artifact coverage does not match parent forward artifact "
+            f"(missing={len(missing)}, extra={len(extra)})"
+        )
     return rows, artifact_type, metadata, parent_path, actual_parent_hash
 
 

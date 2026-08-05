@@ -15,12 +15,12 @@ import numpy as np
 
 from llm_bias.prompt_analysis.artifact_io import read_jsonl, sha256_file
 
-FORWARD_ARTIFACT_TYPE = "prompt_analysis.generated_outputs"
-BACKWARD_ARTIFACT_TYPES = {"prompt_analysis.generated_attribution", "prompt_analysis.backward"}
+FORWARD_ARTIFACT_TYPE = "generated_outputs"
+BACKWARD_ARTIFACT_TYPES = {"generated_token_attribution"}
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 DEFAULT_ARTIFACT_ROOT = "artifacts/prompt_analysis"
-DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/generated_attribution/generated_token_attribution.jsonl"
+DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/backward/generated_token_attribution.jsonl"
 DEFAULT_VALIDATION = "artifacts/prompt_analysis/attribution_validation/semantic_scope_aopc.jsonl"
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/visualization"
 DEFAULT_PRICE_DISTRIBUTION_OUTPUT = "artifacts/prompt_analysis/price_distribution"
@@ -1557,7 +1557,7 @@ def _attribution_panel(
         token_ids = row.get("generated_token_ids")
         if isinstance(token_ids, list) and token_ids:
             generated = [
-                {"position": position, "token_id": int(token_id), "token": str(token_id)}
+                {"position": position, "token_id": int(token_id)}
                 for position, token_id in enumerate(token_ids)
             ]
         else:
@@ -1606,8 +1606,8 @@ def _attribution_panel(
         output_record = {
             "position": int(output.get("position", len(output_tokens))),
             "token_id": int(output.get("token_id", -1)),
-            "token": str(output.get("token", output.get("token_id", ""))),
-            "log_probability": float(output.get("log_probability", 0.0)),
+            "token": output.get("token") if isinstance(output.get("token"), str) else None,
+            "log_probability": (float(output["log_probability"]) if output.get("log_probability") is not None else None),
         }
         if "logit" in output:
             output_record["target_logit"] = float(output["logit"])

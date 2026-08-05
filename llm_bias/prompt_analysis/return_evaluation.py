@@ -51,10 +51,6 @@ def _artifact_type(rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str 
 
 def _require_forward(source: Path, rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str:
     artifact_type = _artifact_type(rows, metadata)
-    if artifact_type is None and rows and all("predicted_label" in row for row in rows):
-        # A forward record may carry already-parsed prediction fields; it still
-        # has forward semantics even when a tiny hand-written fixture omits metadata.
-        artifact_type = FORWARD_ARTIFACT_TYPE
     if artifact_type != FORWARD_ARTIFACT_TYPE:
         raise ValueError(
             f"return evaluation requires a forward generated-output artifact; "
@@ -176,8 +172,6 @@ def evaluate_return_predictions(
             raise ValueError(f"inconsistent identity for pair_id: {pair_id}")
         identities[pair_id] = identity
         parsed = parse_return_prediction(row.get("generated_text"))
-        if parsed["parse_status"] != "valid" and "predicted_label" in row:
-            parsed = {"predicted_label": row.get("predicted_label"), "predicted_confidence": row.get("predicted_confidence"), "parse_status": row.get("parse_status", "invalid"), "parse_reason": row.get("parse_reason")}
         try:
             target_ok = row["target_label"] in LABELS
             return_ok = isinstance(row["fwd_return_1d"], (int, float)) and math.isfinite(float(row["fwd_return_1d"]))

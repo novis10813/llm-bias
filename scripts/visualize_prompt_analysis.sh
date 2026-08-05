@@ -58,7 +58,7 @@ resolve_optional_file FORWARD \
     "${RUN_ROOT}/forward/generated_outputs.jsonl"
 
 resolve_optional_file BACKWARD \
-    "${RUN_ROOT}/backward/generated_attribution.jsonl"
+    "${RUN_ROOT}/backward/generated_token_attribution.jsonl"
 
 combined_uncertainty=""
 for candidate in \

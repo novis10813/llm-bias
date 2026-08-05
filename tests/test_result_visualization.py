@@ -33,6 +33,18 @@ class _PromptTokenizer:
         return f"tok-{token_ids[0]}"
 
 
+def test_forward_only_panel_marks_token_text_and_log_probability_unavailable():
+    data = build_attribution_data(
+        [{"date": "2020-01-01", "index": "sp500", "context": "without", "generated_token_ids": [7], "generated_text": "7"}],
+        ["2020-01-01"],
+        condition_order=[("sp500", "without")],
+    )
+    token = data["dates"][0]["conditions"][0]["output_tokens"][0]
+    assert token["token_id"] == 7
+    assert token["token"] is None
+    assert token["log_probability"] is None
+
+
 def _prices():
     return [
         {"Date": "2020-01-01", "sp500": "100", "russell1000": "100", "russell2000": "100"},
