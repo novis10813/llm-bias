@@ -115,16 +115,22 @@ def test_multiple_runs_write_run_records_and_manifest(tmp_path, monkeypatch):
         "format_prompt",
         lambda _tokenizer, prompt, **_kwargs: prompt,
     )
-    monkeypatch.setattr(
-        attribution,
-        "_attribute_generated_token",
-        lambda **_kwargs: {
+    attribution_calls = []
+
+    def fake_attribute_generated_token(**kwargs):
+        attribution_calls.append(kwargs)
+        return {
             "token_id": 3,
             "token": "generated",
             "logit": 0.0,
             "log_probability": 0.0,
             "top_input_tokens": [],
-        },
+        }
+
+    monkeypatch.setattr(
+        attribution,
+        "_attribute_generated_token",
+        fake_attribute_generated_token,
     )
 
     output_dir = tmp_path / "runs"
@@ -137,6 +143,7 @@ def test_multiple_runs_write_run_records_and_manifest(tmp_path, monkeypatch):
         runs=2,
         temperature=0.7,
         seed=10,
+        backprop=True,
     )
 
     records = []
@@ -147,11 +154,17 @@ def test_multiple_runs_write_run_records_and_manifest(tmp_path, monkeypatch):
         assert {row["run_index"] for row in rows} == {run_index}
         assert [row["sample_index"] for row in rows] == [0, 0]
         assert all(row["generation"]["do_sample"] for row in rows)
+        metadata = json.loads(
+            (output_dir / f"run_{run_index:03d}" / "metadata.json").read_text()
+        )
+        assert metadata["backpropagation"] is True
         records.extend(rows)
 
     assert len({row["generated_text"] for row in records}) == 2
+    assert len(attribution_calls) == len(records)
     manifest = json.loads((output_dir / "manifest.json").read_text())
     assert manifest["runs"] == 2
+    assert manifest["backpropagation"] is True
     assert manifest["records_per_run"] == 2
     assert [item["run_index"] for item in manifest["run_directories"]] == [0, 1]
 
@@ -200,6 +213,7 @@ def test_sampling_uses_shared_nonempty_dates_for_every_condition(tmp_path, monke
         output_dir=str(output_dir),
         sample_per_condition=1,
         max_new_tokens=1,
+        backprop=True,
     )
 
     rows = [json.loads(line) for line in (output_dir / "generated_token_attribution.jsonl").read_text().splitlines()]
@@ -209,6 +223,21 @@ def test_sampling_uses_shared_nonempty_dates_for_every_condition(tmp_path, monke
         "prompt_without_context_aapl",
         "prompt_with_context_aapl",
     }
+
+
+def test_disabled_generated_attribution_is_rejected_before_model_load(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        attribution,
+        "load_lens_model",
+        lambda _model_name: pytest.fail("disabled attribution must not load a model"),
+    )
+
+    with pytest.raises(ValueError, match="requires backprop=True"):
+        attribution.analyze_generated_attribution(
+            input_path=str(tmp_path / "missing.csv"),
+            model_name="fake",
+            backprop=False,
+        )
 
 
 def test_greedy_repeated_runs_are_rejected_before_model_load(tmp_path, monkeypatch):
@@ -228,6 +257,7 @@ def test_greedy_repeated_runs_are_rejected_before_model_load(tmp_path, monkeypat
             input_path=str(input_path),
             runs=2,
             temperature=0.0,
+            backprop=True,
         )
 
 
@@ -242,14 +272,17 @@ def test_sampling_controls_validate_finite_ranges(tmp_path):
         attribution.analyze_generated_attribution(
             input_path=str(input_path),
             temperature=float("nan"),
+            backprop=True,
         )
     with pytest.raises(ValueError, match="top_p"):
         attribution.analyze_generated_attribution(
             input_path=str(input_path),
             top_p=0.0,
+            backprop=True,
         )
     with pytest.raises(ValueError, match="top_k"):
         attribution.analyze_generated_attribution(
             input_path=str(input_path),
             top_k=-1,
+            backprop=True,
         )
