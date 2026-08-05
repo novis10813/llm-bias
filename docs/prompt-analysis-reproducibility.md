@@ -338,6 +338,67 @@ Metadata 保存 source SHA-256、condition/date counts、各市場 paired 與 un
 quantile method、metric definitions 與 non-causal interpretation。Entropy 與 effective
 temperature 使用不同 figures，不使用 dual axis。
 
+## Stage artifact contract（approved interface）
+
+Batch prompt-analysis 的新 artifact layout 以 model、dataset 與 run 隔離；正式
+runner migration 完成前，現有 flat `per_date/` 與 `generated_attribution/`
+輸出仍是目前 CLI 的 compatibility artifact。新 producer/runner 應只採用下列
+approved interface，不要另造一套目錄命名：
+
+```text
+artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
+├── manifest.json
+├── forward/
+│   ├── generated_outputs.jsonl
+│   └── metadata.json
+├── readout/
+│   ├── prompt_layer_topk.jsonl
+│   ├── prompt_layer_uncertainty.jsonl
+│   ├── average_layer_topk.jsonl
+│   ├── average_layer_topk.csv
+│   └── metadata.json
+└── backward/
+    ├── generated_token_attribution.jsonl
+    └── metadata.json
+```
+
+`forward` 是唯一執行 generation、保存 compact prompt/generation token record 的
+stage；`readout` 保存 Jacobian-lens readout 與 uncertainty；`backward` 只消費
+forward 已保存的 generated token IDs 做 gradient attribution，不得再次 generation。
+三個 stage 都必須寫 `status`、model/dataset identity、dataset input SHA-256、
+record count、artifact path 與 artifact SHA-256。Backward metadata 必須寫
+`parent_forward_sha256`（以及等價的 parent artifact reference），且必須等於同一
+run 的 forward artifact hash；不可用不同 model、dataset 或 run 的 parent artifact。
+
+Root `manifest.json` 必須保存 schema version、model/dataset identity、input SHA-256
+與三個 stage 的 status/hash/count。manifest 只有在三個 stage 都是 `complete`、
+檔案存在、hash 相符、record count 與 identity 相符時才可標為 `complete`；`created`、
+`running` 或 `failed` artifact 不得交給 validation 或 visualization。每個 stage
+的 record identity 必須在跨 stage 保持不變：legacy-wide 使用 `(Date, prompt_column)`，
+return-pairs 使用 `(pair_id, condition)`。
+
+Stage artifact 僅保存 compact token IDs/text、top-k、rank、probability、統計量、
+生成設定與 provenance。不得建立 `.pt`、`.pth`、`.ckpt` 或 `.safetensors` raw
+activation 檔案，也不得把完整 residual、embedding 或 gradient tensor 寫入
+JSONL。這個 prompt-analysis contract 不代表 counterfactual-patching 已完成
+layout migration；counterfactual artifacts 仍依其 canonical 文件管理。
+
+### Dataset-specific completion contracts
+
+- **Legacy-wide**：`attribute` 的 `sample_per_condition` 預設是 **32**，先從
+  所有 condition 都有非空 prompt 的共同日期 deterministic spread sampling；同一
+  組日期必須用於每個 condition。這個 32 是 legacy compatibility default，不可
+  解讀成 MAG7 資料的完整 generation 數量。
+- **MAG7 8-K return-pairs**：使用 `dataset_format=return-pairs`、model/dataset
+  scoped run root 與 512-token readout limit。full-generation 的 approved
+  interface 是讓 pair sample limit 覆蓋輸入中所有 unique `pair_id`，而不是沿用
+  legacy 32；每個 pair 必須各產生一筆 `original` 與一筆 `counterfactual` record，
+  並保存完整 generated token sequence、parse status 與 pair identity。若 runner
+  尚未提供 explicit full-generation flag，請以資料集 pair count 作為
+  `sample_per_condition`，不要臆造另一個 command。
+- **Stage ordering**：forward/readout 完成後才可啟動 backward；forward-only run
+  不建立 backward directory 的 placeholder，也不以 readout 結果冒充 attribution。
+
 ## Artifact 與研究限制
 
 - 保存的是 compact readout/attribution 結果：top-k、rank、統計量、token IDs/text、
@@ -387,6 +448,23 @@ temperature 使用不同 figures，不使用 dual axis。
   必須維持。不要在本 checklist 宣稱尚未落地的命令或 workflow。
 
 ## 完成檢查
+
+新 layout 的 smoke gate 使用 tiny JSONL 與 temporary directory，至少驗證：
+
+1. run root 同時包含 `<model-id>/<dataset-id>/<run-id>`，manifest 與每個 stage 的
+   identity 相同；
+2. forward/readout/backward record count 相同，且 identity set 不變；
+3. backward metadata 的 `parent_forward_sha256` 等於 forward artifact hash；
+4. 所有 stage 是 `complete` 且 manifest/file SHA-256 可重算；
+5. run tree 沒有 raw activation suffix 或完整 activation 欄位。
+
+這些 checks 不需要載入 checkpoint。整合 gate 另外執行 `uv run pytest -q`、
+`uv run python -m compileall -q llm_bias`、`uv lock --check`、`uv build` 與
+`node --check llm_bias/static/counterfactual.js`；不要在 unit smoke 中執行 710-pair
+inference。
+
+在 producer migration 完成前，既有 runner 的 forward-only completion check
+（`RUN_ATTRIBUTION=0`）仍是：
 
 Forward-only run（`RUN_ATTRIBUTION=0`）至少應具備 lens、readout 與 uncertainty，且不應
 有 generated attribution artifact：
