@@ -895,93 +895,71 @@ def load_price_distribution_samples(
     sampling_root: str | Path,
     prices_path: str | Path,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Load and normalize every record in a complete multi-run artifact."""
+    """Load and normalize canonical multi-run forward sampling artifacts."""
     root = Path(sampling_root)
-    manifest_path = root / "manifest.json"
+    manifest_path = root / "sampling_manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise ValueError(f"expected JSON object in {manifest_path}")
-
+    if manifest.get("schema_version") != 1 or manifest.get("artifact_type") != "generated_output_sampling":
+        raise ValueError("sampling manifest has unsupported schema or artifact type")
     runs = manifest.get("runs")
     run_indices = manifest.get("run_indices")
-    if not isinstance(runs, int) or runs < 1:
-        raise ValueError("sampling manifest must contain a positive runs value")
-    if run_indices != list(range(runs)):
-        raise ValueError("sampling manifest run_indices must be contiguous from zero")
-
+    if not isinstance(runs, int) or runs < 1 or run_indices != list(range(runs)):
+        raise ValueError("sampling manifest run indices must be contiguous from zero")
     condition_counts = manifest.get("condition_counts")
     selected_dates = manifest.get("selected_dates")
     records_per_run = manifest.get("records_per_run")
     if not isinstance(condition_counts, dict) or not condition_counts:
         raise ValueError("sampling manifest has no condition_counts")
-    if not isinstance(selected_dates, list) or not selected_dates:
-        raise ValueError("sampling manifest has no selected_dates")
-    if len(set(selected_dates)) != len(selected_dates):
-        raise ValueError("sampling manifest contains duplicate selected_dates")
+    if not isinstance(selected_dates, list) or not selected_dates or len(set(selected_dates)) != len(selected_dates):
+        raise ValueError("sampling manifest has invalid selected_dates")
     if not isinstance(records_per_run, int) or records_per_run < 1:
         raise ValueError("sampling manifest has no valid records_per_run")
-
     conditions: dict[str, tuple[str, str]] = {}
     for prompt_column, count in condition_counts.items():
         if not isinstance(prompt_column, str) or count != len(selected_dates):
             raise ValueError("sampling condition counts must match selected_dates")
         conditions[prompt_column] = _sampling_condition(prompt_column)
-    indices = tuple(dict.fromkeys(index for index, _context in conditions.values()))
     if records_per_run != len(selected_dates) * len(conditions):
         raise ValueError("sampling manifest records_per_run does not match its conditions")
-
-    expected_directories = {f"run_{run_index:03d}" for run_index in run_indices}
-    actual_directories = {
-        path.name
-        for path in root.iterdir()
-        if path.is_dir() and path.name.startswith("run_")
-    }
-    if actual_directories != expected_directories:
-        missing = sorted(expected_directories - actual_directories)
-        unexpected = sorted(actual_directories - expected_directories)
-        raise ValueError(
-            f"sampling run directories do not match manifest; missing={missing}, "
-            f"unexpected={unexpected}"
-        )
-
-    run_metadata = manifest.get("run_directories")
-    if not isinstance(run_metadata, list) or len(run_metadata) != runs:
-        raise ValueError("sampling manifest run_directories does not match runs")
-    run_seeds: dict[int, int | None] = {}
-    run_directories: dict[int, str] = {}
-    expected_written: dict[int, int] = {}
-    for entry in run_metadata:
-        if not isinstance(entry, dict):
-            raise ValueError("sampling manifest run directory entry must be an object")
-        run_index = entry.get("run_index")
-        if run_index not in run_indices or run_index in run_seeds:
-            raise ValueError("sampling manifest has invalid or duplicate run_index")
-        directory = entry.get("directory")
-        expected_directory = f"run_{run_index:03d}"
-        if directory != expected_directory:
-            raise ValueError(
-                f"sampling manifest directory for run {run_index} must be "
-                f"{expected_directory!r}"
-            )
-        run_seeds[run_index] = entry.get("run_seed")
-        run_directories[run_index] = directory
-        expected_written[run_index] = entry.get("records_written")
-    if any(count != records_per_run for count in expected_written.values()):
-        raise ValueError("sampling manifest records_written does not match records_per_run")
-
+    indices = tuple(dict.fromkeys(index for index, _context in conditions.values()))
     prices = _load_price_lookup(Path(prices_path), indices)
-    expected_keys = {
-        (str(date), prompt_column)
-        for date in selected_dates
-        for prompt_column in conditions
-    }
+    expected_keys = {(str(date), prompt_column) for date in selected_dates for prompt_column in conditions}
+    entries = manifest.get("run_directories")
+    if not isinstance(entries, list) or len(entries) != runs:
+        raise ValueError("sampling manifest run_directories does not match runs")
+    by_index: dict[int, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("sampling run directory entry must be an object")
+        index = entry.get("run_index")
+        if index not in run_indices or index in by_index:
+            raise ValueError("sampling manifest has invalid or duplicate run_index")
+        directory = f"run_{index:03d}"
+        if entry.get("directory") != directory or entry.get("forward_artifact") != f"{directory}/forward/generated_outputs.jsonl":
+            raise ValueError("sampling manifest has invalid forward artifact path")
+        if not isinstance(entry.get("forward_sha256"), str) or len(entry["forward_sha256"]) != 64:
+            raise ValueError("sampling manifest has invalid forward artifact hash")
+        if entry.get("records_written") != records_per_run:
+            raise ValueError("sampling manifest records_written does not match records_per_run")
+        by_index[index] = entry
+    if set(by_index) != set(run_indices):
+        raise ValueError("sampling manifest is missing a run directory entry")
+    actual = {p.name for p in root.iterdir() if p.is_dir() and p.name.startswith("run_")}
+    expected = {f"run_{index:03d}" for index in run_indices}
+    if actual != expected:
+        raise ValueError(f"sampling run directories do not match manifest: {actual ^ expected}")
     samples: list[dict[str, Any]] = []
     for run_index in run_indices:
-        run_path = root / run_directories[run_index] / "generated_token_attribution.jsonl"
+        entry = by_index[run_index]
+        run_path = root / entry["forward_artifact"]
         if not run_path.is_file():
             raise FileNotFoundError(run_path)
+        if _sha256_file(run_path) != entry["forward_sha256"]:
+            raise ValueError(f"forward artifact hash mismatch: {run_path}")
         seen_keys: set[tuple[str, str]] = set()
         row_count = 0
         with run_path.open(encoding="utf-8") as handle:
@@ -992,18 +970,16 @@ def load_price_distribution_samples(
                     row = json.loads(line)
                 except json.JSONDecodeError as exc:
                     raise ValueError(f"invalid JSON in {run_path}:{line_number}") from exc
-                if not isinstance(row, dict):
-                    raise ValueError(f"expected JSON object in {run_path}:{line_number}")
+                if not isinstance(row, dict) or row.get("artifact_type") != FORWARD_ARTIFACT_TYPE:
+                    raise ValueError(f"invalid forward record in {run_path}:{line_number}")
                 row_count += 1
                 if row.get("run_index") != run_index:
                     raise ValueError(f"run_index mismatch in {run_path}:{line_number}")
                 date = str(row.get("date", ""))
                 prompt_column = str(row.get("prompt_column", ""))
                 key = (date, prompt_column)
-                if key not in expected_keys:
-                    raise ValueError(f"unexpected date/condition in {run_path}:{line_number}")
-                if key in seen_keys:
-                    raise ValueError(f"duplicate date/condition in {run_path}:{line_number}")
+                if key not in expected_keys or key in seen_keys:
+                    raise ValueError(f"invalid or duplicate date/condition in {run_path}:{line_number}")
                 seen_keys.add(key)
                 index, context = conditions[prompt_column]
                 if row.get("index") != index or row.get("context") != context:
@@ -1011,33 +987,24 @@ def load_price_distribution_samples(
                 price_key = (date, index)
                 if price_key not in prices:
                     raise ValueError(f"missing close price for {date}/{index}")
-
                 parsed = _parse_generated_answer(row.get("generated_text"))
-                answer = parsed["parsed_answer"]
                 actual_close = prices[price_key]
-                absolute_percentage_error = (
-                    abs(answer - actual_close) / actual_close * 100.0
-                    if answer is not None
-                    else None
-                )
-                samples.append(
-                    {
-                        "run_index": run_index,
-                        "run_seed": run_seeds[run_index],
-                        "sample_index": row.get("sample_index"),
-                        "date": date,
-                        "index": index,
-                        "context": context,
-                        "prompt_column": prompt_column,
-                        "generated_text": row.get("generated_text"),
-                        **parsed,
-                        "actual_close": actual_close,
-                        "absolute_percentage_error": absolute_percentage_error,
-                    }
-                )
+                answer = parsed["parsed_answer"]
+                samples.append({
+                    "run_index": run_index,
+                    "run_seed": entry.get("run_seed"),
+                    "sample_index": row.get("sample_index"),
+                    "date": date,
+                    "index": index,
+                    "context": context,
+                    "prompt_column": prompt_column,
+                    "generated_text": row.get("generated_text"),
+                    **parsed,
+                    "actual_close": actual_close,
+                    "absolute_percentage_error": abs(answer - actual_close) / actual_close * 100.0 if answer is not None else None,
+                })
         if row_count != records_per_run or seen_keys != expected_keys:
             raise ValueError(f"incomplete sampling records in {run_path}")
-
     return samples, manifest
 
 
@@ -1322,8 +1289,8 @@ def visualize_price_distributions(
     valid_count = sum(sample["parse_status"] == "valid" for sample in samples)
     metadata = {
         "sampling_root": str(root),
-        "sampling_manifest": str(root / "manifest.json"),
-        "sampling_manifest_sha256": _sha256_file(root / "manifest.json"),
+        "sampling_manifest": str(root / "sampling_manifest.json"),
+        "sampling_manifest_sha256": _sha256_file(root / "sampling_manifest.json"),
         "prices": str(prices),
         "prices_sha256": _sha256_file(prices),
         "model": manifest.get("model"),

@@ -22,7 +22,9 @@ artifacts/
 
 `model_slug` follows the existing lens convention: a Hub ID such as
 `Qwen/Qwen3.5-4B` becomes `Qwen--Qwen3.5-4B`, while a local model path uses its
-final component. `dataset_slug` uses the same safe spelling. The path helpers
+final component. `dataset_slug` uses the same safe spelling. Runner dataset identity
+is the input filename stem by default, and both the run-root segment and manifest
+`dataset_slug` are derived from the core `dataset_slug()` helper. The path helpers
 accept an alternate artifact root for tests, but the default is `artifacts/`.
 Dataset slug is part of the run root, so two datasets cannot overwrite a run
 with the same model and run ID.
@@ -85,3 +87,23 @@ output hash, record counts, and generated-token coverage. It checks model identi
 parent hash, and per-record coverage; it does not claim a same-dataset or same-run binding.
 Raw activation and gradient artifact types are rejected. Store only compact top-k, rank,
 probability, summary, token, generation, and provenance data.
+
+## Multi-run forward sampling contract
+
+Multi-run price sampling is a separate artifact family, not a `RunManifest` lifecycle run.
+A sampling root contains `sampling_manifest.json` and one forward directory per run:
+
+```text
+<sampling-root>/
+├── sampling_manifest.json
+├── run_000/forward/generated_outputs.jsonl
+├── run_000/forward/metadata.json
+└── run_001/forward/generated_outputs.jsonl
+```
+
+The sampling manifest uses `artifact_type: generated_output_sampling`, records the model/input
+provenance, selected dates and condition counts, shared generation configuration, and each
+run's forward path, SHA-256, record count, and seed. `plot-price-distributions` consumes only
+these forward generated-output files; it never uses generated-token backward attribution.
+The sampling manifest and lifecycle `manifest.json` are distinct schemas and must not be
+interchanged.

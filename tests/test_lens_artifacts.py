@@ -111,13 +111,16 @@ def test_prompt_analysis_shell_uses_canonical_hub_model_slug(tmp_path):
     fake_uv.chmod(0o755)
     input_csv = tmp_path / "prompts.csv"
     input_csv.write_text("prompt\n", encoding="utf-8")
-    run_root = tmp_path / "runs"
+    artifact_root = tmp_path / "artifacts"
+    run_root = artifact_root / "org--model-name" / "prompts" / "runs" / "run"
     env = {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
         "MODEL": "org/model-name",
         "INPUT_CSV": str(input_csv),
-        "RUN_ROOT": str(run_root),
+        "ARTIFACT_ROOT": str(artifact_root),
+        "DATASET": "prompts",
+        "RUN_ID": "run",
         "RUN_READOUT": "0",
         "RUN_ATTRIBUTION": "0",
         "RUN_IN_TMUX": "0",
@@ -136,7 +139,7 @@ def test_prompt_analysis_shell_uses_canonical_hub_model_slug(tmp_path):
     script = (repo_root / "scripts/run_prompt_analysis.sh").read_text(
         encoding="utf-8"
     )
-    assert "artifacts/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt" in script
+    assert "${ARTIFACT_ROOT}/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt" in script
     assert "MODEL_SLUG##*/" not in script
     candidate_script = (repo_root / "scripts/run_qwen_lens_candidates.sh").read_text(
         encoding="utf-8"

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from types import SimpleNamespace
@@ -102,6 +103,43 @@ def test_generation_only_writes_complete_return_pair_artifact(tmp_path, monkeypa
     metadata = json.loads((tmp_path / "run-root" / "forward" / "metadata.json").read_text())
     assert metadata["backpropagation"] is False
     assert metadata["records_written"] == 4
+
+
+def test_multi_run_writes_sampling_manifest_and_forward_paths(tmp_path, monkeypatch):
+    input_path = tmp_path / "legacy.csv"
+    input_path.write_text(
+        "Date,prompt_without_context_aapl,prompt_with_context_aapl\n"
+        "2026-01-01,plain,with\n"
+        "2026-01-02,plain2,with2\n",
+        encoding="utf-8",
+    )
+    _patch_fake_model(monkeypatch)
+
+    root = tmp_path / "sampling"
+    generation.generate_prompt_outputs(
+        input_path=str(input_path),
+        model_name="fake",
+        output_dir=root,
+        runs=2,
+        sample_per_condition=1,
+        temperature=0.7,
+        seed=100,
+        max_new_tokens=1,
+    )
+
+    manifest = json.loads((root / "sampling_manifest.json").read_text())
+    assert manifest["artifact_type"] == "generated_output_sampling"
+    assert manifest["run_indices"] == [0, 1]
+    assert [entry["run_seed"] for entry in manifest["run_directories"]] == [100, 101]
+    for index in (0, 1):
+        path = root / f"run_{index:03d}" / "forward" / "generated_outputs.jsonl"
+        assert path.is_file()
+        assert manifest["run_directories"][index]["forward_artifact"] == (
+            f"run_{index:03d}/forward/generated_outputs.jsonl"
+        )
+        assert manifest["run_directories"][index]["forward_sha256"] == hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
 
 
 def test_output_path_writes_requested_jsonl_file(tmp_path, monkeypatch):

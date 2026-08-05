@@ -13,16 +13,20 @@ MODEL_SLUG="$(uv run python -c \
     "${MODEL}")"
 INPUT_CSV="${INPUT_CSV:-sp500_r1k_r2k_entityBiasPrompt.csv}"
 DATASET_FORMAT="${DATASET_FORMAT:-auto}"
-DATASET_SLUG="${DATASET_SLUG:-}"
-if [[ -z "${DATASET_SLUG}" ]]; then
-    DATASET_SLUG="$(basename -- "${INPUT_CSV}")"
-    DATASET_SLUG="${DATASET_SLUG%.*}"
-    DATASET_SLUG="${DATASET_SLUG,,}"
-    DATASET_SLUG="${DATASET_SLUG//[^a-z0-9_.-]/_}"
+ARTIFACT_ROOT="${ARTIFACT_ROOT:-artifacts}"
+DATASET="${DATASET:-}"
+if [[ -z "${DATASET}" ]]; then
+    DATASET="$(basename -- "${INPUT_CSV}")"
+    DATASET="${DATASET%.*}"
 fi
+DATASET_SLUG="$(uv run python -c \
+    'from llm_bias.core.artifact_paths import dataset_slug; import sys; print(dataset_slug(sys.argv[1]))' \
+    "${DATASET}")"
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
-RUN_ROOT="${RUN_ROOT:-artifacts/${MODEL_SLUG}/${DATASET_SLUG}/runs/${RUN_ID}}"
-LENS="${LENS:-artifacts/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt}"
+RUN_ROOT="$(uv run python -c \
+    'from llm_bias.core.artifact_paths import run_root; import sys; print(run_root(sys.argv[1], sys.argv[2], sys.argv[3], artifact_root=sys.argv[4]))' \
+    "${MODEL}" "${DATASET}" "${RUN_ID}" "${ARTIFACT_ROOT}")"
+LENS="${LENS:-${ARTIFACT_ROOT}/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt}"
 READOUT_BATCH_SIZE="${READOUT_BATCH_SIZE:-32}"
 READOUT_MAX_SEQ_LEN="${READOUT_MAX_SEQ_LEN:-}"
 if [[ -z "${READOUT_MAX_SEQ_LEN}" ]]; then
@@ -96,7 +100,7 @@ if [[ "${RUN_IN_TMUX}" == "1" && -z "${TMUX:-}" ]]; then
     mkdir -p "${RUN_ROOT}"
     env_args=(
         "MODEL=${MODEL}" "INPUT_CSV=${INPUT_CSV}" "DATASET_FORMAT=${DATASET_FORMAT}"
-        "DATASET_SLUG=${DATASET_SLUG}" "RUN_ID=${RUN_ID}" "RUN_ROOT=${RUN_ROOT}"
+        "ARTIFACT_ROOT=${ARTIFACT_ROOT}" "DATASET=${DATASET}" "DATASET_SLUG=${DATASET_SLUG}" "RUN_ID=${RUN_ID}" "RUN_ROOT=${RUN_ROOT}"
         "RUN_ROOT_READY=1" "LENS=${LENS}" "READOUT_BATCH_SIZE=${READOUT_BATCH_SIZE}"
         "READOUT_MAX_SEQ_LEN=${READOUT_MAX_SEQ_LEN}" "TOP_K=${TOP_K}" "MAX_ROWS=${MAX_ROWS}"
         "GEN_SAMPLE_PER_CONDITION=${GEN_SAMPLE_PER_CONDITION}" "GEN_MAX_NEW_TOKENS=${GEN_MAX_NEW_TOKENS}"
@@ -158,7 +162,7 @@ manifest_files = os.environ.get("MANIFEST_FILES", "")
 if action == "init":
     manifest = RunManifest(
         model=os.environ["MODEL"],
-        dataset=os.environ["DATASET_SLUG"],
+        dataset=os.environ["DATASET"],
         run_id=os.environ["RUN_ID"],
         run_directory=Path(os.environ["RUN_ROOT"]),
     )
@@ -201,7 +205,7 @@ else:
 PY
 }
 
-export MODEL MODEL_SLUG DATASET_SLUG DATASET_FORMAT RUN_ID INPUT_CSV RUN_READOUT RUN_GENERATION RUN_ATTRIBUTION LENS
+export MODEL MODEL_SLUG DATASET DATASET_SLUG DATASET_FORMAT ARTIFACT_ROOT RUN_ID RUN_ROOT INPUT_CSV RUN_READOUT RUN_GENERATION RUN_ATTRIBUTION LENS
 export READOUT_DIR FORWARD_OUTPUT BACKWARD_OUTPUT FORWARD_ARTIFACT
 manifest_update init
 manifest_update start
@@ -222,6 +226,8 @@ if [[ "${RUN_READOUT}" == "1" ]]; then
     MANIFEST_FILES="${READOUT_DIR}/prompt_layer_topk.jsonl|prompt_layer_topk|output
 ${READOUT_DIR}/prompt_layer_uncertainty.jsonl|prompt_layer_uncertainty|output
 ${READOUT_DIR}/average_layer_topk.jsonl|average_layer_topk|output
+${READOUT_DIR}/average_layer_topk.csv|average_layer_topk_csv|output
+${READOUT_DIR}/output_topk_distribution.png|output_topk_distribution_plot|output
 ${READOUT_DIR}/metadata.json|readout_metadata|output" \
         manifest_update stage_complete "${active_stage}"
     active_stage=""

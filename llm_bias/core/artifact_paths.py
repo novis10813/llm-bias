@@ -41,6 +41,14 @@ def dataset_slug(dataset_name: str) -> str:
     return _safe_slug(dataset_name, label="dataset")
 
 
+def dataset_slug_from_input_path(input_path: str | Path) -> str:
+    """Derive a dataset slug from an input filename stem."""
+    path = Path(input_path)
+    if not path.name or not path.stem:
+        raise ValueError("input_path must have a non-empty filename stem")
+    return dataset_slug(path.stem)
+
+
 def model_artifact_root(
     model_name: str, *, artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT
 ) -> Path:

@@ -165,18 +165,32 @@ ${RUN_ROOT}/visualization/
 
 ## 5. Multi-run price distribution 研究圖
 
-完整 multi-run sampling artifact 可以直接輸出三個 index 的 close-price 研究圖：
+Multi-run price sampling 是獨立的 forward artifact family，不是單一 `RunManifest` lifecycle run，
+也不需要 generated-token backward attribution。先建立空的 sampling root：
+
+```bash
+uv run prompt-analysis generate \
+  --model .cache/models/qwen3.5-4b \
+  --input sp500_r1k_r2k_entityBiasPrompt.csv \
+  --output artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30 \
+  --runs 30 \
+  --temperature 0.7 \
+  --seed 123
+```
+
+此 command 產生 `sampling_manifest.json` 與每個
+`run_NNN/forward/generated_outputs.jsonl`。接著可輸出三個 index 的 close-price 研究圖：
 
 ```bash
 uv run prompt-analysis plot-price-distributions \
-  --sampling-root artifacts/qwen3.5-4b/sp500_uncertainty/runs/sampling_t0.7_r30 \
+  --sampling-root artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30 \
   --prices sp500_r1k_r2k_entityBiasPrompt.csv \
-  --output-dir artifacts/qwen3.5-4b/sp500_uncertainty/runs/sampling_t0.7_r30/price_distribution
+  --output-dir artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30/price_distribution
 ```
 
-命令會先驗證 `manifest.json`、所有宣告的 `run_NNN/` 目錄、每個 run 的 record
-數量，以及每個 date/index/context condition 是否完整。Incomplete artifact 不會被靜默當成
-完整實驗。
+命令會先驗證 `sampling_manifest.json`、所有宣告的 `run_NNN/forward/generated_outputs.jsonl`、
+forward SHA-256、每個 run 的 record 數量，以及每個 date/index/context condition 是否完整。
+Incomplete artifact 不會被靜默當成完整實驗；backward attribution 不是此圖的輸入。
 
 每個市場輸出一張 300-DPI PNG：上方兩個共享 price scale 的 panels 分別顯示 without
 context 與 with context，包含 actual close、LLM median、25–75% band 與 5–95% band；
@@ -260,6 +274,8 @@ artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
 │   ├── prompt_layer_topk.jsonl
 │   ├── prompt_layer_uncertainty.jsonl
 │   ├── average_layer_topk.jsonl
+│   ├── average_layer_topk.csv
+│   ├── output_topk_distribution.png
 │   └── metadata.json
 ├── forward/                         # when RUN_GENERATION=1
 │   ├── generated_outputs.jsonl

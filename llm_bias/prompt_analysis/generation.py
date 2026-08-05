@@ -25,6 +25,8 @@ from jspace_viz.model import WrappedModel
 
 SCHEMA_VERSION = 1
 ARTIFACT_TYPE = "generated_outputs"
+SAMPLING_MANIFEST_SCHEMA_VERSION = 1
+SAMPLING_MANIFEST_ARTIFACT_TYPE = "generated_output_sampling"
 DEFAULT_SAMPLE_PER_CONDITION = 32
 Selection = Literal["default", "sampled", "full"]
 
@@ -421,6 +423,11 @@ def generate_prompt_outputs(
         else [destination]
     )
     run_manifest: list[dict[str, Any]] = []
+    input_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    condition_counts = {
+        column.name: len(candidates_by_column[column.name]) for column in columns
+    }
+    records_per_run = sum(condition_counts.values())
 
     for run_index, run_destination in enumerate(run_directories):
         run_seed = _seed_run(seed, run_index)
@@ -518,7 +525,7 @@ def generate_prompt_outputs(
             "artifact_sha256": artifact_sha256,
             "generated_outputs_sha256": artifact_sha256,
             "input": str(source),
-            "input_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "input_sha256": input_sha256,
             "model": model_name,
             "model_slug": model_slug(model_name),
             "dataset_format": dataset_format,
@@ -534,15 +541,39 @@ def generate_prompt_outputs(
             "backpropagation": False,
         }
         atomic_write_json(forward_destination / "metadata.json", metadata)
-        run_manifest.append({"run_index": run_index, "records_written": records_written})
+        run_manifest.append(
+            {
+                "run_index": run_index,
+                "directory": f"run_{run_index:03d}" if runs > 1 else ".",
+                "run_seed": run_seed,
+                "forward_artifact": (
+                    f"run_{run_index:03d}/forward/generated_outputs.jsonl"
+                    if runs > 1
+                    else "forward/generated_outputs.jsonl"
+                ),
+                "forward_sha256": artifact_sha256,
+                "records_written": records_written,
+            }
+        )
 
     if runs > 1:
         atomic_write_json(
-            destination / "manifest.json",
+            destination / "sampling_manifest.json",
             {
-                "schema_version": SCHEMA_VERSION,
-                "artifact_type": ARTIFACT_TYPE,
+                "schema_version": SAMPLING_MANIFEST_SCHEMA_VERSION,
+                "artifact_type": SAMPLING_MANIFEST_ARTIFACT_TYPE,
+                "model": model_name,
+                "model_slug": model_slug(model_name),
+                "input": str(source),
+                "input_sha256": input_sha256,
+                "dataset_format": dataset_format,
+                "selection": "full" if (full_generation or selection == "full" or return_pairs_full or sample_per_condition is None) else "sampled",
                 "runs": runs,
+                "run_indices": list(range(runs)),
+                "selected_dates": sorted(effective_dates),
+                "condition_counts": condition_counts,
+                "records_per_run": records_per_run,
+                "generation_config": generation_config,
                 "run_directories": run_manifest,
             },
         )

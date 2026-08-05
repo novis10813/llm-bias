@@ -139,11 +139,14 @@ def test_independent_cli_command_sets():
             "0.7",
             "--seed",
             "20260803",
+            "--runs",
+            "2",
         ]
     )
     assert generate_args.sample_per_condition == 0
     assert generate_args.temperature == 0.7
     assert generate_args.seed == 20260803
+    assert generate_args.runs == 2
 
     backward_defaults = prompt_parser().parse_args(
         [
@@ -328,7 +331,8 @@ def test_prompt_runner_manifest_records_canonical_refs_and_counts(tmp_path):
     input_csv.write_text("Date,prompt_without_context_a\n2026-01-01,hello\n", encoding="utf-8")
     lens = tmp_path / "lens.pt"
     lens.write_bytes(b"lens")
-    run_root = tmp_path / "artifacts" / "run"
+    artifact_root = tmp_path / "artifacts"
+    run_root = artifact_root / "fake" / "data" / "runs" / "run"
     fake_uv = tmp_path / "uv"
     fake_uv.write_text(
         """#!/usr/bin/env bash
@@ -346,7 +350,7 @@ fi
         encoding="utf-8",
     )
     fake_uv.chmod(0o755)
-    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "MODEL": "fake", "LENS": str(lens), "INPUT_CSV": str(input_csv), "RUN_ROOT": str(run_root), "RUN_ID": "run", "DATASET_SLUG": "data", "RUN_READOUT": "0", "RUN_GENERATION": "1", "RUN_ATTRIBUTION": "0", "RUN_IN_TMUX": "0"}
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "MODEL": "fake", "LENS": str(lens), "INPUT_CSV": str(input_csv), "ARTIFACT_ROOT": str(artifact_root), "DATASET": "data", "RUN_ID": "run", "RUN_READOUT": "0", "RUN_GENERATION": "1", "RUN_ATTRIBUTION": "0", "RUN_IN_TMUX": "0"}
     result = subprocess.run(["bash", "scripts/run_prompt_analysis.sh"], cwd=root, env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
     manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))

@@ -49,6 +49,7 @@ def _run_generation_stage(args: argparse.Namespace) -> Path:
         seed=args.seed,
         top_p=args.top_p,
         top_k=args.top_k,
+        runs=args.runs,
         max_seq_len=args.max_seq_len,
         prompt_columns=args.prompt_columns,
         dates=args.dates,
@@ -129,6 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="process every return-pair instead of the legacy sample limit",
     )
+    generate.add_argument("--runs", type=int, default=1)
     generate.add_argument("--max-new-tokens", type=int, default=64)
     generate.add_argument("--max-seq-len", type=int, default=256)
     generate.add_argument("--prompt-column", action="append", dest="prompt_columns")

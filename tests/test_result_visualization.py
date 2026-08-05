@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import pytest
@@ -552,11 +553,12 @@ def _write_price_sampling_fixture(tmp_path):
     ]
     records_per_run = len(dates) * len(prompt_columns)
     manifest = {
+        "schema_version": 1,
+        "artifact_type": "generated_output_sampling",
         "input": str(price_path),
         "model": "fake-model",
         "runs": 2,
         "run_indices": [0, 1],
-        "generation": "sampling",
         "generation_config": {"temperature": 0.7},
         "selected_dates": list(dates),
         "condition_counts": {column: len(dates) for column in prompt_columns},
@@ -566,12 +568,14 @@ def _write_price_sampling_fixture(tmp_path):
                 "run_index": run_index,
                 "run_seed": 100 + run_index,
                 "directory": f"run_{run_index:03d}",
+                "forward_artifact": f"run_{run_index:03d}/forward/generated_outputs.jsonl",
+                "forward_sha256": "pending",
                 "records_written": records_per_run,
             }
             for run_index in range(2)
         ],
     }
-    (root / "manifest.json").write_text(
+    (root / "sampling_manifest.json").write_text(
         json.dumps(manifest) + "\n", encoding="utf-8"
     )
 
@@ -594,6 +598,7 @@ def _write_price_sampling_fixture(tmp_path):
                         generated_text = '{"answer": null, "confidence": 90}'
                     rows.append(
                         {
+                            "artifact_type": "generated_outputs",
                             "run_index": run_index,
                             "sample_index": sample_index,
                             "date": date,
@@ -603,10 +608,15 @@ def _write_price_sampling_fixture(tmp_path):
                             "generated_text": generated_text,
                         }
                     )
-        (run_dir / "generated_token_attribution.jsonl").write_text(
+        forward_dir = run_dir / "forward"
+        forward_dir.mkdir()
+        forward_path = forward_dir / "generated_outputs.jsonl"
+        forward_path.write_text(
             "\n".join(json.dumps(row) for row in rows) + "\n",
             encoding="utf-8",
         )
+        manifest["run_directories"][run_index]["forward_sha256"] = hashlib.sha256(forward_path.read_bytes()).hexdigest()
+    (root / "sampling_manifest.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
     return root, price_path
 
 
@@ -645,7 +655,7 @@ def test_load_and_summarize_price_distribution_samples(tmp_path):
 
 def test_load_price_distribution_samples_rejects_incomplete_runs(tmp_path):
     root, price_path = _write_price_sampling_fixture(tmp_path)
-    (root / "run_001" / "generated_token_attribution.jsonl").unlink()
+    (root / "run_001" / "forward" / "generated_outputs.jsonl").unlink()
 
     with pytest.raises(FileNotFoundError):
         load_price_distribution_samples(root, price_path)
@@ -653,12 +663,12 @@ def test_load_price_distribution_samples_rejects_incomplete_runs(tmp_path):
 
 def test_load_price_distribution_samples_validates_manifest_directories(tmp_path):
     root, price_path = _write_price_sampling_fixture(tmp_path)
-    manifest_path = root / "manifest.json"
+    manifest_path = root / "sampling_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["run_directories"][0]["directory"] = "run_001"
     manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="manifest directory"):
+    with pytest.raises(ValueError, match="forward artifact path"):
         load_price_distribution_samples(root, price_path)
 
 

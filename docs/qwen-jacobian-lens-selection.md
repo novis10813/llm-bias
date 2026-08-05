@@ -122,14 +122,15 @@ Runner 依序 fitting `english`、`chinese_simplified`、`mixed`。已完成的
 digest 命名的 checkpoint 繼續。每個 candidate 完成後會產生 metadata，記錄
 model shape、完整 source layers、calibration input/formatted digests、chat
 settings、jlens version、fitting 參數、artifact type/schema version、binary/metadata
-SHA-256 與 provenance。
+SHA-256 與 provenance。直接 fitting canonical output 時，resumable checkpoint 位於
+`artifacts/archive/<model-slug>/jacobian-lens/checkpoints/`；本候選 runner 使用每個
+candidate 目錄旁的 digest checkpoint，不會寫入該 canonical checkpoint root。
 
 ```text
 artifacts/qwen3.5-4b/jacobian-lens/
-├── checkpoints/              # canonical fit checkpoints
 ├── archive/                  # replaced active lenses
 ├── selection.json
-└── candidates/
+└── candidates/                # candidate-adjacent fit checkpoints
     ├── english/
     │   ├── fit.log
     │   ├── jacobian_lens.pt
