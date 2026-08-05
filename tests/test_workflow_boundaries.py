@@ -1,6 +1,8 @@
 import ast
 import json
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -10,7 +12,6 @@ from llm_bias.counterfactual_patching.visualization import STATIC_DIR
 from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.lens_fitting.calibration import load_calibration_prompts
 from llm_bias.lens_fitting.cli import build_parser as lens_parser
-from llm_bias.prompt_analysis import attribution as attribution_module
 from llm_bias.prompt_analysis import cli as prompt_cli
 from llm_bias.prompt_analysis.cli import build_parser as prompt_parser
 from llm_bias.prompt_analysis.interactive import STATIC_DIR as PROMPT_STATIC_DIR
@@ -67,7 +68,8 @@ def test_independent_cli_command_sets():
     }
     assert set(prompt_choices) == {
         "readout",
-        "attribute",
+        "generate",
+        "attribute-generated",
         "validate-attribution",
         "visualize",
         "plot-price-distributions",
@@ -90,59 +92,52 @@ def test_independent_cli_command_sets():
     assert readout_defaults.enable_thinking is False
     assert readout_defaults.save_prompt_topk is True
     assert readout_defaults.save_prompt_uncertainty is True
-    assert readout_defaults.backprop is False
-    readout_backprop = prompt_parser().parse_args(
-        ["readout", "--model", "fake", "--lens", "fake-lens.pt", "--backprop"]
-    )
-    assert readout_backprop.backprop is True
     with pytest.raises(SystemExit):
         prompt_parser().parse_args(
-            [
-                "readout",
-                "--model",
-                "fake",
-                "--lens",
-                "fake-lens.pt",
-                "--no-input-attribution",
-            ]
+            ["readout", "--model", "fake", "--lens", "fake-lens.pt", "--backprop"]
         )
 
-    attribute_defaults = prompt_parser().parse_args(["attribute", "--model", "fake"])
-    assert attribute_defaults.input == "sp500_r1k_r2k_entityBiasPrompt.csv"
-    assert attribute_defaults.sample_per_condition == 32
-    assert attribute_defaults.max_new_tokens == 64
-    assert attribute_defaults.runs == 1
-    assert attribute_defaults.temperature == 0.0
-    assert attribute_defaults.top_p == 1.0
-    assert attribute_defaults.top_k == 0
-    assert attribute_defaults.backprop is False
-    attribute_backprop = prompt_parser().parse_args(
-        ["attribute", "--model", "fake", "--backprop"]
+    generate_defaults = prompt_parser().parse_args(
+        ["generate", "--model", "fake", "--output", "forward.jsonl"]
     )
-    assert attribute_backprop.backprop is True
+    assert generate_defaults.input == "sp500_r1k_r2k_entityBiasPrompt.csv"
+    assert generate_defaults.sample_per_condition == 32
+    assert generate_defaults.max_new_tokens == 64
+    assert generate_defaults.temperature == 0.0
+    assert generate_defaults.top_p == 1.0
+    assert generate_defaults.top_k == 0
 
-    attribute_args = prompt_parser().parse_args(
+    generate_args = prompt_parser().parse_args(
         [
-            "attribute",
+            "generate",
             "--model",
             "fake-qwen",
-            "--runs",
-            "30",
+            "--output",
+            "forward.jsonl",
+            "--sample-per-condition",
+            "0",
             "--temperature",
             "0.7",
             "--seed",
             "20260803",
-            "--top-p",
-            "1.0",
-            "--top-k",
-            "0",
         ]
     )
-    assert attribute_args.runs == 30
-    assert attribute_args.temperature == 0.7
-    assert attribute_args.seed == 20260803
-    assert attribute_args.top_p == 1.0
-    assert attribute_args.top_k == 0
+    assert generate_args.sample_per_condition == 0
+    assert generate_args.temperature == 0.7
+    assert generate_args.seed == 20260803
+
+    backward_defaults = prompt_parser().parse_args(
+        [
+            "attribute-generated",
+            "--model",
+            "fake",
+            "--forward-artifact",
+            "forward.jsonl",
+            "--output",
+            "backward.jsonl",
+        ]
+    )
+    assert backward_defaults.max_seq_len == 256
     price_plot_args = prompt_parser().parse_args(
         [
             "plot-price-distributions",
@@ -177,31 +172,96 @@ def test_independent_cli_command_sets():
     )
 
 
-def test_attribute_without_backprop_fails_before_model_load(monkeypatch, tmp_path):
+def test_generated_attribution_fails_closed_without_forward_artifact(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        attribution_module,
-        "load_lens_model",
-        lambda _model_name: pytest.fail("disabled attribution must not load a model"),
+        "sys.argv",
+        [
+            "prompt-analysis",
+            "attribute-generated",
+            "--model",
+            "fake",
+            "--forward-artifact",
+            str(tmp_path / "missing-forward.jsonl"),
+            "--output",
+            str(tmp_path / "backward.jsonl"),
+        ],
     )
-    monkeypatch.setattr(
-        prompt_cli,
-        "analyze_generated_attribution",
-        lambda **_kwargs: pytest.fail("disabled attribution must not run"),
+
+    with pytest.raises(FileNotFoundError, match="forward artifact"):
+        prompt_cli.main()
+
+
+def test_generation_cli_uses_forward_api_without_backward(monkeypatch, tmp_path):
+    calls = []
+    generation_module = ModuleType("llm_bias.prompt_analysis.generation")
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        return Path(kwargs["output_path"])
+
+    generation_module.generate_prompt_outputs = fake_generate
+    monkeypatch.setitem(
+        sys.modules, "llm_bias.prompt_analysis.generation", generation_module
     )
     monkeypatch.setattr(
         "sys.argv",
         [
             "prompt-analysis",
-            "attribute",
+            "generate",
             "--model",
             "fake",
             "--input",
-            str(tmp_path / "missing.csv"),
+            "prompts.csv",
+            "--output",
+            str(tmp_path / "run" / "forward" / "generated_outputs.jsonl"),
+            "--sample-per-condition",
+            "0",
         ],
     )
 
-    with pytest.raises(ValueError, match="requires --backprop"):
-        prompt_cli.main()
+    prompt_cli.main()
+
+    assert len(calls) == 1
+    assert calls[0]["full_generation"] is True
+    assert calls[0]["sample_per_condition"] is None
+
+
+def test_generated_attribution_cli_reads_forward_api_only(monkeypatch, tmp_path):
+    forward = tmp_path / "forward.jsonl"
+    forward.write_text("{}\n", encoding="utf-8")
+    calls = []
+    backward_module = ModuleType("llm_bias.prompt_analysis.generated_attribution")
+
+    def fake_attribute(**kwargs):
+        calls.append(kwargs)
+        return Path(kwargs["output_dir"]) / "backward" / "generated_token_attribution.jsonl"
+
+    backward_module.attribute_generated_outputs = fake_attribute
+    monkeypatch.setitem(
+        sys.modules,
+        "llm_bias.prompt_analysis.generated_attribution",
+        backward_module,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "prompt-analysis",
+            "attribute-generated",
+            "--model",
+            "fake",
+            "--forward-artifact",
+            str(forward),
+            "--output",
+            str(tmp_path / "run" / "backward" / "generated_token_attribution.jsonl"),
+        ],
+    )
+
+    prompt_cli.main()
+
+    assert len(calls) == 1
+    assert calls[0]["forward_artifact"] == str(forward)
+    assert "output_path" not in calls[0]
+    assert calls[0]["output_dir"] == tmp_path / "run"
 
 
 def test_load_calibration_prompts_supports_text_and_jsonl(tmp_path):
