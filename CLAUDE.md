@@ -62,8 +62,9 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
 - 模型、lens binary、實驗輸出與第三方 checkout 不要加入 root Git；分別使用
   `.cache/`、`artifacts/` 與 `third_party/`。
 - 每個模型只能有一個 active、完整逐層的 canonical lens：
-  `artifacts/lenses/<model>/jacobian_lens.pt`。partial/stride fitting 與
-  checkpoint 放在 `artifacts/archive/`，不要混入 active model directory。
+  `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt`。partial/stride fitting 與
+  checkpoint 放在 `artifacts/archive/<model-slug>/jacobian-lens/checkpoints/`，不要混入
+  active model directory。
 - Qwen3.5-4B 使用不同 residual width/layer count 的 model-specific lens，應
   使用 `docs/qwen-jacobian-lens-selection.md` 所述的候選選擇流程，不要用小型
   smoke corpus 覆寫 canonical lens。

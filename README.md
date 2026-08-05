@@ -83,7 +83,7 @@ uv run counterfactual-patching prepare-data \
   --max-pairs 4
 uv run counterfactual-patching run \
   --model .cache/models/llama-3.2-1b-instruct \
-  --lens artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt \
+  --lens artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt \
   --max-pairs 4
 ```
 
@@ -96,9 +96,22 @@ metrics, artifacts, and dashboard behavior, use
 - Models, lens binaries, experiment outputs, and external checkouts remain in
   `.cache/`, `artifacts/`, and `third_party/`; they are not committed to root
   Git.
+- Model-scoped lenses live under `artifacts/<model-slug>/jacobian-lens/`.
+  Prompt-analysis runs are isolated under
+  `artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/`, with `manifest.json`
+  and compact `forward/`, `readout/`, and optional `backward/` stage artifacts.
+- The manifest records model/dataset identity, input and artifact SHA-256 values,
+  record counts, and stage status. Backward attribution must reference the exact
+  forward artifact hash and never regenerate its tokens. A run is consumable only
+  after all required stages are `complete`.
+- Legacy-wide generated-token sampling remains 32 shared dates by default. MAG7
+  8-K return-pairs full-generation instead covers every unique pair and writes both
+  `original` and `counterfactual` records; it is not the legacy 32 sample.
+- No workflow writes complete raw activations to tracked artifacts.
 - The 8-K counterfactual workflow requires manual review and promotion before a
   row is considered validated. See the [dataset protocol](docs/counterfactual-dataset-generation.md).
-- No workflow writes complete raw activations to tracked artifacts.
+- This prompt-analysis layout does not claim that counterfactual-patching has
+  completed a repository-wide artifact migration.
 - Jacobian-lens attribution is a local transported-readout or sensitivity
   diagnostic; it is not by itself a causal claim.
 

@@ -35,7 +35,7 @@ A run must use one consistent set of:
 The default lens path is:
 
 ```text
-artifacts/lenses/<model>/jacobian_lens.pt
+artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt
 ```
 
 For a model-specific rendered pair file, use an explicit `--pairs` path rather
@@ -48,7 +48,7 @@ make accidental model/pair mismatches visible:
 
 ```bash
 MODEL=.cache/models/llama-3.2-1b-instruct
-LENS=artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt
+LENS=artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt
 RUN_ROOT=artifacts/counterfactual_patching/llama-3.2-1b-instruct/smoke
 PAIRS="$RUN_ROOT/pairs.jsonl"
 RESULTS="$RUN_ROOT/patch_results.jsonl"
@@ -97,7 +97,7 @@ A small model-scoped smoke run is:
 
 ```bash
 MODEL=.cache/models/llama-3.2-1b-instruct
-LENS=artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt
+LENS=artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt
 RUN_ROOT=artifacts/counterfactual_patching/llama-3.2-1b-instruct/smoke
 
 uv run counterfactual-patching prepare-data \
@@ -146,7 +146,7 @@ The patching commands then use the same model, lens, pair file, and output root:
 
 ```bash
 MODEL=.cache/models/qwen3.5-4b
-LENS=artifacts/lenses/qwen3.5-4b/jacobian_lens.pt
+LENS=artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt
 PAIRS=artifacts/counterfactual_data/8k_earnings_v1/rendered/qwen3.5-4b/pairs.jsonl
 RUN_ROOT=artifacts/counterfactual_patching/qwen3.5-4b/entity_bias
 

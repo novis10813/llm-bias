@@ -53,12 +53,12 @@ artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
 └── backward/  # generated-token attribution, only when enabled
 ```
 
-每個 stage 的 metadata 與 root manifest 都必須保存 model identity、dataset
-identity、dataset input SHA-256、record count 與 artifact SHA-256；backward 另須
-保存 forward artifact 的 parent hash。這使得同一個 Qwen lens 被不同 dataset 或 run 誤用時
-可以在 completion check 中 fail closed。Stage 只保存 compact readout/provenance，
-不得保存 residual、embedding 或 gradient activation；這是 prompt-analysis 的
-artifact contract，不是 counterfactual-patching 全面 layout migration 的宣稱。
+Root manifest 保存 model/dataset/run identity、input 與 artifact SHA-256、record counts
+與 stage statuses。Backward metadata 保存實際執行的 model identity、parent forward path/hash
+與 per-record generated-token coverage；目前 producer 不宣稱 same-dataset 或 same-run binding。
+Stage 只保存 compact readout/provenance，不得保存 residual、embedding 或 gradient activation；
+這是 prompt-analysis 的 artifact contract，不是 counterfactual-patching 全面 layout migration
+的宣稱。
 
 ## Calibration 設計
 
@@ -245,20 +245,17 @@ source layers；partial/stride experiments 不得放入 active model folder。
 
 ## Prompt-analysis dataset gates
 
-Qwen lens promotion 與資料集 sampling 是兩個獨立 gate。Legacy-wide MAG7/S&P500
-compatibility workflow 的 generated-token stage 預設每個 condition deterministic
-sampling 32 個共同日期；這個數字不可套用成 return-pairs 的完整 generation 上限。
-MAG7 8-K return-pairs 必須明確使用 `return-pairs` schema 與 model/dataset-scoped
-run，full-generation 的 pair limit 覆蓋所有 unique `pair_id`，並對每個 pair 保存
-`original` 與 `counterfactual` 的完整 generated sequence。若 exact runner option
-尚未落地，文件批准的是這個 interface 與 completion contract，不是另一個未實作
-CLI。
+Qwen lens promotion 與資料集 sampling 是兩個獨立 gate。Legacy-wide `generate`
+stage 預設每個 condition deterministic sampling 32 個共同日期；這個數字不可套用
+成 return-pairs 的完整 generation 上限。MAG7 8-K return-pairs runner 明確使用
+`return-pairs` schema、`RUN_GENERATION=1`、`RUN_ATTRIBUTION=0` 與
+`GEN_SAMPLE_PER_CONDITION=0`，由 runner 傳入 `--full-generation`，對 710 個 unique
+pairs 保存 1,420 筆 `original`/`counterfactual` condition records。
 
-在宣告 run 完成前，tiny-fixture contract test 應檢查 model/dataset isolation、
-forward/readout/backward record identity 與 count、backward parent SHA-256、三個
-stage status、manifest/file hashes，以及 raw activation artifact 不存在。這些
-checks 不需要 Qwen checkpoint；Qwen full calibration/evaluation/promotion 才需要
-模型 inference。
+在宣告 run 完成前，tiny-fixture contract test 應檢查 manifest identity、enabled stage
+status、manifest/file hashes、backward parent SHA-256 與 coverage，以及 raw activation
+artifact 不存在。這些 checks 不需要 Qwen checkpoint；Qwen full calibration/evaluation/
+promotion 才需要 model inference。
 
 ## 如何解讀與下一步
 

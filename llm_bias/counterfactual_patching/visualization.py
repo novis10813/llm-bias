@@ -356,7 +356,7 @@ def main() -> None:
     parser.add_argument("--model", default=".cache/models/llama-3.2-1b-instruct")
     parser.add_argument(
         "--lens",
-        help="defaults to artifacts/lenses/<model>/jacobian_lens.pt",
+        help="defaults to artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt",
     )
     parser.add_argument("--pairs", default=DEFAULT_PAIRS)
     parser.add_argument("--host", default="127.0.0.1")

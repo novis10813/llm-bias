@@ -44,7 +44,7 @@ RUN_READOUT="${RUN_READOUT:-1}"
 RUN_GENERATION="${RUN_GENERATION:-0}"
 RUN_ATTRIBUTION="${RUN_ATTRIBUTION:-0}"
 FORWARD_ARTIFACT="${FORWARD_ARTIFACT:-}"
-ATTR_INPUT_TOP_K="${ATTR_INPUT_TOP_K:-}"
+BACKWARD_INPUT_TOP_K="${BACKWARD_INPUT_TOP_K:-}"
 SESSION="${SESSION:-prompt_analysis}"
 RUN_IN_TMUX="${RUN_IN_TMUX:-1}"
 
@@ -103,7 +103,7 @@ if [[ "${RUN_IN_TMUX}" == "1" && -z "${TMUX:-}" ]]; then
         "GEN_TEMPERATURE=${GEN_TEMPERATURE}" "GEN_SEED=${GEN_SEED}" "GEN_TOP_P=${GEN_TOP_P}"
         "GEN_TOP_K=${GEN_TOP_K}" "RUN_READOUT=${RUN_READOUT}" "RUN_GENERATION=${RUN_GENERATION}"
         "RUN_ATTRIBUTION=${RUN_ATTRIBUTION}" "FORWARD_ARTIFACT=${FORWARD_ARTIFACT}"
-        "ATTR_INPUT_TOP_K=${ATTR_INPUT_TOP_K}"
+        "BACKWARD_INPUT_TOP_K=${BACKWARD_INPUT_TOP_K}"
         "SESSION=${SESSION}" "RUN_IN_TMUX=0"
     )
     command=(env)
@@ -237,6 +237,7 @@ if [[ "${RUN_GENERATION}" == "1" ]]; then
         --max-seq-len "${READOUT_MAX_SEQ_LEN}" --temperature "${GEN_TEMPERATURE}" --top-p "${GEN_TOP_P}"
         --top-k "${GEN_TOP_K}" --dataset-format "${DATASET_FORMAT}"
     )
+    if [[ "${GEN_SAMPLE_PER_CONDITION}" == "0" ]]; then generation_args+=(--full-generation); fi
     if [[ -n "${GEN_SEED}" ]]; then generation_args+=(--seed "${GEN_SEED}"); fi
     "${generation_args[@]}"
     MANIFEST_FILES="${FORWARD_OUTPUT}|generated_outputs|output
@@ -254,7 +255,7 @@ if [[ "${RUN_ATTRIBUTION}" == "1" ]]; then
         --forward-artifact "${FORWARD_ARTIFACT}" --output "${BACKWARD_OUTPUT}"
         --max-seq-len "${READOUT_MAX_SEQ_LEN}"
     )
-    if [[ -n "${ATTR_INPUT_TOP_K}" ]]; then attribution_args+=(--input-top-k "${ATTR_INPUT_TOP_K}"); fi
+    if [[ -n "${BACKWARD_INPUT_TOP_K}" ]]; then attribution_args+=(--input-top-k "${BACKWARD_INPUT_TOP_K}"); fi
     "${attribution_args[@]}"
     MANIFEST_FILES="${BACKWARD_OUTPUT}|generated_token_attribution|output
 ${RUN_ROOT}/backward/metadata.json|attribution_metadata|output" \

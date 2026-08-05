@@ -18,9 +18,7 @@ from llm_bias.core.model import DEFAULT_MODEL, load_model
 from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.artifact_io import read_jsonl, sha256_file
 
-DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/backward/generated_token_attribution.jsonl"
 BACKWARD_ARTIFACT_TYPES = {"generated_token_attribution"}
-DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/attribution_validation"
 ABLATION_RATES = (0.0, 0.05, 0.10, 0.20)
 
 
@@ -228,9 +226,9 @@ def _resolve_max_seq_len(source: Path, requested: int | None) -> int:
 
 def evaluate_semantic_scope(
     *,
-    attribution_path: str | Path = DEFAULT_ATTRIBUTION,
+    attribution_path: str | Path,
+    output_dir: str | Path,
     model_name: str = DEFAULT_MODEL,
-    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     seed: int = 0,
     max_seq_len: int | None = None,
 ) -> Path:

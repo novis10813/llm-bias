@@ -274,6 +274,27 @@ def test_forward_only_readout_writes_readout_uncertainty_without_attribution(
     assert metadata["input_attribution"]["enabled"] is False
 
 
+def test_readout_resolves_default_lens_from_model_identity(tmp_path, monkeypatch):
+    _patch_deterministic_prompt_run(monkeypatch)
+    input_path, lens_path = _write_prompt_analysis_inputs(tmp_path)
+    resolved_models = []
+
+    def fake_canonical_lens_path(model_name):
+        resolved_models.append(model_name)
+        return lens_path
+
+    monkeypatch.setattr(readout, "canonical_lens_path", fake_canonical_lens_path)
+
+    readout.analyze_prompt_outputs(
+        input_path=str(input_path),
+        model_name="org/fake-model",
+        output_dir=str(tmp_path / "canonical-lens"),
+        top_k=1,
+    )
+
+    assert resolved_models == ["org/fake-model"]
+
+
 def test_backprop_readout_calls_attribution_and_records_provenance(tmp_path, monkeypatch):
     _patch_deterministic_prompt_run(monkeypatch)
     input_path, lens_path = _write_prompt_analysis_inputs(tmp_path)

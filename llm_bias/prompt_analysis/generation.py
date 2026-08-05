@@ -25,7 +25,6 @@ from jspace_viz.model import WrappedModel
 
 SCHEMA_VERSION = 1
 ARTIFACT_TYPE = "generated_outputs"
-DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/generated_outputs"
 DEFAULT_SAMPLE_PER_CONDITION = 32
 Selection = Literal["default", "sampled", "full"]
 
@@ -317,7 +316,7 @@ def generate_prompt_outputs(
     *,
     input_path: str,
     model_name: str = DEFAULT_MODEL,
-    output_dir: str = DEFAULT_OUTPUT_DIR,
+    output_dir: str | Path | None = None,
     output_path: str | Path | None = None,
     sample_per_condition: int | None = DEFAULT_SAMPLE_PER_CONDITION,
     full_generation: bool = False,
@@ -410,6 +409,8 @@ def generate_prompt_outputs(
                 "output_path must be an existing directory, a forward directory, "
                 "or a .jsonl file"
             )
+    if output_dir is None:
+        raise ValueError("output_dir or output_path is required")
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     if runs > 1 and any(destination.iterdir()):
@@ -558,7 +559,6 @@ generate_forward_artifact = generate_prompt_outputs
 
 __all__ = [
     "ARTIFACT_TYPE",
-    "DEFAULT_OUTPUT_DIR",
     "DEFAULT_SAMPLE_PER_CONDITION",
     "SCHEMA_VERSION",
     "generate_forward_artifact",

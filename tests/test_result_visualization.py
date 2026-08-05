@@ -104,7 +104,15 @@ def _attribution_rows(dates):
 
 def test_select_attribution_dates_chooses_crashes_and_normal_date():
     rows = _attribution_rows(["2020-01-02", "2020-01-03", "2020-01-04"])
-    selected, market = select_attribution_dates(rows, _prices())
+    selected, market = select_attribution_dates(
+        rows,
+        _prices(),
+        condition_order=[
+            (index, context)
+            for index in ("sp500", "russell1000", "russell2000")
+            for context in ("without", "with")
+        ],
+    )
 
     assert selected == ["2020-01-02", "2020-01-03", "2020-01-04"]
     assert market["2020-01-02"]["mean_return_pct"] == pytest.approx(-10.0)
@@ -396,8 +404,8 @@ def test_select_attribution_dates_accepts_arbitrary_price_columns():
     assert market["2020-01-02"]["prices"] == {"aapl": 90.0}
 
 
-def test_uncertainty_paths_from_root_discovers_runner_per_date_directory(tmp_path):
-    path = tmp_path / "per_date" / "prompt_layer_uncertainty.jsonl"
+def test_uncertainty_paths_from_root_discovers_runner_readout_directory(tmp_path):
+    path = tmp_path / "readout" / "prompt_layer_uncertainty.jsonl"
     path.parent.mkdir()
     path.write_text("{}\n", encoding="utf-8")
 
@@ -409,6 +417,11 @@ def test_uncertainty_paths_from_root_discovers_runner_per_date_directory(tmp_pat
         for context in ("without", "with")
     }
     assert set(paths.values()) == {path}
+
+
+def test_uncertainty_paths_from_root_rejects_missing_combined_artifact(tmp_path):
+    with pytest.raises(FileNotFoundError, match="prompt_layer_uncertainty.jsonl"):
+        uncertainty_paths_from_root(tmp_path)
 
 
 def test_render_attribution_html_embeds_tokens_and_interaction_script():

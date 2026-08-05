@@ -19,14 +19,6 @@ FORWARD_ARTIFACT_TYPE = "generated_outputs"
 BACKWARD_ARTIFACT_TYPES = {"generated_token_attribution"}
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
-DEFAULT_ARTIFACT_ROOT = "artifacts/prompt_analysis"
-DEFAULT_ATTRIBUTION = "artifacts/prompt_analysis/backward/generated_token_attribution.jsonl"
-DEFAULT_VALIDATION = "artifacts/prompt_analysis/attribution_validation/semantic_scope_aopc.jsonl"
-DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/visualization"
-DEFAULT_PRICE_DISTRIBUTION_OUTPUT = "artifacts/prompt_analysis/price_distribution"
-DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT = (
-    "artifacts/prompt_analysis/uncertainty_distribution"
-)
 DEFAULT_TOKENIZER = ".cache/models/llama-3.2-1b-instruct"
 
 INDEX_LABELS = {
@@ -48,39 +40,24 @@ UNCERTAINTY_METRICS = {
         "file_stem": "effective_temperature",
     },
 }
-DEFAULT_UNCERTAINTY_FILES = {
-    ("sp500", "without"): "artifacts/prompt_analysis/readout/sp500_without/prompt_layer_uncertainty.jsonl",
-    ("sp500", "with"): "artifacts/prompt_analysis/readout/sp500_with/prompt_layer_uncertainty.jsonl",
-    ("russell1000", "without"): "artifacts/prompt_analysis/readout/russell1000_without/prompt_layer_uncertainty.jsonl",
-    ("russell1000", "with"): "artifacts/prompt_analysis/readout/russell1000_with/prompt_layer_uncertainty.jsonl",
-    ("russell2000", "without"): "artifacts/prompt_analysis/readout/russell2000_without/prompt_layer_uncertainty.jsonl",
-    ("russell2000", "with"): "artifacts/prompt_analysis/readout/russell2000_with/prompt_layer_uncertainty.jsonl",
-}
+UNCERTAINTY_KEYS = tuple(
+    (index, context) for index in INDEX_ORDER for context in CONTEXT_ORDER
+)
 
 
-def uncertainty_paths_from_root(
-    root: str | Path = DEFAULT_ARTIFACT_ROOT,
-) -> dict[tuple[str, str], Path]:
-    """Resolve six uncertainty inputs, preferring one combined artifact.
-
-    ``prompt-analysis readout`` writes a combined file directly below its
-    output directory. Support both the historical named directory and the
-    portable runner's ``per_date`` directory so callers do not need to create
-    compatibility symlinks.
-    """
+def uncertainty_paths_from_root(root: str | Path) -> dict[tuple[str, str], Path]:
+    """Resolve the combined readout uncertainty artifact below a run root."""
     root_path = Path(root)
     combined_candidates = (
         root_path / "readout" / "prompt_layer_uncertainty.jsonl",
-        root_path / "per_date" / "prompt_layer_uncertainty.jsonl",
         root_path / "prompt_layer_uncertainty.jsonl",
     )
     for combined in combined_candidates:
         if combined.is_file():
-            return {key: combined for key in DEFAULT_UNCERTAINTY_FILES}
-    return {
-        key: root_path / Path(source).relative_to(DEFAULT_ARTIFACT_ROOT)
-        for key, source in DEFAULT_UNCERTAINTY_FILES.items()
-    }
+            return {key: combined for key in UNCERTAINTY_KEYS}
+    raise FileNotFoundError(
+        f"prompt_layer_uncertainty.jsonl not found below {root_path}"
+    )
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -631,7 +608,7 @@ def plot_uncertainty_distribution_figures(
 def visualize_uncertainty_distributions(
     *,
     uncertainty_paths: dict[tuple[str, str], str | Path],
-    output_dir: str | Path = DEFAULT_UNCERTAINTY_DISTRIBUTION_OUTPUT,
+    output_dir: str | Path,
 ) -> Path:
     """Create final-layer uncertainty distribution research artifacts."""
     output = Path(output_dir)
@@ -1294,7 +1271,7 @@ def visualize_price_distributions(
     *,
     sampling_root: str | Path,
     prices_path: str | Path = DEFAULT_INPUT,
-    output_dir: str | Path = DEFAULT_PRICE_DISTRIBUTION_OUTPUT,
+    output_dir: str | Path,
 ) -> Path:
     """Create research figures and traceable tables for multi-run prices."""
     root = Path(sampling_root)
@@ -1423,16 +1400,11 @@ def select_attribution_dates(
     attribution_rows: Iterable[dict[str, Any]],
     prices: Iterable[dict[str, str]],
     *,
+    condition_order: Iterable[tuple[str, str]],
     crash_count: int = 2,
-    condition_order: Iterable[tuple[str, str]] | None = None,
 ) -> tuple[list[str], dict[str, dict[str, Any]]]:
-    """Select common crash and normal dates deterministically.
-
-    ``condition_order`` keeps the original three-index default for backwards
-    compatibility, while the visualization runner supplies conditions discovered
-    from the input artifact (for example ``aapl`` through ``tsla``).
-    """
-    required_order = list(condition_order or _condition_order())
+    """Select common crash and normal dates deterministically."""
+    required_order = list(condition_order)
     required_conditions = set(required_order)
     by_date: dict[str, set[tuple[str, str]]] = defaultdict(set)
     for row in attribution_rows:
@@ -1765,12 +1737,6 @@ def plot_uncertainty(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows({key: row.get(key) for key in fieldnames} for row in rows)
-    # Keep the historical filename as a compatibility alias with fresh values.
-    with (output_dir / "final_layer_entropy.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows({key: row.get(key) for key in fieldnames} for row in rows)
-
     palette = (
         "#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c",
         "#0891b2", "#be123c", "#4f46e5", "#65a30d", "#c026d3",
@@ -1887,12 +1853,12 @@ def _parent_hash(metadata: dict[str, Any]) -> str | None:
 
 def visualize_prompt_results(
     *,
-    uncertainty_paths: dict[tuple[str, str], str | Path] | None = None,
-    attribution_path: str | Path = DEFAULT_ATTRIBUTION,
+    forward_path: str | Path,
+    uncertainty_paths: dict[tuple[str, str], str | Path],
     backward_path: str | Path | None = None,
-    validation_path: str | Path | None = DEFAULT_VALIDATION,
+    validation_path: str | Path | None = None,
     prices_path: str | Path = DEFAULT_INPUT,
-    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    output_dir: str | Path,
     input_top_k: int = 15,
     tokenizer_path: str | Path = DEFAULT_TOKENIZER,
     max_seq_len: int = 256,
@@ -1904,21 +1870,13 @@ def visualize_prompt_results(
     parent hash matches the forward JSONL is supplied.
     """
     output = Path(output_dir)
-    paths = uncertainty_paths or DEFAULT_UNCERTAINTY_FILES
-    uncertainty = load_final_layer_uncertainty(paths)
-    forward_source = Path(attribution_path)
+    uncertainty = load_final_layer_uncertainty(uncertainty_paths)
+    forward_source = Path(forward_path)
     forward_rows = read_jsonl(forward_source)
     forward_metadata = _sidecar_metadata(forward_source)
     if _artifact_type(forward_source, forward_rows, forward_metadata) != FORWARD_ARTIFACT_TYPE:
         raise ValueError("prompt visualization requires a forward generated-output artifact")
     forward_hash = sha256_file(forward_source)
-    # The public CLI's optional validation slot may carry the explicit backward
-    # artifact until its parser exposes a dedicated --backward flag.
-    if backward_path is None and validation_path is not None and Path(validation_path).is_file():
-        candidate = Path(validation_path)
-        candidate_rows = read_jsonl(candidate)
-        if _artifact_type(candidate, candidate_rows, _sidecar_metadata(candidate)) in BACKWARD_ARTIFACT_TYPES:
-            backward_path, validation_path = candidate, None
     backward_rows = None
     backward_hash = None
     if backward_path is not None:

@@ -1,17 +1,16 @@
 # Prompt-analysis 實驗重現指南
 
-這份文件說明如何以任意相容 decoder model，從同一份 prompt CSV 重跑
-forward-only 的 Jacobian-lens readout 與 Temperature Scope 不確定性資料；只有
-明確啟用 backpropagation stage 時，才會額外產生 generated-token attribution，並
-可進一步執行 validation、圖表與互動式 dashboard。
+這份文件說明如何以任意相容 decoder model，從同一份 prompt CSV 執行
+Jacobian-lens readout、generation 與 generated-token attribution stages，並依 stage
+前置條件執行 validation、圖表與互動式 dashboard。
 
 整體分成三個獨立入口：
 
 - `fit-jacobian-lens`：建立可重用的 lens artifact。
-- `prompt-analysis`：執行 readout、optional attribution、validation 與 visualization。
+- `prompt-analysis`：提供 `readout`、`generate`、`attribute-generated`、validation
+  與 visualization commands。
 - `scripts/run_prompt_analysis.sh`：只 orchestration prompt experiment，不會 fitting
-  lens；`RUN_ATTRIBUTION=0` 是預設，只有 `RUN_ATTRIBUTION=1` 才會啟動 attribution
-  backpropagation。
+  lens；各 stage 由 `RUN_READOUT`、`RUN_GENERATION` 與 `RUN_ATTRIBUTION` 控制。
 
 以下範例使用 Qwen 3.5-4B，但 Python API 與 CLI 名稱均不依賴特定模型。
 
@@ -27,215 +26,128 @@ test -f sp500_r1k_r2k_entityBiasPrompt.csv
 
 ## 1. 準備 model-specific canonical Jacobian lens
 
-Canonical lens 必須保留每個 intermediate layer。Qwen3.5-4B 已使用 English-only、
-Simplified-Chinese-only 與 mixed 各 128 題完成 controlled selection；完整設計、
-重跑方式與結果見
+Canonical lens 必須保留每個 intermediate layer。Qwen3.5-4B 使用 model-specific
+residual width/layer count；完整設計、候選選擇與 promotion 流程見
 [Qwen3.5-4B Jacobian-lens calibration 與候選選擇](qwen-jacobian-lens-selection.md)。
 
-一般新模型可以先使用 standalone fitter 建立 experimental lens，但不要用小型
-smoke calibration 直接覆寫已有的 validated canonical artifact：
-
-```bash
-uv run fit-jacobian-lens \
-  --model /path/to/new-model \
-  --output artifacts/candidate_lenses/new-model/smoke/jacobian_lens.pt \
-  --calibration-prompts 16 \
-  --dim-batch 16 \
-  --max-seq-len 128
-```
-
-Qwen production workflow 使用：
-
-```bash
-bash scripts/run_qwen_lens_candidates.sh
-```
-
-選出的 active artifact 為：
+一般新模型可以先使用 standalone fitter 建立 experimental lens，輸出到候選目錄；
+active canonical lens 的位置固定為：
 
 ```text
-artifacts/lenses/qwen3.5-4b/
+artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt
+```
+
+fitting checkpoints 的位置固定為：
+
+```text
+artifacts/archive/<model-slug>/jacobian-lens/checkpoints/
+```
+
+選出的 Qwen active artifact 例：
+
+```text
+artifacts/qwen3.5-4b/jacobian-lens/
 ├── jacobian_lens.pt
 ├── jacobian_lens.pt.metadata.json
 └── selection.json
 ```
 
-Metadata 記錄模型、hidden width、layers、fitting 參數、calibration digest 與
-jlens version。Checkpoint 與 partial/experimental lens 不放在 active model lens
-folder；若 fitting 中斷，以完全相同的 model/output 與 calibration 重跑即可
-繼續。
-
-也可以使用外部 calibration prompts。純文字格式為每行一個 prompt；JSONL
-則預設讀取 `text` 欄位：
-
-```bash
-uv run fit-jacobian-lens \
-  --model /path/to/model \
-  --calibration-file calibration.jsonl \
-  --calibration-field text \
-  --calibration-prompts 32 \
-  --output artifacts/candidate_lenses/my-model/experiment/jacobian_lens.pt
-```
+Metadata 記錄模型 identity、hidden width、layer coverage、fitting 參數、calibration
+digest 與 jlens version。完整 active lens 不得由小型 smoke fit 覆寫。
 
 ## 2. 執行 prompt-analysis
+
+目前 runner 與 CLI 的 stage contract 是：
+
+- `readout`：讀取 CSV、載入既有 lens，輸出 `${RUN_ROOT}/readout/` 的逐層
+  vocabulary readout、uncertainty、aggregate top-k 與 metadata。
+- `generate`：對輸入 conditions 產生並保存 `${RUN_ROOT}/forward/generated_outputs.jsonl`
+  與 `forward/metadata.json`；它是唯一執行 generation 的 stage。
+- `attribute-generated`：只讀取既有 forward artifact，驗證 model identity 與
+  parent SHA-256，再把 gradient attribution 寫入 `${RUN_ROOT}/backward/`；它不會
+  再次 generation。
 
 預設 shell 設定為：
 
 ```text
 MODEL=.cache/models/qwen3.5-4b
-LENS=artifacts/lenses/qwen3.5-4b/jacobian_lens.pt
-RUN_ROOT=artifacts/prompt_analysis/qwen3.5-4b
+LENS=artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt
+RUN_ROOT=artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>
+RUN_READOUT=1
+RUN_GENERATION=0
+RUN_ATTRIBUTION=0
+GEN_SAMPLE_PER_CONDITION=32
 ```
 
-Lens 必須已存在；runner 不會自動 fitting。Runner 預設為 forward-only，
-`RUN_ATTRIBUTION=0` 不會執行生成或 backpropagation：
-
-```bash
-RUN_ATTRIBUTION=0 bash scripts/run_prompt_analysis.sh
-```
-
-也可以省略變數，因為 `RUN_ATTRIBUTION=0` 是預設值：
-
-```bash
-bash scripts/run_prompt_analysis.sh
-```
-
-若需要 generated-token attribution，必須明確啟用 attribution backpropagation
-stage；這不是 readout 的 fallback：
-
-```bash
-RUN_ATTRIBUTION=1 bash scripts/run_prompt_analysis.sh
-```
-
-預設建立 detached tmux session：
-
-```bash
-tmux attach -t prompt_analysis
-tail -f artifacts/prompt_analysis/qwen3.5-4b/run.log
-```
-
-若要在目前終端執行：
-
-```bash
-RUN_IN_TMUX=0 bash scripts/run_prompt_analysis.sh
-```
-
-使用其他模型或獨立 run：
-
-```bash
-MODEL=/path/to/model \
-LENS=artifacts/lenses/my-model/jacobian_lens.pt \
-RUN_ROOT=artifacts/prompt_analysis/my-model/repro-001 \
-SESSION=prompt_analysis_repro_001 \
-bash scripts/run_prompt_analysis.sh
-```
-
-Runner 執行一個 forward stage，以及一個預設關閉的 optional attribution stage：
-
-1. `RUN_READOUT=1` 時，對六個 `with/without × index` prompt columns 做逐日期、逐層
-   Jacobian Lens readout，產生 output top-k 與 Temperature Scope uncertainty；此
-   stage 不做 generation backpropagation。
-2. `RUN_ATTRIBUTION=1` 時，才對每個 condition 均勻抽樣日期，生成 output tokens，並
-   以 `--backprop` 計算 generated-token attribution。`RUN_ATTRIBUTION=0` 時刻意跳過
-   整個 stage，不會留下空的或 placeholder attribution artifact。
-
-條件式輸出結構如下：
-
-```text
-${RUN_ROOT}/
-├── per_date/                         # RUN_READOUT=1 時產生
-│   ├── prompt_layer_uncertainty.jsonl
-│   ├── prompt_layer_topk.jsonl
-│   └── metadata.json                 # 記錄 backpropagation=false
-├── generated_attribution/            # 僅 RUN_ATTRIBUTION=1 時產生
-│   ├── generated_token_attribution.jsonl
-│   └── metadata.json
-└── run.log
-```
-
-因此 forward-only run 的 artifact contract 只有 `per_date/` readout 與 uncertainty
-結果；它刻意不產生 `generated_attribution/`。需要 generated-token attribution 的
-validation 或 visualization 必須改用 `RUN_ATTRIBUTION=1` 產生的完整 artifact，不新增
-fallback 或以 forward-only 結果冒充 attribution。
+Runner 不會 fitting lens。完整 MAG7 8-K return-pairs runner 的固定設定另見
+[本文件的 MAG7 completion contract](#dataset-specific-completion-contracts)。
 
 ### Runner 環境變數
 
 | 變數 | 預設值 |
 |---|---|
 | `MODEL` | `.cache/models/qwen3.5-4b` |
-| `LENS` | `artifacts/lenses/qwen3.5-4b/jacobian_lens.pt` |
+| `LENS` | `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt` |
 | `INPUT_CSV` | `sp500_r1k_r2k_entityBiasPrompt.csv` |
-| `RUN_ROOT` | `artifacts/prompt_analysis/qwen3.5-4b` |
+| `DATASET_FORMAT` | `auto` |
+| `DATASET_SLUG` | input filename 的安全 slug |
+| `RUN_ID` | UTC timestamp |
+| `RUN_ROOT` | `artifacts/<model-slug>/<dataset-slug>/runs/<run-id>` |
 | `READOUT_BATCH_SIZE` | `32` |
-| `READOUT_MAX_SEQ_LEN` | legacy/auto：`256`；明確設定 `DATASET_FORMAT=return-pairs`：`512` |
+| `READOUT_MAX_SEQ_LEN` | `256`；`return-pairs` 時為 `512` |
 | `TOP_K` | `15` |
-| `ATTR_SAMPLE_PER_CONDITION` | `32` |
-| `ATTR_MAX_NEW_TOKENS` | `64` |
-| `ATTR_RUNS` | `1` |
-| `ATTR_TEMPERATURE` | `0`（greedy） |
-| `ATTR_SEED` | empty（不固定 seed） |
-| `ATTR_TOP_P` | `1.0` |
-| `ATTR_TOP_K` | `0` |
-| `ATTR_OUTPUT_DIR` | `${RUN_ROOT}/generated_attribution` |
+| `MAX_ROWS` | empty（不限制） |
+| `GEN_SAMPLE_PER_CONDITION` | `32`；`0` 代表傳入 `--full-generation` |
+| `GEN_MAX_NEW_TOKENS` | `64` |
+| `GEN_TEMPERATURE` | `0`（greedy） |
+| `GEN_SEED` | empty |
+| `GEN_TOP_P` | `1.0` |
+| `GEN_TOP_K` | `0` |
 | `RUN_READOUT` | `1` |
-| `RUN_ATTRIBUTION` | `0`；設為 `1` 才執行 generated-token attribution backpropagation |
-| `SESSION` | `prompt_analysis` |
+| `RUN_GENERATION` | `0` |
+| `RUN_ATTRIBUTION` | `0` |
+| `FORWARD_ARTIFACT` | attribution-only execution 時的既有 forward JSONL |
+| `BACKWARD_INPUT_TOP_K` | empty |
 | `RUN_IN_TMUX` | `1` |
+| `SESSION` | `prompt_analysis` |
 
-Return-pair 的 system instruction 與 user question 合併後通常超過 256 tokens；runner 在明確設定
-`DATASET_FORMAT=return-pairs` 時使用 512，避免右側 truncation 移除 user question 或 assistant
-generation marker。Legacy/auto workflow 維持原本的 256 預設。
-
-只有 `RUN_ATTRIBUTION=1` 時，`ATTR_RUNS`、`ATTR_TEMPERATURE`、`ATTR_SEED`、`ATTR_TOP_P`
-與 `ATTR_TOP_K` 才會控制 generated-token stage。預設 `ATTR_RUNS=1` 且
-`ATTR_TEMPERATURE=0` 使用 deterministic greedy generation。若要在同一批 shared dates
-上重複 sampling，可設定 `ATTR_RUNS=30`、`ATTR_TEMPERATURE=0.7`、固定 `ATTR_SEED`，並
-把 `ATTR_OUTPUT_DIR` 指向新的目錄。`runs > 1` 會建立 `run_000/` 到 `run_029/`，每個 run
-各自保存 JSONL 與 metadata，避免覆蓋既有結果；不要把多個 run 的 raw JSONL 直接交給只
-接受單一 run 的 visualizer。
-
-`ATTR_TEMPERATURE` 是 generation sampling temperature；它與 readout 的 uncertainty
-中 `effective_temperature` 不同。後者由 final-normalized residual 的 L2 norm 推導，
-不是 generation 的 sampling 設定。
+`RUN_GENERATION=1` 執行 `generate`；`RUN_ATTRIBUTION=1` 執行
+`attribute-generated`。若 generation 關閉而 attribution 開啟，必須提供
+`FORWARD_ARTIFACT`；該 artifact 必須先存在。Stage outputs 只保存 compact records、
+token IDs/text、scores、generation config 與 metadata。
 
 ## 3. Attribution validation（需要 attribution-enabled artifact）
 
 這個 validation 只接受 `RUN_ATTRIBUTION=1` 產生的
-`generated_token_attribution.jsonl`。Forward-only run 刻意沒有 generated
-attribution artifact，因此不能執行此命令；不要新增 fallback，也不要把 readout 或
-uncertainty artifact 當成 attribution 輸入。
+`backward/generated_token_attribution.jsonl`。`readout` 與 `forward` artifact 不是
+attribution input，必須先完成 `attribute-generated` stage。
 
 ```bash
 uv run prompt-analysis validate-attribution \
   --model .cache/models/qwen3.5-4b \
-  --attribution artifacts/prompt_analysis/qwen3.5-4b/generated_attribution/generated_token_attribution.jsonl \
-  --output-dir artifacts/prompt_analysis/qwen3.5-4b/attribution_validation
+  --attribution artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>/backward/generated_token_attribution.jsonl \
+  --output-dir artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>/attribution_validation
 ```
 
-## 4. 建立視覺化（需要完整 attribution-enabled run）
+## 4. 建立視覺化
 
-`visualize_prompt_analysis.sh` 需要同一個 run 的 per-date uncertainty 與 generated
-attribution；forward-only artifact 可以用第 6 節的 uncertainty distribution 命令，
-但不能建立 attribution dashboard。缺少 generated attribution 時，visualizer 應直接
-失敗，不使用 fallback。
-
-```bash
-bash scripts/visualize_prompt_analysis.sh
-```
-
-自訂 run：
+`visualize_prompt_analysis.sh` 需要同一個 run 的 `readout` uncertainty 與 `forward`
+generated outputs；存在 `backward` artifact 時才會啟用 attribution panel。Script 不猜測
+run ID，必須明確指定 canonical run root：
 
 ```bash
-RUN_ROOT=artifacts/prompt_analysis/my-model/repro-001 \
+RUN_ROOT=artifacts/<model-slug>/<dataset-slug>/runs/<run-id> \
 TOKENIZER=/path/to/model \
 bash scripts/visualize_prompt_analysis.sh
 ```
 
 Visualizer 尋找：
 
-1. `${RUN_ROOT}/per_date/prompt_layer_uncertainty.jsonl`（必要）
-2. `${RUN_ROOT}/generated_attribution/generated_token_attribution.jsonl`（必要，必須來自
-   attribution-enabled run）
-3. optional `${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl`
+1. `${RUN_ROOT}/readout/prompt_layer_uncertainty.jsonl`（必要）
+2. `${RUN_ROOT}/forward/generated_outputs.jsonl`（必要）
+3. `${RUN_ROOT}/backward/generated_token_attribution.jsonl`（optional；存在時啟用
+   attribution panel）
+4. optional `${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl`
 
 輸出為：
 
@@ -246,7 +158,6 @@ ${RUN_ROOT}/visualization/
 ├── final_layer_entropy_with_context.png
 ├── final_layer_entropy_without_context.png
 ├── final_layer_uncertainty.csv
-├── final_layer_entropy.csv
 └── attribution_dashboard.html
 ```
 
@@ -258,9 +169,9 @@ ${RUN_ROOT}/visualization/
 
 ```bash
 uv run prompt-analysis plot-price-distributions \
-  --sampling-root artifacts/prompt_analysis/qwen3.5-4b/sp500_uncertainty/generated_attribution_sampling_t0.7_r30 \
+  --sampling-root artifacts/qwen3.5-4b/sp500_uncertainty/runs/sampling_t0.7_r30 \
   --prices sp500_r1k_r2k_entityBiasPrompt.csv \
-  --output-dir artifacts/prompt_analysis/qwen3.5-4b/sp500_uncertainty/generated_attribution_sampling_t0.7_r30/price_distribution
+  --output-dir artifacts/qwen3.5-4b/sp500_uncertainty/runs/sampling_t0.7_r30/price_distribution
 ```
 
 命令會先驗證 `manifest.json`、所有宣告的 `run_NNN/` 目錄、每個 run 的 record
@@ -301,8 +212,8 @@ error formula 與 valid/invalid counts。圖中的 bands 是 valid generated pri
 
 ```bash
 uv run prompt-analysis plot-uncertainty-distributions \
-  --uncertainty-root artifacts/qwen3.5-4b/qwen3.5_temperature_scope_per_date \
-  --output-dir artifacts/qwen3.5-4b/qwen3.5_uncertainty_distribution
+  --uncertainty-root artifacts/qwen3.5-4b/sp500_uncertainty/runs/readout \
+  --output-dir artifacts/qwen3.5-4b/sp500_uncertainty/uncertainty_distribution
 ```
 
 Raw distribution 使用 ECDF，比較每個市場的 with-context 與 without-context：
@@ -338,69 +249,90 @@ Metadata 保存 source SHA-256、condition/date counts、各市場 paired 與 un
 quantile method、metric definitions 與 non-causal interpretation。Entropy 與 effective
 temperature 使用不同 figures，不使用 dual axis。
 
+## Stage artifact contract
+
+The runner writes one canonical run tree:
+
+```text
+artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
+├── manifest.json
+├── readout/                         # when RUN_READOUT=1
+│   ├── prompt_layer_topk.jsonl
+│   ├── prompt_layer_uncertainty.jsonl
+│   ├── average_layer_topk.jsonl
+│   └── metadata.json
+├── forward/                         # when RUN_GENERATION=1
+│   ├── generated_outputs.jsonl
+│   └── metadata.json
+└── backward/                        # when RUN_ATTRIBUTION=1
+    ├── generated_token_attribution.jsonl
+    └── metadata.json
+```
+
+`manifest.json` is schema version `1` and is produced by `RunManifest`. Its canonical
+object contains:
+
+- `schema_version`, `model`, `model_slug`, `dataset`, `dataset_slug`, `run_id` and
+  `run_root`;
+- lifecycle `status` (`created`, `running`, `complete` or `failed`), timestamps, and
+  optional `error`;
+- `artifacts`, plus the role-indexed `input_refs`, `lens_refs` and `output_refs`;
+- `record_counts`, keyed by registered `artifact_type`; and
+- `stages`, keyed by enabled stage name, whose status is `created`, `running`, `complete`
+  or `failed`, with lifecycle timestamps.
+
+Each artifact reference records `artifact_type`, `stage`, `status`, `role`, a path, a
+lowercase SHA-256 digest, and an optional JSONL `record_count` and producer metadata.
+The runner registers the input CSV and configured lens during initialization. As stages
+finish it registers the files that actually exist, computes their SHA-256 values, and
+infers JSONL record counts. The root manifest is marked `complete` only after the runner
+has finished all enabled stages; a failed stage leaves the run `failed` with an error.
+The stored hashes, counts, and stage states support independent completion checks without
+using stale file existence as the completion signal.
+
+`attribute-generated` writes backward metadata with the model identity, parent forward
+path, parent forward SHA-256 (also exposed as `parent_forward_hash` and
+`parent_artifact`), output SHA-256, record counts, and coverage counts. It verifies the
+forward model identity, parent hash, and per-record generated-token coverage. The
+metadata does not claim a dataset/run binding that the producer does not implement.
+
+## Dataset-specific completion contracts
+
+- **Legacy-wide**: `generate` defaults to 32 deterministically spread dates per condition.
+  The same selected date set is used for each prompt condition.
+- **MAG7 8-K return-pairs**: the dedicated runner sets `DATASET_FORMAT=return-pairs`,
+  `READOUT_MAX_SEQ_LEN=512`, `RUN_GENERATION=1`, `RUN_ATTRIBUTION=0`, and
+  `GEN_SAMPLE_PER_CONDITION=0`. The runner translates zero into `generate --full-generation`.
+  The input contains 710 unique pairs, so forward generation writes 1,420 condition
+  records: one `original` and one `counterfactual` record per pair.
+- **Stage ordering**: `readout` and `generate` complete before `attribute-generated`.
+  Backward consumes the persisted generated token IDs and does not perform generation.
+
 ## Artifact 與研究限制
 
 - 保存的是 compact readout/attribution 結果：top-k、rank、統計量、token IDs/text、
   probabilities、generation 設定與 provenance；不保存完整 raw residual、embedding 或
-  gradient activation。需要重新分析時，必須重新執行對應 stage，不可假設有 raw activation
-  可回填。
-- Readout 的 aggregate 必須先對每個 condition 的完整 vocabulary softmax 做平均，再
-  選 top-k。Temperature Scope uncertainty 是 residual-space 的 readout measure；
-  `ATTR_TEMPERATURE` 則是 generation sampling 設定，兩者不可互換或解讀成同一量。
+  gradient activation。
+- Readout aggregate 先對每個 condition 的完整 vocabulary softmax 做平均，再選 top-k。
+  `effective_temperature` 是 residual-space 的 readout measure；`GEN_TEMPERATURE` 是
+  generation sampling 設定，兩者不可互換或解讀成同一量。
 - Generated-token attribution 是局部的一階 gradient sensitivity/semantic-scope
   readout，不是 attention map、chain-of-thought、離散 reasoning path，也不是
   standalone causal proof。Attribution validation 的 ablation 結果只能提供額外的
   validation evidence，不能把單次 attribution 直接宣稱為一般化 causal effect。
-- 因此 forward-only 與 attribution-enabled run 必須以 artifact provenance、metadata
-  的 backpropagation 設定及各自的前置條件分開保存與解讀；不以缺少 attribution 的
-  forward-only 結果做 fallback。
-
-## Legacy MAG7/S&P500 compatibility checklist
-
-在替換或擴充 prompt-analysis workflow 前，請確認下列既有 contract 仍成立：
-
-- **CSV schema**：`Date` 與名稱完全符合
-  `prompt_with_context_<ticker>` / `prompt_without_context_<ticker>` 的欄位會被載入；
-  不符合 pattern 的額外欄位可保留但不會被當成 condition。BOM、quoted multiline
-  prompt、空 prompt 與任意 ticker 名稱都必須可讀；空白或空 prompt 會被跳過並在
-  `condition_counts` 記錄 `skipped_empty_prompts`。
-- **Date sampling**：generated attribution 的自動 sampling 先取所有 condition
-  都有非空 prompt 的共同 `Date`，再以 deterministic spread 選日期；每個 condition
-  使用同一組日期，不可各自抽樣造成 paired conditions 日期不一致。明確傳入
-  `--date` 時則只使用指定日期。
-- **Prompt assembly**：預設使用 tokenizer 的 user-only chat template，且不啟用
-  thinking；`readout --raw-prompt` 才改用原始 prompt。attribution 的 scope 仍是
-  chat-formatted prompt 中的 raw user message tokens。
-- **Legacy artifacts**：readout 的核心檔名仍為
-  `prompt_layer_topk.jsonl`、`prompt_layer_uncertainty.jsonl`、
-  `average_layer_topk.jsonl`、`average_layer_topk.csv` 與 `metadata.json`；
-  multi-run attribution 仍使用 `manifest.json`、`run_NNN/` 與每個 run 的
-  `generated_token_attribution.jsonl`。JSONL/manifest 的既有欄位（日期、condition、
-  `run_index`、`sample_index`、generation config、condition counts 與 record counts）
-  必須保留。
-- **Price answer parser**：只接受 JSON object 中 finite numeric `answer`；整數與
-  浮點數都會轉成 numeric price。`confidence` 是 optional numeric metadata，不會把
-  有效 answer 變成 invalid；null、字串、布林、NaN、malformed JSON 與缺少 answer
-  必須標為 invalid，且不可靜默轉成 0。
-- **CLI defaults**：現有 `prompt-analysis readout`、`attribute` 與 visualization
-  的 input/output、sampling、generation、chat-template 與 token-length defaults
-  必須維持。不要在本 checklist 宣稱尚未落地的命令或 workflow。
 
 ## 完成檢查
 
-Forward-only run（`RUN_ATTRIBUTION=0`）至少應具備 lens、readout 與 uncertainty，且不應
-有 generated attribution artifact：
+使用 tiny JSONL 與 temporary directory，至少驗證：
 
-```bash
-test -f artifacts/lenses/qwen3.5-4b/jacobian_lens.pt
-test -f artifacts/prompt_analysis/qwen3.5-4b/per_date/prompt_layer_uncertainty.jsonl
-test ! -e artifacts/prompt_analysis/qwen3.5-4b/generated_attribution/generated_token_attribution.jsonl
-```
+1. run root 使用 `<model-slug>/<dataset-slug>/<run-id>`，manifest identity 與 stage
+   metadata identity 相符；
+2. enabled stages have `complete` status and their registered files exist;
+3. manifest and stage metadata SHA-256 values can be recomputed;
+4. backward metadata parent path/hash match the supplied forward artifact, and coverage
+   counts agree with persisted generated token IDs;
+5. run tree 沒有 raw activation suffix 或完整 activation 欄位。
 
-只有 attribution-enabled run（`RUN_ATTRIBUTION=1`）才能檢查 attribution validation
-與完整 visualization：
-
-```bash
-test -f artifacts/prompt_analysis/qwen3.5-4b/generated_attribution/generated_token_attribution.jsonl
-test -f artifacts/prompt_analysis/qwen3.5-4b/visualization/attribution_dashboard.html
-```
+這些 checks 不需要載入 checkpoint。整合 gate 另外執行 `uv run pytest -q`、
+`uv run python -m compileall -q llm_bias`、`uv lock --check` 與 `uv build`；不要在
+unit smoke 中執行 710-pair inference。
