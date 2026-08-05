@@ -87,6 +87,8 @@ def _model_info(state: PromptReadoutState) -> dict[str, Any]:
     fitted_layers = list(state.lens.source_layers)
     expected_source_layers = list(range(state.model.n_layers - 1))
     chat_template = getattr(state.model.tokenizer, "chat_template", None)
+    canonical_path = canonical_lens_path(state.model_id)
+    resolved_lens_path = Path(state.lens_path).resolve()
     return {
         "model_id": state.model_id,
         "device": str(state.model.device),
@@ -98,6 +100,8 @@ def _model_info(state: PromptReadoutState) -> dict[str, Any]:
         "expected_fitted_layer_count": len(expected_source_layers),
         "lens_n_prompts": state.lens.n_prompts,
         "lens_source": state.lens_path,
+        "lens_is_model_canonical": resolved_lens_path == canonical_path.resolve(),
+        "canonical_lens_source": str(canonical_path),
         "has_chat_template": bool(chat_template),
         "supports_enable_thinking": (
             isinstance(chat_template, str)
@@ -201,8 +205,14 @@ def create_app(state: PromptReadoutState) -> FastAPI:
 
 
 def build_app(model_name: str, lens_path: str | None = None) -> FastAPI:
-    """Load the model and lens once, then build the interactive app."""
-    resolved_lens_path = str(lens_path or canonical_lens_path(model_name))
+    """Load the model and its model-scoped canonical lens once.
+
+    An explicit ``lens_path`` remains an opt-in experimental override; the
+    default path is always resolved through the model-specific lens authority.
+    """
+    resolved_lens_path = str(
+        Path(lens_path) if lens_path is not None else canonical_lens_path(model_name)
+    )
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
     lens = JacobianLens.load(resolved_lens_path)

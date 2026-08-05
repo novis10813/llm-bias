@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from llm_bias.prompt_analysis import attribution
+from llm_bias.prompt_analysis import generated_attribution
 
 
 def test_parse_generated_return_answer_is_strict_and_nonfatal():
@@ -17,6 +18,11 @@ def test_parse_generated_return_answer_is_strict_and_nonfatal():
     invalid = attribution.parse_generated_return_answer('{"label":"neutral","confidence":80.0}')
     assert invalid["parse_status"] == "invalid"
     assert invalid["parse_reason"] == "invalid_confidence"
+
+
+def test_backward_api_aliases_are_explicit():
+    assert generated_attribution.analyze_generated_attribution_from_forward is generated_attribution.run_backward_attribution
+    assert generated_attribution.backward_generated_attribution is generated_attribution.run_backward_attribution
 
 
 class _Tokenizer:

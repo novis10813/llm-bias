@@ -267,11 +267,60 @@ def test_forward_only_readout_writes_readout_uncertainty_without_attribution(
     assert (output_dir / "average_layer_topk.jsonl").is_file()
     assert (output_dir / "average_layer_topk.csv").is_file()
     assert (output_dir / "metadata.json").is_file()
-    assert not (output_dir / "input_token_attribution.jsonl").exists()
-    assert not (output_dir / "input_token_attribution.png").exists()
+    assert not (output_dir.parent / "backward" / "input_token_attribution.jsonl").exists()
+    assert not (output_dir.parent / "backward" / "input_token_attribution.png").exists()
     metadata = json.loads((output_dir / "metadata.json").read_text())
     assert metadata["backpropagation"] is False
     assert metadata["input_attribution"]["enabled"] is False
+    assert metadata["dataset_identity"]["format"] == "legacy-wide"
+    assert metadata["lens_sha256"] == "3d4fe476d1411bf195160d1d2d4cbabd652d8d9cf1e8e06cb4b4db3a487b2a8e"
+    assert metadata["run_manifest_reference"].endswith("/manifest.json")
+
+
+def test_dataset_scoped_readout_roots_keep_dataset_runs_separate(tmp_path, monkeypatch):
+    _patch_deterministic_prompt_run(monkeypatch)
+    input_path, lens_path = _write_prompt_analysis_inputs(tmp_path)
+    pair_path = tmp_path / "return-pairs.csv"
+    pair_path.write_text(
+        "cik,filename,item,filing_date,ticker,peer_ticker,system_prompt,prompt,counterfactual_prompt,return_label,fwd_return_1d\n"
+        "1,a.txt,item_1,2026-01-01,AAA,BBB,sys,orig,counter,neutral,0.0\n",
+        encoding="utf-8",
+    )
+    artifact_root = tmp_path / "artifacts"
+
+    first = readout.analyze_prompt_outputs(
+        input_path=str(input_path),
+        model_name="org/model",
+        lens_path=str(lens_path),
+        output_dir=str(tmp_path / "ignored"),
+        artifact_root=artifact_root,
+        dataset_name="legacy-wide",
+        run_id="run-001",
+        run_manifest_path="manifests/legacy.json",
+        top_k=1,
+    )
+    second = readout.analyze_prompt_outputs(
+        input_path=str(pair_path),
+        model_name="org/model",
+        lens_path=str(lens_path),
+        output_dir=str(tmp_path / "ignored"),
+        artifact_root=artifact_root,
+        dataset_name="return-pairs",
+        run_id="run-001",
+        dataset_format="return-pairs",
+        top_k=1,
+    )
+
+    assert first == artifact_root / "org--model" / "legacy-wide" / "runs" / "run-001" / "readout"
+    assert second == artifact_root / "org--model" / "return-pairs" / "runs" / "run-001" / "readout"
+    assert (first / "metadata.json").is_file()
+    assert (second / "metadata.json").is_file()
+    first_metadata = json.loads((first / "metadata.json").read_text())
+    second_metadata = json.loads((second / "metadata.json").read_text())
+    assert first_metadata["dataset_identity"]["name"] == "legacy-wide"
+    assert second_metadata["dataset_identity"]["name"] == "return-pairs"
+    assert first_metadata["run_manifest_reference"] == "manifests/legacy.json"
+    assert second_metadata["run_manifest_reference"].endswith("/manifest.json")
 
 
 def test_backprop_readout_calls_attribution_and_records_provenance(tmp_path, monkeypatch):
@@ -282,21 +331,19 @@ def test_backprop_readout_calls_attribution_and_records_provenance(tmp_path, mon
     def fake_attribute_column(**kwargs):
         attribution_calls.append(kwargs)
         column = kwargs["column"]
-        return [
-            {
-                "prompt_column": column.name,
-                "index": column.index,
-                "context": column.context,
-                "n_prompts": 1,
-                "output_rank": 1,
-                "output_token_id": 1,
-                "output_token": " answer",
-                "output_mean_probability": 0.75,
-                "input_positions": [],
-                "top_input_tokens": [],
-                "top_input_positions": [],
-            }
-        ]
+        return [{
+            "prompt_column": column.name,
+            "index": column.index,
+            "context": column.context,
+            "n_prompts": 1,
+            "output_rank": 1,
+            "output_token_id": 1,
+            "output_token": " answer",
+            "output_mean_probability": 0.75,
+            "input_positions": [],
+            "top_input_tokens": [],
+            "top_input_positions": [],
+        }]
 
     monkeypatch.setattr(readout, "_attribute_column", fake_attribute_column)
     output_dir = tmp_path / "with-backprop"
@@ -310,7 +357,9 @@ def test_backprop_readout_calls_attribution_and_records_provenance(tmp_path, mon
     )
 
     assert len(attribution_calls) == 2
-    assert (output_dir / "input_token_attribution.jsonl").is_file()
+    assert (output_dir.parent / "backward" / "input_token_attribution.jsonl").is_file()
+    assert not (output_dir / "input_token_attribution.jsonl").exists()
     metadata = json.loads((output_dir / "metadata.json").read_text())
     assert metadata["backpropagation"] is True
     assert metadata["input_attribution"]["enabled"] is True
+    assert metadata["stages"]["backward"].endswith("/backward")

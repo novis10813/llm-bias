@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import math
 import re
@@ -19,12 +18,22 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
+from llm_bias.core.artifact_paths import (
+    DEFAULT_ARTIFACT_ROOT,
+    dataset_slug,
+    file_sha256,
+    run_manifest_path as artifact_manifest_path,
+    run_root,
+)
+from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import decode_token, format_messages, format_prompt
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/readout"
-DEFAULT_STRIDE1_LENS = "artifacts/lenses/jacobian_lens.pt"
+DEFAULT_STRIDE1_LENS = str(canonical_lens_path(DEFAULT_MODEL))
+PROMPT_ANALYSIS_READOUT_STAGE = "readout"
+PROMPT_ANALYSIS_BACKWARD_STAGE = "backward"
 PROMPT_COLUMN_PATTERN = re.compile(
     r"^prompt_(?P<context>with|without)_context_(?P<index>.+)$"
 )
@@ -158,6 +167,43 @@ def _dependency_revisions(root: Path) -> dict[str, str]:
         except (OSError, subprocess.CalledProcessError):
             revisions[name] = "unknown"
     return revisions
+
+
+def _read_dataset_format(source: Path, requested: str) -> str:
+    with source.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"{source} has no header")
+        return detect_dataset_format(reader.fieldnames, requested)
+
+
+def _resolve_readout_destination(
+    *,
+    model_name: str,
+    output_dir: str | Path,
+    dataset_name: str | None,
+    run_id: str | None,
+    artifact_root: str | Path,
+) -> tuple[Path, Path, str, str]:
+    """Return ``readout/``, run root, dataset name, and run id."""
+    if (dataset_name is None) != (run_id is None):
+        raise ValueError("dataset_name and run_id must be provided together")
+    if dataset_name is None:
+        destination = Path(output_dir)
+        return destination, destination.parent, destination.parent.name, destination.name
+
+    run_directory = run_root(
+        model_name,
+        dataset_name,
+        run_id or "",
+        artifact_root=artifact_root,
+    )
+    return (
+        run_directory / PROMPT_ANALYSIS_READOUT_STAGE,
+        run_directory,
+        dataset_slug(dataset_name),
+        run_id,
+    )
 
 
 def load_prompt_table(
@@ -872,7 +918,7 @@ def analyze_prompt_outputs(
     *,
     input_path: str = DEFAULT_INPUT,
     model_name: str = DEFAULT_MODEL,
-    lens_path: str = DEFAULT_STRIDE1_LENS,
+    lens_path: str | None = None,
     output_dir: str = DEFAULT_OUTPUT_DIR,
     top_k: int = 15,
     batch_size: int = 32,
@@ -889,6 +935,11 @@ def analyze_prompt_outputs(
     attribution_output_top_k: int | None = None,
     attribution_max_rows: int | None = None,
     dataset_format: str = "auto",
+    dataset_name: str | None = None,
+    run_id: str | None = None,
+    artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT,
+    run_manifest_path: str | Path | None = None,
+    backward_output_dir: str | Path | None = None,
 ) -> Path:
     """Run batched final-position J-space readout and save compact artifacts."""
     if top_k < 1:
@@ -911,10 +962,16 @@ def analyze_prompt_outputs(
     source = Path(input_path)
     if not source.is_file():
         raise FileNotFoundError(source)
-    lens_source = Path(lens_path)
+    resolved_dataset_format = _read_dataset_format(source, dataset_format)
+    lens_source = Path(lens_path) if lens_path is not None else canonical_lens_path(model_name)
     if not lens_source.is_file():
         raise FileNotFoundError(lens_source)
-    columns, rows = load_prompt_table(source, prompt_columns, max_rows, dataset_format=dataset_format)
+    columns, rows = load_prompt_table(
+        source,
+        prompt_columns,
+        max_rows,
+        dataset_format=resolved_dataset_format,
+    )
 
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
@@ -946,8 +1003,19 @@ def analyze_prompt_outputs(
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    destination = Path(output_dir)
+    destination, run_root, resolved_dataset_name, resolved_run_id = _resolve_readout_destination(
+        model_name=model_name,
+        output_dir=output_dir,
+        dataset_name=dataset_name,
+        run_id=run_id,
+        artifact_root=artifact_root,
+    )
     destination.mkdir(parents=True, exist_ok=True)
+    backward_destination = (
+        Path(backward_output_dir)
+        if backward_output_dir is not None
+        else run_root / PROMPT_ANALYSIS_BACKWARD_STAGE
+    )
     prompt_path = destination / "prompt_layer_topk.jsonl"
     prompt_temporary = prompt_path.with_suffix(prompt_path.suffix + ".tmp")
     prompt_handle = (
@@ -1026,28 +1094,51 @@ def analyze_prompt_outputs(
         destination / "output_topk_distribution.png",
     )
     if compute_input_attribution:
-        attribution_path = destination / "input_token_attribution.jsonl"
+        backward_destination.mkdir(parents=True, exist_ok=True)
+        attribution_path = backward_destination / "input_token_attribution.jsonl"
         with attribution_path.open("w", encoding="utf-8") as handle:
             for record in attribution_records:
                 _write_json_line(handle, record)
         _plot_input_attributions(
             attribution_records,
-            destination / "input_token_attribution.png",
+            backward_destination / "input_token_attribution.png",
             input_top_k=input_top_k,
         )
 
     repository_root = Path(__file__).resolve().parents[2]
+    input_sha256 = file_sha256(source)
+    lens_sha256 = file_sha256(lens_source)
+    manifest_reference = (
+        Path(run_manifest_path)
+        if run_manifest_path is not None
+        else artifact_manifest_path(run_root)
+    )
     metadata = {
         "input": str(source),
-        "input_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "input_sha256": input_sha256,
+        "dataset_identity": {
+            "name": resolved_dataset_name,
+            "format": resolved_dataset_format,
+            "input": str(source),
+            "input_sha256": input_sha256,
+        },
         "model": model_name,
         "lens": str(lens_source),
+        "lens_sha256": lens_sha256,
+        "lens_hash": {"algorithm": "sha256", "value": lens_sha256},
+        "run_id": resolved_run_id,
+        "run_root": str(run_root),
+        "run_manifest_reference": str(manifest_reference),
         "top_k": top_k,
         "batch_size": batch_size,
         "max_seq_len": max_seq_len,
         "max_rows": max_rows,
-        "dataset_format": dataset_format,
+        "dataset_format": resolved_dataset_format,
         "prompt_columns": [column.name for column in columns],
+        "stages": {
+            "readout": str(destination),
+            "backward": str(backward_destination) if compute_input_attribution else None,
+        },
         "layers": layers,
         "missing_layers": missing_layers,
         "output_position": "last_non_padding_prompt_token",

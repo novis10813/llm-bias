@@ -39,6 +39,15 @@ def _state():
     return interactive.PromptReadoutState(model, lens, "model", "lens.pt")
 
 
+def test_model_info_reports_model_scoped_canonical_lens():
+    info = interactive._model_info(_state())
+
+    assert info["canonical_lens_source"].endswith(
+        "artifacts/model/jacobian-lens/jacobian_lens.pt"
+    )
+    assert info["lens_is_model_canonical"] is False
+
+
 def test_prompt_readout_request_rejects_invalid_controls():
     with pytest.raises(ValidationError):
         interactive.PromptReadoutRequest(prompt="", top_k=0)
