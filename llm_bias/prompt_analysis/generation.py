@@ -342,6 +342,8 @@ def generate_prompt_outputs(
     ``selection="full"`` (or ``return_pairs_full=True`` / ``sample_per_condition=None``)
     without changing the generic sampling default.
     """
+    if sample_per_condition == 0 and full_generation:
+        sample_per_condition = None
     _validate_controls(
         sample_per_condition=sample_per_condition,
         max_new_tokens=max_new_tokens,

@@ -1,9 +1,8 @@
 # Artifact identity and run manifest contract
 
-This contract is the shared foundation for experiment producers. It does not
-change existing producers, migrate ignored runtime output, or provide a
-compatibility fallback. New workflow units should import the helpers in
-`llm_bias.core.artifact_paths` and `llm_bias.core.artifact_manifest` directly.
+This contract describes the canonical run manifest emitted by the prompt-analysis
+runner. Producers use the helpers in `llm_bias.core.artifact_paths` and
+`llm_bias.core.artifact_manifest` directly.
 
 ## Canonical layout
 
@@ -47,55 +46,42 @@ objects; `count_jsonl_records` validates and counts non-empty lines.
 
 ## Manifest schema and lifecycle
 
-`create_run_manifest(model, dataset, run_id)` creates and persists a manifest
-with `schema_version: 1` and status `created`. A normal run calls:
+`RunManifest` emits schema version `1` at
+`artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/manifest.json`. The canonical
+object contains:
 
-```python
-manifest.start()
-manifest.start_stage("prompt-generation")
-manifest.register_artifact(
-    input_path,
-    artifact_type="prompt_input",
-    stage="prompt-generation",
-    role="input",
-)
-manifest.register_artifact(
-    lens_path,
-    artifact_type="jacobian_lens",
-    stage="prompt-generation",
-    role="lens",
-)
-manifest.register_artifact(
-    output_path,
-    artifact_type="prompt_output",
-    stage="prompt-generation",
-    role="output",
-    record_count=record_count,
-)
-manifest.finish_stage("prompt-generation", record_count=record_count)
-manifest.complete()
-manifest.save()
+- `schema_version`, `model`, `model_slug`, `dataset`, `dataset_slug`, `run_id`, and
+  `run_root`;
+- `status` (`created`, `running`, `complete`, or `failed`), `created_at`, `updated_at`,
+  and optional `error`;
+- `artifacts`, with role-indexed `input_refs`, `lens_refs`, and `output_refs`;
+- `record_counts`, keyed by artifact type; and
+- `stages`, keyed by enabled stage name, with status and lifecycle timestamps.
+
+The prompt-analysis runner registers the input CSV and configured Jacobian lens when it
+initializes. Each completed stage registers the files it produced. An artifact reference
+contains `artifact_type`, `stage`, `status`, `role`, a path, a lowercase SHA-256 digest,
+and, for JSONL, an inferred `record_count`; small producer metadata may also be present.
+The manifest groups the same references in the role arrays and totals registered counts
+in `record_counts`.
+
+The runner lifecycle is `created` → `running` → `complete` or `failed`. Enabled stages
+must reach `complete` before the run is consumable. A stage failure marks the run failed
+and records an error. Consumers recompute declared file hashes and counts before using
+outputs.
+
+The canonical stage tree is:
+
+```text
+<run-root>/
+├── manifest.json
+├── readout/   # RUN_READOUT=1
+├── forward/   # RUN_GENERATION=1
+└── backward/  # RUN_ATTRIBUTION=1
 ```
 
-`register_artifact` hashes an existing file. For JSONL files, omitted
-`record_count` is inferred and validated automatically. A registration contains
-only compact provenance:
-
-- `artifact_type`, `stage`, `status`, and `role` (`input`, `lens`, or `output`);
-- a path reference (relative to the run when possible);
-- the file SHA-256 and optional record count; and
-- optional small metadata supplied by the producer.
-
-The manifest exposes the same references in `artifacts` and the role-specific
-`input_refs`, `lens_refs`, and `output_refs` arrays. `record_counts` totals
-registered counts by artifact type. `stages` records stage status and optional
-counts. A run ends with `complete()` or `fail(message)`; both require `save()` to
-persist the new state. `RunManifest.load(path)` validates and rehydrates a
-manifest.
-
-Prompt generation and optional backward/generated-token attribution are separate
-versioned artifacts and should use distinct `artifact_type` and `stage` values.
-An attribution artifact must never be represented as a fallback for a missing
-prompt-generation artifact. Raw activation and raw gradient artifact types are
-rejected by the registration API. Store only compact top-k, rank, probability,
-summary, token, and provenance data in experiment outputs.
+`attribute-generated` metadata records the model identity, parent forward path/hash,
+output hash, record counts, and generated-token coverage. It checks model identity,
+parent hash, and per-record coverage; it does not claim a same-dataset or same-run binding.
+Raw activation and gradient artifact types are rejected. Store only compact top-k, rank,
+probability, summary, token, generation, and provenance data.

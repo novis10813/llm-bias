@@ -64,14 +64,11 @@ def uncertainty_paths_from_root(
     """Resolve six uncertainty inputs, preferring one combined artifact.
 
     ``prompt-analysis readout`` writes a combined file directly below its
-    output directory. Support both the historical named directory and the
-    portable runner's ``per_date`` directory so callers do not need to create
-    compatibility symlinks.
+    output directory.
     """
     root_path = Path(root)
     combined_candidates = (
         root_path / "readout" / "prompt_layer_uncertainty.jsonl",
-        root_path / "per_date" / "prompt_layer_uncertainty.jsonl",
         root_path / "prompt_layer_uncertainty.jsonl",
     )
     for combined in combined_candidates:

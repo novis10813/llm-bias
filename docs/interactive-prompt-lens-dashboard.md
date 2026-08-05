@@ -27,7 +27,7 @@ uv run prompt-analysis serve \
 ```bash
 uv run prompt-analysis serve \
   --model .cache/models/qwen3.5-4b \
-  --lens artifacts/candidate_lenses/qwen3.5-4b/mixed/jacobian_lens.pt
+  --lens artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt
 ```
 
 Server 啟動時只載入一次 model 與 lens。它會檢查 hidden width、model metadata

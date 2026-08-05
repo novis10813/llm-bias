@@ -6,9 +6,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 MODEL="${MODEL:-.cache/models/qwen3.5-4b}"
-MODEL_SLUG="${MODEL%/}"
-MODEL_SLUG="${MODEL_SLUG##*/}"
-LENS="${LENS:-artifacts/lenses/${MODEL_SLUG}/jacobian_lens.pt}"
+command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
+cd "${REPO_ROOT}"
+MODEL_SLUG="$(uv run python -c \
+    'from llm_bias.core.lens_artifacts import model_slug; import sys; print(model_slug(sys.argv[1]))' \
+    "${MODEL}")"
+LENS="${LENS:-artifacts/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt}"
 INPUT_CSV="${INPUT_CSV:-mag7_8k_return_prompts.csv}"
 DATASET_FORMAT="${DATASET_FORMAT:-return-pairs}"
 DATASET_SLUG="${DATASET_SLUG:-mag7_8k_return_pairs}"
@@ -23,7 +26,6 @@ RUN_ATTRIBUTION="${RUN_ATTRIBUTION:-0}"
 RUN_IN_TMUX="${RUN_IN_TMUX:-1}"
 SESSION="${SESSION:-prompt_analysis}"
 
-cd "${REPO_ROOT}"
 exec env \
     MODEL="${MODEL}" \
     MODEL_SLUG="${MODEL_SLUG}" \

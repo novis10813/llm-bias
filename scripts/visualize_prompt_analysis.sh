@@ -62,7 +62,7 @@ resolve_optional_file BACKWARD \
 
 combined_uncertainty=""
 for candidate in \
-    "${UNCERTAINTY_ROOT}/per_date/prompt_layer_uncertainty.jsonl" \
+    "${UNCERTAINTY_ROOT}/readout/prompt_layer_uncertainty.jsonl" \
     "${UNCERTAINTY_ROOT}/prompt_layer_uncertainty.jsonl"; do
     if [[ -f "${candidate}" ]]; then
         combined_uncertainty="${candidate}"
@@ -71,7 +71,7 @@ for candidate in \
 done
 if [[ -z "${combined_uncertainty}" ]]; then
     echo "No combined uncertainty file found below: ${UNCERTAINTY_ROOT}" >&2
-    echo "Expected per_date/ or a prompt_layer_uncertainty.jsonl at the root." >&2
+    echo "Expected readout/prompt_layer_uncertainty.jsonl or a prompt_layer_uncertainty.jsonl at the root." >&2
     exit 1
 fi
 

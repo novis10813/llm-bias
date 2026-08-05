@@ -396,8 +396,8 @@ def test_select_attribution_dates_accepts_arbitrary_price_columns():
     assert market["2020-01-02"]["prices"] == {"aapl": 90.0}
 
 
-def test_uncertainty_paths_from_root_discovers_runner_per_date_directory(tmp_path):
-    path = tmp_path / "per_date" / "prompt_layer_uncertainty.jsonl"
+def test_uncertainty_paths_from_root_discovers_runner_readout_directory(tmp_path):
+    path = tmp_path / "readout" / "prompt_layer_uncertainty.jsonl"
     path.parent.mkdir()
     path.write_text("{}\n", encoding="utf-8")
 

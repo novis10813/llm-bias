@@ -83,7 +83,7 @@ uv run counterfactual-patching prepare-data \
   --max-pairs 4
 uv run counterfactual-patching run \
   --model .cache/models/llama-3.2-1b-instruct \
-  --lens artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt \
+  --lens artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt \
   --max-pairs 4
 ```
 

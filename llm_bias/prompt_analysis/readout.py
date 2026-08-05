@@ -24,7 +24,7 @@ from llm_bias.core.prompting import decode_token, format_messages, format_prompt
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/readout"
-DEFAULT_STRIDE1_LENS = "artifacts/lenses/jacobian_lens.pt"
+DEFAULT_STRIDE1_LENS = "artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt"
 PROMPT_COLUMN_PATTERN = re.compile(
     r"^prompt_(?P<context>with|without)_context_(?P<index>.+)$"
 )

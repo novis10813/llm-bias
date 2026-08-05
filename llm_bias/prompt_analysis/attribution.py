@@ -17,7 +17,7 @@ from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import decode_token, find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.readout import DEFAULT_INPUT, load_prompt_table
 
-DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/generated_attribution"
+DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/backward"
 RETURN_LABELS = {"very bullish", "bullish", "neutral", "bearish", "very bearish"}
 
 
