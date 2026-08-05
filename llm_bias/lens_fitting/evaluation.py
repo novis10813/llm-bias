@@ -16,6 +16,8 @@ from jlens.hooks import ActivationRecorder
 from llm_bias.core.lens_artifacts import (
     expected_source_layers,
     load_lens_metadata,
+    model_slug,
+    validate_lens_metadata,
 )
 from llm_bias.core.model import load_model
 from llm_bias.core.prompting import format_prompt
@@ -271,6 +273,7 @@ def validate_candidate_calibration(
     lens: Any,
     lens_path: str | Path,
     expected_n_prompts: int,
+    model_name: str | None = None,
 ) -> dict[str, Any]:
     """Reject incomplete or mislabeled candidate calibration artifacts."""
     if int(lens.n_prompts) != expected_n_prompts:
@@ -281,6 +284,13 @@ def validate_candidate_calibration(
     metadata = load_lens_metadata(lens_path)
     if metadata is None:
         raise ValueError(f"{name} lens is missing reproducibility metadata")
+    validate_lens_metadata(metadata=metadata, lens_path=lens_path)
+    metadata_model = metadata.get("model")
+    if model_name is not None and (
+        not isinstance(metadata_model, str)
+        or model_slug(metadata_model) != model_slug(model_name)
+    ):
+        raise ValueError(f"{name} lens metadata model does not match {model_name!r}")
     if int(metadata.get("calibration_count", -1)) != expected_n_prompts:
         raise ValueError(
             f"{name} metadata calibration_count does not match "
@@ -429,19 +439,22 @@ def evaluate_candidates(
         raise ValueError(f"empty evaluation layer band [{start}, {end})")
 
     lenses: dict[str, jlens.JacobianLens] = {}
+    lens_metadata_values: dict[str, dict[str, Any]] = {}
     for name, path in candidate_paths.items():
         lens = jlens.JacobianLens.load(str(path))
         if lens.d_model != model.d_model:
             raise ValueError(f"{name} lens d_model does not match the model")
         if lens.source_layers != expected_layers:
             raise ValueError(f"{name} lens does not have complete layer coverage")
-        validate_candidate_calibration(
+        metadata = validate_candidate_calibration(
             name=name,
             lens=lens,
             lens_path=path,
             expected_n_prompts=expected_n_prompts,
+            model_name=model_name,
         )
         lenses[name] = lens
+        lens_metadata_values[name] = metadata
 
     residuals = _record_final_position_residuals(
         model,
@@ -464,6 +477,8 @@ def evaluate_candidates(
         candidates[name] = {
             "lens_path": str(candidate_paths[name]),
             "n_prompts": lens.n_prompts,
+            "lens_binary_sha256": lens_metadata_values[name]["binary_sha256"],
+            "lens_metadata_sha256": lens_metadata_values[name]["metadata_sha256"],
             "summary": summarize_candidate_rows(rows),
             "rows": rows,
         }

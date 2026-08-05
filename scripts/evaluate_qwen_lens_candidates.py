@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
+from llm_bias.core.lens_artifacts import lens_candidate_path, lens_candidates_root
 from llm_bias.lens_fitting.evaluation import evaluate_candidates
 
 
@@ -16,7 +17,7 @@ def main() -> None:
     parser.add_argument(
         "--candidate-root",
         type=Path,
-        default=Path("artifacts/candidate_lenses/qwen3.5-4b"),
+        default=None,
     )
     parser.add_argument(
         "--holdout",
@@ -32,14 +33,19 @@ def main() -> None:
     parser.add_argument("--band-end", type=int)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    candidate_root = args.candidate_root or lens_candidates_root(args.model)
     candidates = {
-        condition: args.candidate_root / condition / "jacobian_lens.pt"
+        condition: (
+            lens_candidate_path(args.model, condition)
+            if args.candidate_root is None
+            else candidate_root / condition / "jacobian_lens.pt"
+        )
         for condition in ("english", "chinese_simplified", "mixed")
     }
     missing = [str(path) for path in candidates.values() if not path.is_file()]
     if missing:
         parser.error(f"candidate lenses are missing: {', '.join(missing)}")
-    output = args.output or args.candidate_root / "evaluation.json"
+    output = args.output or candidate_root / "evaluation.json"
     result = evaluate_candidates(
         model_name=args.model,
         candidate_paths=candidates,

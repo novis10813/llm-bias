@@ -23,11 +23,20 @@ def test_promotion_archives_previous_canonical_and_copies_winner(
     candidate = tmp_path / "candidates" / "mixed" / "jacobian_lens.pt"
     candidate.parent.mkdir(parents=True)
     candidate.write_bytes(b"selected lens")
-    candidate.with_name("jacobian_lens.pt.metadata.json").write_text(
-        json.dumps({"model": "models/model", "source_layers": [0]}),
-        encoding="utf-8",
+    candidate_metadata = _promotion_module().complete_lens_metadata(
+        metadata={
+            "model": ".cache/models/model",
+            "source_layers": [0],
+            "provenance": {"workflow": "test"},
+        },
+        lens_path=candidate,
     )
-    canonical = tmp_path / "artifacts" / "lenses" / "model" / "jacobian_lens.pt"
+    candidate.with_name("jacobian_lens.pt.metadata.json").write_text(
+        json.dumps(candidate_metadata), encoding="utf-8"
+    )
+    canonical = (
+        tmp_path / "artifacts" / "model" / "jacobian-lens" / "jacobian_lens.pt"
+    )
     canonical.parent.mkdir(parents=True)
     canonical.write_bytes(b"old lens")
     canonical.with_name("jacobian_lens.pt.metadata.json").write_text(
