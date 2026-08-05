@@ -19,12 +19,11 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
+from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import decode_token, format_messages, format_prompt
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
-DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis/readout"
-DEFAULT_STRIDE1_LENS = "artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt"
 PROMPT_COLUMN_PATTERN = re.compile(
     r"^prompt_(?P<context>with|without)_context_(?P<index>.+)$"
 )
@@ -872,8 +871,8 @@ def analyze_prompt_outputs(
     *,
     input_path: str = DEFAULT_INPUT,
     model_name: str = DEFAULT_MODEL,
-    lens_path: str = DEFAULT_STRIDE1_LENS,
-    output_dir: str = DEFAULT_OUTPUT_DIR,
+    lens_path: str | Path | None = None,
+    output_dir: str | Path,
     top_k: int = 15,
     batch_size: int = 32,
     max_seq_len: int = 256,
@@ -911,7 +910,7 @@ def analyze_prompt_outputs(
     source = Path(input_path)
     if not source.is_file():
         raise FileNotFoundError(source)
-    lens_source = Path(lens_path)
+    lens_source = Path(lens_path) if lens_path is not None else canonical_lens_path(model_name)
     if not lens_source.is_file():
         raise FileNotFoundError(lens_source)
     columns, rows = load_prompt_table(source, prompt_columns, max_rows, dataset_format=dataset_format)

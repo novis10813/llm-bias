@@ -252,9 +252,9 @@ def plot_paired_uncertainty_delta_figures(rows: Iterable[dict[str, Any]], output
     return [path]
 
 
-def visualize_return_predictions(*, attribution_path: str | Path, uncertainty_path: str | Path, output_dir: str | Path) -> Path:
+def visualize_return_predictions(*, forward_path: str | Path, uncertainty_path: str | Path, output_dir: str | Path) -> Path:
     """Visualize predictions from a forward artifact and final-layer uncertainty."""
-    forward_source = Path(attribution_path)
+    forward_source = Path(forward_path)
     uncertainty_source = Path(uncertainty_path)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)

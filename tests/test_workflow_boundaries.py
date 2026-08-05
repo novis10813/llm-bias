@@ -84,7 +84,15 @@ def test_independent_cli_command_sets():
     assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
     readout_defaults = prompt_parser().parse_args(
-        ["readout", "--model", "fake", "--lens", "fake-lens.pt"]
+        [
+            "readout",
+            "--model",
+            "fake",
+            "--lens",
+            "fake-lens.pt",
+            "--output-dir",
+            "readout",
+        ]
     )
     assert readout_defaults.input == "sp500_r1k_r2k_entityBiasPrompt.csv"
     assert readout_defaults.top_k == 15
@@ -96,7 +104,16 @@ def test_independent_cli_command_sets():
     assert readout_defaults.save_prompt_uncertainty is True
     with pytest.raises(SystemExit):
         prompt_parser().parse_args(
-            ["readout", "--model", "fake", "--lens", "fake-lens.pt", "--backprop"]
+            [
+                "readout",
+                "--model",
+                "fake",
+                "--lens",
+                "fake-lens.pt",
+                "--output-dir",
+                "readout",
+                "--backprop",
+            ]
         )
 
     generate_defaults = prompt_parser().parse_args(
@@ -140,6 +157,45 @@ def test_independent_cli_command_sets():
         ]
     )
     assert backward_defaults.max_seq_len == 256
+    visualization_args = prompt_parser().parse_args(
+        [
+            "visualize",
+            "--uncertainty-root",
+            "run/readout",
+            "--forward",
+            "run/forward/generated_outputs.jsonl",
+            "--backward",
+            "run/backward/generated_token_attribution.jsonl",
+            "--tokenizer",
+            "fake-model",
+            "--output-dir",
+            "run/visualization",
+        ]
+    )
+    assert visualization_args.forward.endswith("generated_outputs.jsonl")
+    assert visualization_args.backward.endswith("generated_token_attribution.jsonl")
+    return_evaluation_args = prompt_parser().parse_args(
+        [
+            "evaluate-return-predictions",
+            "--forward",
+            "run/forward/generated_outputs.jsonl",
+            "--output-dir",
+            "run/evaluation",
+        ]
+    )
+    assert return_evaluation_args.forward.endswith("generated_outputs.jsonl")
+    return_visualization_args = prompt_parser().parse_args(
+        [
+            "visualize-return-predictions",
+            "--forward",
+            "run/forward/generated_outputs.jsonl",
+            "--uncertainty",
+            "run/readout/prompt_layer_uncertainty.jsonl",
+            "--output-dir",
+            "run/visualization",
+        ]
+    )
+    assert return_visualization_args.forward.endswith("generated_outputs.jsonl")
     price_plot_args = prompt_parser().parse_args(
         [
             "plot-price-distributions",

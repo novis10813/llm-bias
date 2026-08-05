@@ -5,7 +5,6 @@ import pytest
 import torch
 
 from llm_bias.core.artifact_paths import sha256_file
-from llm_bias.prompt_analysis import attribution
 from llm_bias.prompt_analysis import generated_attribution
 
 
@@ -82,12 +81,6 @@ def test_backward_reuses_forward_tokens_without_generation(tmp_path, monkeypatch
     forward = tmp_path / "run" / "forward" / "generated_outputs.jsonl"
     _forward_fixture(forward)
     _patch_model(monkeypatch)
-    monkeypatch.setattr(
-        attribution,
-        "_generate_tokens",
-        lambda *_args, **_kwargs: pytest.fail("backward stage must not generate"),
-    )
-
     output = generated_attribution.run_backward_attribution(
         forward_path=forward,
         model_name="fake",

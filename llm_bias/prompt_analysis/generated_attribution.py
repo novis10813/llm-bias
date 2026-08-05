@@ -35,7 +35,6 @@ from llm_bias.prompt_analysis.artifact_io import (
 
 METHOD = "semantic_scope_target_logit_gradient_l2_norm"
 ARTIFACT_TYPE = "generated_token_attribution"
-DEFAULT_OUTPUT_DIR = "artifacts/prompt_analysis"
 
 # Keep the primitive available at module scope.  Besides making the dependency
 # explicit, this lets deterministic tests replace the expensive model call.
@@ -184,7 +183,7 @@ def run_backward_attribution(
     forward_path: str | Path | None = None,
     forward_artifact: str | Path | None = None,
     model_name: str = DEFAULT_MODEL,
-    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    output_dir: str | Path | None = None,
     output_path: str | Path | None = None,
     input_top_k: int | None = None,
     max_seq_len: int | None = None,
@@ -205,8 +204,10 @@ def run_backward_attribution(
     if output_token_top_k is not None and output_token_top_k < 1:
         raise ValueError("output_token_top_k must be positive when provided")
 
-    destination = Path(output_dir) / "backward"
     requested_output = Path(output_path) if output_path is not None else None
+    if output_dir is None and requested_output is None:
+        raise ValueError("output_dir or output_path is required")
+    destination = Path(output_dir) / "backward" if output_dir is not None else requested_output.parent
     if requested_output is not None:
         if requested_output.suffix.lower() != ".jsonl":
             raise ValueError("output_path must be a .jsonl file")
@@ -380,7 +381,7 @@ def attribute_generated_outputs(
     *,
     forward_artifact: str | Path,
     model_name: str = DEFAULT_MODEL,
-    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    output_dir: str | Path | None = None,
     output_path: str | Path | None = None,
     input_top_k: int | None = None,
     max_seq_len: int | None = None,
@@ -398,9 +399,3 @@ def attribute_generated_outputs(
         prompt_columns=prompt_columns,
         output_token_top_k=output_token_top_k,
     )
-
-
-# Name used by early coordinator drafts; keep it as a direct alias rather than
-# a second implementation so both paths have identical hash validation.
-analyze_generated_attribution_from_forward = run_backward_attribution
-backward_generated_attribution = run_backward_attribution

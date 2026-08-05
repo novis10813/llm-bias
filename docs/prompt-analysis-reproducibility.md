@@ -126,22 +126,17 @@ attribution input，必須先完成 `attribute-generated` stage。
 uv run prompt-analysis validate-attribution \
   --model .cache/models/qwen3.5-4b \
   --attribution artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>/backward/generated_token_attribution.jsonl \
-  --output-dir artifacts/prompt_analysis/qwen3.5-4b/attribution_validation
+  --output-dir artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>/attribution_validation
 ```
 
-## 4. 建立視覺化（需要完整 attribution-enabled run）
+## 4. 建立視覺化
 
 `visualize_prompt_analysis.sh` 需要同一個 run 的 `readout` uncertainty 與 `forward`
-generated outputs；存在 `backward` artifact 時才會啟用 attribution panel。
+generated outputs；存在 `backward` artifact 時才會啟用 attribution panel。Script 不猜測
+run ID，必須明確指定 canonical run root：
 
 ```bash
-bash scripts/visualize_prompt_analysis.sh
-```
-
-自訂 run：
-
-```bash
-RUN_ROOT=artifacts/prompt_analysis/my-model/repro-001 \
+RUN_ROOT=artifacts/<model-slug>/<dataset-slug>/runs/<run-id> \
 TOKENIZER=/path/to/model \
 bash scripts/visualize_prompt_analysis.sh
 ```
@@ -149,9 +144,10 @@ bash scripts/visualize_prompt_analysis.sh
 Visualizer 尋找：
 
 1. `${RUN_ROOT}/readout/prompt_layer_uncertainty.jsonl`（必要）
-2. `${RUN_ROOT}/backward/generated_token_attribution.jsonl`（必要，必須來自
-   attribution-enabled run）
-3. optional `${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl`
+2. `${RUN_ROOT}/forward/generated_outputs.jsonl`（必要）
+3. `${RUN_ROOT}/backward/generated_token_attribution.jsonl`（optional；存在時啟用
+   attribution panel）
+4. optional `${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl`
 
 輸出為：
 
@@ -162,7 +158,6 @@ ${RUN_ROOT}/visualization/
 ├── final_layer_entropy_with_context.png
 ├── final_layer_entropy_without_context.png
 ├── final_layer_uncertainty.csv
-├── final_layer_entropy.csv
 └── attribution_dashboard.html
 ```
 
@@ -292,8 +287,8 @@ The runner registers the input CSV and configured lens during initialization. As
 finish it registers the files that actually exist, computes their SHA-256 values, and
 infers JSONL record counts. The root manifest is marked `complete` only after the runner
 has finished all enabled stages; a failed stage leaves the run `failed` with an error.
-Consumers must require the manifest and every enabled stage to be complete, and must
-recompute declared file hashes and counts before analysis.
+The stored hashes, counts, and stage states support independent completion checks without
+using stale file existence as the completion signal.
 
 `attribute-generated` writes backward metadata with the model identity, parent forward
 path, parent forward SHA-256 (also exposed as `parent_forward_hash` and

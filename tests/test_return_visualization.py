@@ -87,7 +87,7 @@ def test_visualization_writes_csv_metadata_and_all_pngs(tmp_path):
     attribution.write_text("\n".join(json.dumps(row) for row in _attribution_rows()) + "\n", encoding="utf-8")
     uncertainty.write_text("\n".join(json.dumps(row) for row in _uncertainty_rows()) + "\n", encoding="utf-8")
     output = visualize_return_predictions(
-        attribution_path=attribution,
+        forward_path=attribution,
         uncertainty_path=uncertainty,
         output_dir=tmp_path / "out",
     )
@@ -107,6 +107,6 @@ def test_incomplete_pairs_are_reported_not_silently_collapsed(tmp_path):
     uncertainty = tmp_path / "uncertainty.jsonl"
     attribution.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
     uncertainty.write_text("\n".join(json.dumps(row) for row in _uncertainty_rows()) + "\n", encoding="utf-8")
-    output = visualize_return_predictions(attribution_path=attribution, uncertainty_path=uncertainty, output_dir=tmp_path / "out")
+    output = visualize_return_predictions(forward_path=attribution, uncertainty_path=uncertainty, output_dir=tmp_path / "out")
     metadata = json.loads((output / "return_visualization_metadata.json").read_text())
     assert metadata["missing_or_incomplete"]["prediction"]["missing_condition"] == 1

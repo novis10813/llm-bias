@@ -65,10 +65,10 @@ and, for JSONL, an inferred `record_count`; small producer metadata may also be 
 The manifest groups the same references in the role arrays and totals registered counts
 in `record_counts`.
 
-The runner lifecycle is `created` → `running` → `complete` or `failed`. Enabled stages
-must reach `complete` before the run is consumable. A stage failure marks the run failed
-and records an error. Consumers recompute declared file hashes and counts before using
-outputs.
+The runner lifecycle is `created` → `running` → `complete` or `failed`. The runner
+marks each enabled stage `complete` after its command succeeds and its outputs are registered;
+a stage failure marks the run failed and records an error. The stored hashes and counts make
+independent completion checks possible without relying on stale file existence alone.
 
 The canonical stage tree is:
 
