@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
-from llm_bias.prompt_analysis.attribution import (
-    DEFAULT_OUTPUT_DIR as DEFAULT_ATTRIBUTION_OUTPUT,
-    analyze_generated_attribution,
-)
 from llm_bias.prompt_analysis.readout import (
     DEFAULT_INPUT,
     DEFAULT_OUTPUT_DIR as DEFAULT_READOUT_OUTPUT,
@@ -32,6 +29,63 @@ from llm_bias.prompt_analysis.visualization import (
     visualize_prompt_results,
 )
 from llm_bias.prompt_analysis.return_visualization import visualize_return_predictions
+
+
+def _missing_stage_api(stage: str, error: Exception) -> RuntimeError:
+    message = RuntimeError(
+        f"prompt-analysis {stage} stage API is unavailable; "
+        "install or merge the generation/backward implementation"
+    )
+    message.__cause__ = error
+    return message
+
+
+def _run_generation_stage(args: argparse.Namespace) -> Path:
+    try:
+        from llm_bias.prompt_analysis.generation import generate_prompt_outputs
+    except ImportError as error:
+        raise _missing_stage_api("generation", error) from error
+    return generate_prompt_outputs(
+        input_path=args.input,
+        model_name=args.model,
+        output_path=args.output,
+        sample_per_condition=(
+            None
+            if args.full_generation or args.sample_per_condition == 0
+            else args.sample_per_condition
+        ),
+        full_generation=args.full_generation or args.sample_per_condition == 0,
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        seed=args.seed,
+        top_p=args.top_p,
+        top_k=args.top_k,
+        max_seq_len=args.max_seq_len,
+        prompt_columns=args.prompt_columns,
+        dates=args.dates,
+        dataset_format=args.dataset_format,
+    )
+
+
+def _run_generated_attribution_stage(args: argparse.Namespace) -> Path:
+    try:
+        from llm_bias.prompt_analysis.generated_attribution import (
+            attribute_generated_outputs,
+        )
+    except ImportError as error:
+        raise _missing_stage_api("generated attribution", error) from error
+    forward_artifact = Path(args.forward_artifact)
+    if not forward_artifact.is_file():
+        raise FileNotFoundError(
+            f"forward artifact does not exist: {forward_artifact}"
+        )
+    return attribute_generated_outputs(
+        forward_artifact=args.forward_artifact,
+        model_name=args.model,
+        output_path=Path(args.output),
+        input_top_k=args.input_top_k,
+        max_seq_len=args.max_seq_len,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,16 +121,6 @@ def build_parser() -> argparse.ArgumentParser:
         dest="save_prompt_uncertainty",
     )
     readout.add_argument(
-        "--backprop",
-        action="store_true",
-        dest="backprop",
-        help="enable gradient backpropagation for input attribution",
-    )
-    readout.add_argument("--attribution-batch-size", type=int, default=8)
-    readout.add_argument("--input-top-k", type=int, default=15)
-    readout.add_argument("--attribution-output-top-k", type=int)
-    readout.add_argument("--attribution-max-rows", type=int)
-    readout.add_argument(
         "--raw-prompt",
         action="store_false",
         dest="use_chat_template",
@@ -84,29 +128,41 @@ def build_parser() -> argparse.ArgumentParser:
     readout.add_argument("--enable-thinking", action="store_true")
     readout.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
 
-    attribute = commands.add_parser(
-        "attribute", help="generate output tokens and attribute them to prompt tokens"
+    generate = commands.add_parser(
+        "generate", help="generate and persist complete forward outputs"
     )
-    attribute.add_argument("--model", required=True)
-    attribute.add_argument("--input", default=DEFAULT_INPUT)
-    attribute.add_argument("--output-dir", default=DEFAULT_ATTRIBUTION_OUTPUT)
-    attribute.add_argument("--sample-per-condition", type=int, default=32)
-    attribute.add_argument("--max-new-tokens", type=int, default=64)
-    attribute.add_argument("--input-top-k", type=int)
-    attribute.add_argument("--max-seq-len", type=int, default=256)
-    attribute.add_argument("--prompt-column", action="append", dest="prompt_columns")
-    attribute.add_argument("--date", action="append", dest="dates")
-    attribute.add_argument("--runs", type=int, default=1)
-    attribute.add_argument("--temperature", type=float, default=0.0)
-    attribute.add_argument("--seed", type=int)
-    attribute.add_argument("--top-p", type=float, default=1.0)
-    attribute.add_argument("--top-k", type=int, default=0)
-    attribute.add_argument(
-        "--backprop",
+    generate.add_argument("--model", required=True)
+    generate.add_argument("--input", default=DEFAULT_INPUT)
+    generate.add_argument("--output", required=True)
+    generate.add_argument("--sample-per-condition", type=int, default=32)
+    generate.add_argument(
+        "--full-generation",
         action="store_true",
-        help="enable gradient backpropagation for generated-token attribution",
+        help="process every return-pair instead of the legacy sample limit",
     )
-    attribute.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
+    generate.add_argument("--max-new-tokens", type=int, default=64)
+    generate.add_argument("--max-seq-len", type=int, default=256)
+    generate.add_argument("--prompt-column", action="append", dest="prompt_columns")
+    generate.add_argument("--date", action="append", dest="dates")
+    generate.add_argument("--temperature", type=float, default=0.0)
+    generate.add_argument("--seed", type=int)
+    generate.add_argument("--top-p", type=float, default=1.0)
+    generate.add_argument("--top-k", type=int, default=0)
+    generate.add_argument(
+        "--dataset-format",
+        choices=("auto", "legacy-wide", "return-pairs"),
+        default="auto",
+    )
+
+    generated_attribution = commands.add_parser(
+        "attribute-generated",
+        help="backpropagate over an existing generated forward artifact",
+    )
+    generated_attribution.add_argument("--model", required=True)
+    generated_attribution.add_argument("--forward-artifact", required=True)
+    generated_attribution.add_argument("--output", required=True)
+    generated_attribution.add_argument("--input-top-k", type=int)
+    generated_attribution.add_argument("--max-seq-len", type=int, default=256)
 
     evaluate_return = commands.add_parser(
         "evaluate-return-predictions", help="score five-class return predictions from attribution JSONL"
@@ -195,38 +251,15 @@ def main() -> None:
             prompt_columns=args.prompt_columns,
             save_prompt_topk=args.save_prompt_topk,
             save_prompt_uncertainty=args.save_prompt_uncertainty,
-            compute_input_attribution=args.backprop,
-            attribution_batch_size=args.attribution_batch_size,
-            input_top_k=args.input_top_k,
+            compute_input_attribution=False,
             use_chat_template=args.use_chat_template,
             enable_thinking=args.enable_thinking,
-            attribution_output_top_k=args.attribution_output_top_k,
-            attribution_max_rows=args.attribution_max_rows,
             dataset_format=args.dataset_format,
         )
-    elif args.command == "attribute":
-        if not args.backprop:
-            raise ValueError(
-                "generated-token attribution requires --backprop"
-            )
-        analyze_generated_attribution(
-            input_path=args.input,
-            model_name=args.model,
-            output_dir=args.output_dir,
-            sample_per_condition=args.sample_per_condition,
-            max_new_tokens=args.max_new_tokens,
-            input_top_k=args.input_top_k,
-            max_seq_len=args.max_seq_len,
-            prompt_columns=args.prompt_columns,
-            dates=args.dates,
-            runs=args.runs,
-            temperature=args.temperature,
-            seed=args.seed,
-            top_p=args.top_p,
-            top_k=args.top_k,
-            backprop=args.backprop,
-            dataset_format=args.dataset_format,
-        )
+    elif args.command == "generate":
+        _run_generation_stage(args)
+    elif args.command == "attribute-generated":
+        _run_generated_attribution_stage(args)
     elif args.command == "evaluate-return-predictions":
         evaluate_return_predictions(args.attribution, args.output_dir)
     elif args.command == "validate-attribution":
