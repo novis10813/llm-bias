@@ -1,5 +1,7 @@
 import ast
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -168,7 +170,7 @@ def test_independent_cli_command_sets():
     assert lens_args.layer_stride == 1
     assert lens_args.checkpoint_every == 4
     assert canonical_lens_path(lens_args.model) == Path(
-        "artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt"
+        "artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt"
     )
 
 
@@ -234,7 +236,7 @@ def test_generated_attribution_cli_reads_forward_api_only(monkeypatch, tmp_path)
 
     def fake_attribute(**kwargs):
         calls.append(kwargs)
-        return Path(kwargs["output_dir"]) / "backward" / "generated_token_attribution.jsonl"
+        return Path(kwargs["output_path"])
 
     backward_module.attribute_generated_outputs = fake_attribute
     monkeypatch.setitem(
@@ -260,8 +262,44 @@ def test_generated_attribution_cli_reads_forward_api_only(monkeypatch, tmp_path)
 
     assert len(calls) == 1
     assert calls[0]["forward_artifact"] == str(forward)
-    assert "output_path" not in calls[0]
-    assert calls[0]["output_dir"] == tmp_path / "run"
+    assert calls[0]["output_path"] == tmp_path / "run" / "backward" / "generated_token_attribution.jsonl"
+    assert "output_dir" not in calls[0]
+
+
+def test_prompt_runner_manifest_records_canonical_refs_and_counts(tmp_path):
+    root = Path(__file__).parents[1]
+    input_csv = tmp_path / "input.csv"
+    input_csv.write_text("Date,prompt_without_context_a\n2026-01-01,hello\n", encoding="utf-8")
+    lens = tmp_path / "lens.pt"
+    lens.write_bytes(b"lens")
+    run_root = tmp_path / "artifacts" / "run"
+    fake_uv = tmp_path / "uv"
+    fake_uv.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+shift
+if [[ $1 == python ]]; then shift; exec python "$@"; fi
+if [[ $1 == prompt-analysis && $2 == generate ]]; then
+  output=""
+  while (($#)); do [[ $1 == --output ]] && output=$2; shift; done
+  mkdir -p "$(dirname "$output")"
+  printf '%s\\n' '{\"record_id\":\"r1\"}' > "$output"
+  printf '%s\\n' '{}' > "$(dirname "$output")/metadata.json"
+fi
+""",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "MODEL": "fake", "LENS": str(lens), "INPUT_CSV": str(input_csv), "RUN_ROOT": str(run_root), "RUN_ID": "run", "DATASET_SLUG": "data", "RUN_READOUT": "0", "RUN_GENERATION": "1", "RUN_ATTRIBUTION": "0", "RUN_IN_TMUX": "0"}
+    result = subprocess.run(["bash", "scripts/run_prompt_analysis.sh"], cwd=root, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
+    assert manifest["status"] == "complete"
+    assert manifest["stages"]["generation"]["status"] == "complete"
+    assert manifest["input_refs"][0]["sha256"] and manifest["lens_refs"][0]["sha256"]
+    output = next(ref for ref in manifest["output_refs"] if ref["artifact_type"] == "generated_outputs")
+    assert output["sha256"] and output["record_count"] == 1
 
 
 def test_load_calibration_prompts_supports_text_and_jsonl(tmp_path):

@@ -10,18 +10,19 @@ def _row(pair, condition, label="bullish", confidence=80, status="valid"):
     return {
         "pair_id": pair, "filing_date": "2026-01-01", "ticker": "AAA",
         "peer_ticker": "BBB", "condition": condition, "target_label": "bullish",
-        "fwd_return_1d": 0.01, "generated_text": "{}", "predicted_label": label,
+        "fwd_return_1d": 0.01, "generated_text": json.dumps({"label": label, "confidence": confidence}), "predicted_label": label,
         "predicted_confidence": confidence, "parse_status": status,
     }
 
 
 def _write(path, rows):
-    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    path.write_text("".join(json.dumps({**row, "artifact_type": "generated_outputs"}) + "\n" for row in rows), encoding="utf-8")
+    path.with_name("metadata.json").write_text(json.dumps({"artifact_type": "generated_outputs"}) + "\n", encoding="utf-8")
 
 
 def test_evaluator_writes_metrics_and_retains_invalid_predictions(tmp_path):
     source = tmp_path / "attribution.jsonl"
-    _write(source, [_row("p1", "original", "bullish", 80), _row("p1", "counterfactual", "bearish", 70), _row("p2", "original", "neutral", 101), _row("p2", "counterfactual", "neutral", 60, "invalid")])
+    _write(source, [_row("p1", "original", "bullish", 80), _row("p1", "counterfactual", "bearish", 70), _row("p2", "original", "neutral", 101), {**_row("p2", "counterfactual", "neutral", 60, "invalid"), "generated_text": "malformed"}])
     output = evaluate_return_predictions(source, tmp_path / "out", settings={"seed": 1})
     assert output.joinpath("prediction_samples.csv").is_file()
     with output.joinpath("prediction_samples.csv").open() as handle:
@@ -39,13 +40,16 @@ def test_evaluator_writes_metrics_and_retains_invalid_predictions(tmp_path):
     assert metadata["settings"] == {"seed": 1}
 
 
-@pytest.mark.parametrize("field,value", [("predicted_confidence", 1.5), ("predicted_confidence", -1), ("predicted_confidence", 101), ("predicted_label", "unknown")])
-def test_invalid_prediction_is_not_batch_failure(tmp_path, field, value):
+def test_generated_text_is_authoritative_over_stale_prediction_fields(tmp_path):
     source = tmp_path / "input.jsonl"
-    row = _row("p", "original"); row[field] = value
+    row = _row("p", "original", "bullish", 80)
+    row.update(predicted_label="unknown", predicted_confidence=101, generated_text="not json")
     other = _row("p", "counterfactual")
     _write(source, [row, other])
     output = evaluate_return_predictions(source, tmp_path / "out")
+    samples = list(csv.DictReader(output.joinpath("prediction_samples.csv").open()))
+    assert samples[0]["prediction_valid"] == "False"
+    assert samples[0]["predicted_label"] == ""
     assert json.loads(output.joinpath("metadata.json").read_text())["invalid_predictions"] == 1
 
 

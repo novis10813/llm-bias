@@ -214,3 +214,21 @@ def test_return_pair_backward_adds_prediction_fields(tmp_path, monkeypatch):
     assert row["predicted_label"] == "bullish"
     assert row["predicted_confidence"] == 80
     assert row["parse_status"] == "valid"
+
+
+def test_backward_output_path_writes_exact_arbitrary_filename(tmp_path, monkeypatch):
+    forward = tmp_path / "run" / "forward" / "generated_outputs.jsonl"
+    _forward_fixture(forward)
+    _patch_model(monkeypatch)
+    requested = tmp_path / "custom" / "my-attribution.jsonl"
+
+    output = generated_attribution.run_backward_attribution(
+        forward_artifact=forward,
+        model_name="fake",
+        output_path=requested,
+    )
+
+    assert output == requested
+    assert requested.is_file()
+    assert not (requested.parent / "generated_token_attribution.jsonl").exists()
+    assert requested.with_suffix(".metadata.json").is_file()

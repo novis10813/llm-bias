@@ -79,12 +79,10 @@ def _run_generated_attribution_stage(args: argparse.Namespace) -> Path:
         raise FileNotFoundError(
             f"forward artifact does not exist: {forward_artifact}"
         )
-    output_path = Path(args.output)
-    output_dir = output_path.parent.parent
     return attribute_generated_outputs(
         forward_artifact=args.forward_artifact,
         model_name=args.model,
-        output_dir=output_dir,
+        output_path=Path(args.output),
         input_top_k=args.input_top_k,
         max_seq_len=args.max_seq_len,
     )

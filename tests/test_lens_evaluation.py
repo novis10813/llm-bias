@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from llm_bias.core.lens_artifacts import complete_lens_metadata
 from llm_bias.lens_fitting.evaluation import (
     BilingualEvalItem,
     _score_lens,
@@ -172,16 +173,18 @@ def test_candidate_calibration_validation_checks_count_and_label(tmp_path):
     lens_path = tmp_path / "english" / "jacobian_lens.pt"
     lens_path.parent.mkdir()
     lens_path.touch()
+    metadata = complete_lens_metadata(
+        metadata={
+            "calibration_count": 128,
+            "calibration_source": "data/calibration/english.jsonl",
+            "use_chat_template": True,
+            "enable_thinking": False,
+            "provenance": {"workflow": "test"},
+        },
+        lens_path=lens_path,
+    )
     lens_path.with_name("jacobian_lens.pt.metadata.json").write_text(
-        json.dumps(
-            {
-                "calibration_count": 128,
-                "calibration_source": "data/calibration/english.jsonl",
-                "use_chat_template": True,
-                "enable_thinking": False,
-            }
-        ),
-        encoding="utf-8",
+        json.dumps(metadata), encoding="utf-8"
     )
 
     metadata = validate_candidate_calibration(
@@ -205,16 +208,18 @@ def test_candidate_calibration_validation_rejects_wrong_source(tmp_path):
     lens_path = tmp_path / "english" / "jacobian_lens.pt"
     lens_path.parent.mkdir()
     lens_path.touch()
+    metadata = complete_lens_metadata(
+        metadata={
+            "calibration_count": 128,
+            "calibration_source": "data/calibration/mixed.jsonl",
+            "use_chat_template": True,
+            "enable_thinking": False,
+            "provenance": {"workflow": "test"},
+        },
+        lens_path=lens_path,
+    )
     lens_path.with_name("jacobian_lens.pt.metadata.json").write_text(
-        json.dumps(
-            {
-                "calibration_count": 128,
-                "calibration_source": "data/calibration/mixed.jsonl",
-                "use_chat_template": True,
-                "enable_thinking": False,
-            }
-        ),
-        encoding="utf-8",
+        json.dumps(metadata), encoding="utf-8"
     )
 
     with pytest.raises(ValueError, match="mislabeled"):

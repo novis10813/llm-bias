@@ -7,8 +7,10 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 MODEL="${MODEL:-.cache/models/qwen3.5-4b}"
-MODEL_SLUG="${MODEL%/}"
-MODEL_SLUG="${MODEL_SLUG##*/}"
+command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
+MODEL_SLUG="$(uv run python -c \
+    'from llm_bias.core.lens_artifacts import model_slug; import sys; print(model_slug(sys.argv[1]))' \
+    "${MODEL}")"
 INPUT_CSV="${INPUT_CSV:-sp500_r1k_r2k_entityBiasPrompt.csv}"
 DATASET_FORMAT="${DATASET_FORMAT:-auto}"
 DATASET_SLUG="${DATASET_SLUG:-}"
@@ -20,7 +22,7 @@ if [[ -z "${DATASET_SLUG}" ]]; then
 fi
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ROOT="${RUN_ROOT:-artifacts/${MODEL_SLUG}/${DATASET_SLUG}/runs/${RUN_ID}}"
-LENS="${LENS:-artifacts/lenses/${MODEL_SLUG}/jacobian_lens.pt}"
+LENS="${LENS:-artifacts/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt}"
 READOUT_BATCH_SIZE="${READOUT_BATCH_SIZE:-32}"
 READOUT_MAX_SEQ_LEN="${READOUT_MAX_SEQ_LEN:-}"
 if [[ -z "${READOUT_MAX_SEQ_LEN}" ]]; then
@@ -58,7 +60,6 @@ if [[ "${GEN_SAMPLE_PER_CONDITION}" =~ ^-?[0-9]+$ ]] && (( GEN_SAMPLE_PER_CONDIT
     exit 1
 fi
 
-command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
 [[ -f "${INPUT_CSV}" ]] || { echo "Missing input CSV: ${INPUT_CSV}" >&2; exit 1; }
 if [[ "${RUN_READOUT}" == "1" ]]; then
     [[ -f "${LENS}" ]] || {
@@ -134,57 +135,83 @@ if [[ "${RUN_GENERATION}" == "1" ]]; then
     FORWARD_ARTIFACT="${FORWARD_OUTPUT}"
 fi
 
-write_manifest() {
-    local status="${1}"
-    local readout_status="${2}"
-    local generation_status="${3}"
-    local attribution_status="${4}"
-    MANIFEST_STATUS="${status}" \
-    MANIFEST_READOUT_STATUS="${readout_status}" \
-    MANIFEST_GENERATION_STATUS="${generation_status}" \
-    MANIFEST_ATTRIBUTION_STATUS="${attribution_status}" \
+manifest_update() {
+    local action="${1}"
+    local stage="${2:-}"
+    local error="${3:-}"
+    MANIFEST_ACTION="${action}" \
+    MANIFEST_STAGE="${stage}" \
+    MANIFEST_ERROR="${error}" \
+    MANIFEST_FILES="${MANIFEST_FILES:-}" \
     uv run python - "${MANIFEST}" <<'PY'
-import json
 import os
 import sys
 from pathlib import Path
 
+from llm_bias.core.artifact_manifest import RunManifest
+
 manifest_path = Path(sys.argv[1])
-manifest = {
-    "schema": "prompt-analysis-run-manifest-v1",
-    "status": os.environ["MANIFEST_STATUS"],
-    "model": os.environ["MODEL"],
-    "model_slug": os.environ["MODEL_SLUG"],
-    "dataset": os.environ["DATASET_SLUG"],
-    "dataset_format": os.environ["DATASET_FORMAT"],
-    "run_id": os.environ["RUN_ID"],
-    "input": os.environ["INPUT_CSV"],
-    "stages": {
-        "readout": {"enabled": os.environ["RUN_READOUT"] == "1", "status": os.environ["MANIFEST_READOUT_STATUS"], "path": os.environ["READOUT_DIR"]},
-        "generation": {"enabled": os.environ["RUN_GENERATION"] == "1", "status": os.environ["MANIFEST_GENERATION_STATUS"], "path": os.environ["FORWARD_OUTPUT"]},
-        "attribution": {"enabled": os.environ["RUN_ATTRIBUTION"] == "1", "status": os.environ["MANIFEST_ATTRIBUTION_STATUS"], "path": os.environ["BACKWARD_OUTPUT"]},
-    },
-    "forward_artifact": os.environ["FORWARD_ARTIFACT"] or None,
-}
-manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+action = os.environ["MANIFEST_ACTION"]
+stage = os.environ.get("MANIFEST_STAGE", "")
+manifest_files = os.environ.get("MANIFEST_FILES", "")
+
+if action == "init":
+    manifest = RunManifest(
+        model=os.environ["MODEL"],
+        dataset=os.environ["DATASET_SLUG"],
+        run_id=os.environ["RUN_ID"],
+        run_directory=Path(os.environ["RUN_ROOT"]),
+    )
+    manifest.register_artifact(
+        os.environ["INPUT_CSV"], artifact_type="prompt_input", stage="prepare", role="input",
+        metadata={"dataset_format": os.environ["DATASET_FORMAT"], "provenance": "runner input CSV"},
+    )
+    lens_path = Path(os.environ["LENS"])
+    if lens_path.is_file():
+        manifest.register_artifact(
+            lens_path, artifact_type="jacobian_lens", stage="prepare", role="lens",
+            metadata={"provenance": "configured Jacobian lens"},
+        )
+    for name, enabled in (("readout", "RUN_READOUT"), ("generation", "RUN_GENERATION"), ("attribution", "RUN_ATTRIBUTION")):
+        if os.environ[enabled] == "1":
+            manifest.stages[name] = {"status": "created"}
+    manifest.save()
+else:
+    manifest = RunManifest.load(manifest_path)
+    if action == "start":
+        manifest.start().save()
+    elif action == "stage_running":
+        manifest.start_stage(stage).save()
+    elif action == "stage_complete":
+        for entry in filter(None, manifest_files.split("\n")):
+            path, artifact_type, role = entry.split("|", 2)
+            manifest.register_artifact(
+                path, artifact_type=artifact_type, stage=stage, role=role,
+                metadata={"provenance": f"prompt-analysis {stage} stage output"},
+            )
+        manifest.finish_stage(stage).save()
+    elif action == "fail":
+        if stage:
+            manifest.finish_stage(stage, status="failed").save()
+        manifest.fail(os.environ.get("MANIFEST_ERROR") or "prompt-analysis stage failed").save()
+    elif action == "complete":
+        manifest.complete().save()
+    else:
+        raise ValueError(f"unknown manifest action: {action}")
 PY
 }
 
-export MODEL MODEL_SLUG DATASET_SLUG DATASET_FORMAT RUN_ID INPUT_CSV RUN_READOUT RUN_GENERATION RUN_ATTRIBUTION
+export MODEL MODEL_SLUG DATASET_SLUG DATASET_FORMAT RUN_ID INPUT_CSV RUN_READOUT RUN_GENERATION RUN_ATTRIBUTION LENS
 export READOUT_DIR FORWARD_OUTPUT BACKWARD_OUTPUT FORWARD_ARTIFACT
+manifest_update init
+manifest_update start
+trap 'rc=$?; if [[ "${run_status}" != "completed" ]]; then manifest_update fail "${active_stage:-}" "runner exited with status ${rc}" || true; fi; exit "${rc}"' EXIT
 run_status="running"
-readout_status="disabled"
-generation_status="disabled"
-attribution_status="disabled"
-[[ "${RUN_READOUT}" == "1" ]] && readout_status="pending"
-[[ "${RUN_GENERATION}" == "1" ]] && generation_status="pending"
-[[ "${RUN_ATTRIBUTION}" == "1" ]] && attribution_status="pending"
-write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
-trap 'rc=$?; if [[ "${run_status}" != "completed" ]]; then write_manifest failed "${readout_status}" "${generation_status}" "${attribution_status}" || true; fi; exit "${rc}"' EXIT
+active_stage=""
 
 if [[ "${RUN_READOUT}" == "1" ]]; then
-    readout_status="running"
-    write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+    active_stage="readout"
+    manifest_update stage_running "${active_stage}"
     readout_args=(
         uv run prompt-analysis readout --model "${MODEL}" --lens "${LENS}" --input "${INPUT_CSV}"
         --top-k "${TOP_K}" --batch-size "${READOUT_BATCH_SIZE}" --max-seq-len "${READOUT_MAX_SEQ_LEN}"
@@ -192,13 +219,17 @@ if [[ "${RUN_READOUT}" == "1" ]]; then
     )
     if [[ -n "${MAX_ROWS}" ]]; then readout_args+=(--max-rows "${MAX_ROWS}"); fi
     "${readout_args[@]}"
-    readout_status="completed"
-    write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+    MANIFEST_FILES="${READOUT_DIR}/prompt_layer_topk.jsonl|prompt_layer_topk|output
+${READOUT_DIR}/prompt_layer_uncertainty.jsonl|prompt_layer_uncertainty|output
+${READOUT_DIR}/average_layer_topk.jsonl|average_layer_topk|output
+${READOUT_DIR}/metadata.json|readout_metadata|output" \
+        manifest_update stage_complete "${active_stage}"
+    active_stage=""
 fi
 
 if [[ "${RUN_GENERATION}" == "1" ]]; then
-    generation_status="running"
-    write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+    active_stage="generation"
+    manifest_update stage_running "${active_stage}"
     mkdir -p "${RUN_ROOT}/forward"
     generation_args=(
         uv run prompt-analysis generate --model "${MODEL}" --input "${INPUT_CSV}" --output "${FORWARD_OUTPUT}"
@@ -208,14 +239,15 @@ if [[ "${RUN_GENERATION}" == "1" ]]; then
     )
     if [[ -n "${GEN_SEED}" ]]; then generation_args+=(--seed "${GEN_SEED}"); fi
     "${generation_args[@]}"
-    [[ -s "${FORWARD_OUTPUT}" ]] || { echo "Generation did not produce a non-empty forward artifact" >&2; exit 1; }
-    generation_status="completed"
-    write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+    MANIFEST_FILES="${FORWARD_OUTPUT}|generated_outputs|output
+${RUN_ROOT}/forward/metadata.json|generation_metadata|output" \
+        manifest_update stage_complete "${active_stage}"
+    active_stage=""
 fi
 
 if [[ "${RUN_ATTRIBUTION}" == "1" ]]; then
-    attribution_status="running"
-    write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+    active_stage="attribution"
+    manifest_update stage_running "${active_stage}"
     mkdir -p "${RUN_ROOT}/backward"
     attribution_args=(
         uv run prompt-analysis attribute-generated --model "${MODEL}"
@@ -224,12 +256,13 @@ if [[ "${RUN_ATTRIBUTION}" == "1" ]]; then
     )
     if [[ -n "${ATTR_INPUT_TOP_K}" ]]; then attribution_args+=(--input-top-k "${ATTR_INPUT_TOP_K}"); fi
     "${attribution_args[@]}"
-    [[ -s "${BACKWARD_OUTPUT}" ]] || { echo "Attribution did not produce a non-empty backward artifact" >&2; exit 1; }
-    attribution_status="completed"
-    write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+    MANIFEST_FILES="${BACKWARD_OUTPUT}|generated_token_attribution|output
+${RUN_ROOT}/backward/metadata.json|attribution_metadata|output" \
+        manifest_update stage_complete "${active_stage}"
+    active_stage=""
 fi
 
 run_status="completed"
-write_manifest "${run_status}" "${readout_status}" "${generation_status}" "${attribution_status}"
+manifest_update complete
 trap - EXIT
 echo "Experiment complete: ${RUN_ROOT}"

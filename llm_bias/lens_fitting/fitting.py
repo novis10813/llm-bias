@@ -13,6 +13,7 @@ import jlens
 from llm_bias.core.lens_artifacts import (
     canonical_lens_checkpoint_path,
     canonical_lens_path,
+    complete_lens_metadata,
     expected_source_layers,
 )
 from llm_bias.core.model import DEFAULT_MODEL, load_model
@@ -120,8 +121,6 @@ def fit_jacobian_lens(
     lens.save(str(destination))
 
     metadata: dict[str, Any] = {
-        "schema_version": 1,
-        "artifact": "jacobian_lens",
         "model": model_name,
         "d_model": model.d_model,
         "n_layers": model.n_layers,
@@ -140,7 +139,14 @@ def fit_jacobian_lens(
         "jlens_version": _package_version("jacobian-lens", "jlens"),
         "checkpoint_path": str(checkpoint),
         "checkpoint_every": checkpoint_every,
+        "provenance": {
+            "workflow": "fit-jacobian-lens",
+            "module": "llm_bias.lens_fitting.fitting",
+            "model": model_name,
+            "output": str(destination),
+        },
     }
+    metadata = complete_lens_metadata(metadata=metadata, lens_path=destination)
     metadata_path = destination.with_name(destination.name + ".metadata.json")
     temporary = metadata_path.with_suffix(metadata_path.suffix + ".tmp")
     temporary.write_text(
