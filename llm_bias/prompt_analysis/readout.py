@@ -881,7 +881,7 @@ def analyze_prompt_outputs(
     prompt_columns: Iterable[str] | None = None,
     save_prompt_topk: bool = True,
     save_prompt_uncertainty: bool = True,
-    compute_input_attribution: bool = True,
+    compute_input_attribution: bool = False,
     attribution_batch_size: int = 8,
     input_top_k: int = 15,
     use_chat_template: bool = True,
@@ -1063,6 +1063,7 @@ def analyze_prompt_outputs(
         "condition_counts": condition_counts,
         "saved_prompt_layer_topk": save_prompt_topk,
         "saved_prompt_layer_uncertainty": save_prompt_uncertainty,
+        "backpropagation": compute_input_attribution,
         "input_attribution": {
             "enabled": compute_input_attribution,
             "batch_size": attribution_batch_size,

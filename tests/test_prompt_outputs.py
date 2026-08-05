@@ -1,6 +1,10 @@
+import json
+from types import SimpleNamespace
+
 import pytest
 import torch
 
+from llm_bias.prompt_analysis import readout
 from llm_bias.prompt_analysis.readout import (
     _batched_output_gradients,
     _prepare_prompt,
@@ -173,3 +177,140 @@ def test_auto_does_not_treat_partial_pair_schema_as_return_pairs(tmp_path):
     path.write_text("cik,prompt_without_context_x\n1,hello\n", encoding="utf-8")
     with pytest.raises(ValueError, match="requires a Date column"):
         load_prompt_table(path, dataset_format="auto")
+
+
+def _patch_deterministic_prompt_run(monkeypatch):
+    class _FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 0
+        pad_token = "<pad>"
+        eos_token = "<eos>"
+
+    class _FakePromptModel:
+        d_model = 4
+        n_layers = 2
+        device = torch.device("cpu")
+        tokenizer = _FakeTokenizer()
+        _lm_head = SimpleNamespace(weight=torch.zeros((8, 4)))
+
+    model = _FakePromptModel()
+    lens = SimpleNamespace(d_model=4, source_layers=[0], jacobians={})
+    monkeypatch.setattr(
+        readout,
+        "load_lens_model",
+        lambda _model_name: (SimpleNamespace(_hf_model=object()), model.tokenizer, "cpu"),
+    )
+    monkeypatch.setattr(readout, "WrappedModel", lambda *_args: model)
+    monkeypatch.setattr(readout.JacobianLens, "load", lambda _path: lens)
+
+    def fake_analyze_column(*, column, **_kwargs):
+        return [
+            {
+                "prompt_column": column.name,
+                "index": column.index,
+                "context": column.context,
+                "n_prompts": 1,
+                "layer": 1,
+                "is_output": True,
+                "top_tokens": [
+                    {
+                        "rank": 1,
+                        "token_id": 1,
+                        "token": " answer",
+                        "probability": 0.75,
+                    }
+                ],
+            }
+        ], 1, 0
+
+    monkeypatch.setattr(readout, "_analyze_column", fake_analyze_column)
+    monkeypatch.setattr(readout, "_plot_output_distributions", lambda *_args: None)
+    monkeypatch.setattr(readout, "_plot_input_attributions", lambda *_args, **_kwargs: None)
+    return model
+
+
+def _write_prompt_analysis_inputs(tmp_path):
+    input_path = tmp_path / "prompts.csv"
+    input_path.write_text(
+        "Date,prompt_without_context_aapl,prompt_with_context_aapl\n"
+        "2026-01-01,plain,with context\n",
+        encoding="utf-8",
+    )
+    lens_path = tmp_path / "lens.pt"
+    lens_path.write_bytes(b"fake lens")
+    return input_path, lens_path
+
+
+def test_forward_only_readout_writes_readout_uncertainty_without_attribution(
+    tmp_path, monkeypatch
+):
+    _patch_deterministic_prompt_run(monkeypatch)
+    input_path, lens_path = _write_prompt_analysis_inputs(tmp_path)
+    monkeypatch.setattr(
+        readout,
+        "_attribute_column",
+        lambda **_kwargs: pytest.fail("forward-only readout must not backpropagate"),
+    )
+
+    output_dir = tmp_path / "forward-only"
+    readout.analyze_prompt_outputs(
+        input_path=str(input_path),
+        model_name="fake",
+        lens_path=str(lens_path),
+        output_dir=str(output_dir),
+        top_k=1,
+        compute_input_attribution=False,
+    )
+
+    assert (output_dir / "prompt_layer_topk.jsonl").is_file()
+    assert (output_dir / "prompt_layer_uncertainty.jsonl").is_file()
+    assert (output_dir / "average_layer_topk.jsonl").is_file()
+    assert (output_dir / "average_layer_topk.csv").is_file()
+    assert (output_dir / "metadata.json").is_file()
+    assert not (output_dir / "input_token_attribution.jsonl").exists()
+    assert not (output_dir / "input_token_attribution.png").exists()
+    metadata = json.loads((output_dir / "metadata.json").read_text())
+    assert metadata["backpropagation"] is False
+    assert metadata["input_attribution"]["enabled"] is False
+
+
+def test_backprop_readout_calls_attribution_and_records_provenance(tmp_path, monkeypatch):
+    _patch_deterministic_prompt_run(monkeypatch)
+    input_path, lens_path = _write_prompt_analysis_inputs(tmp_path)
+    attribution_calls = []
+
+    def fake_attribute_column(**kwargs):
+        attribution_calls.append(kwargs)
+        column = kwargs["column"]
+        return [
+            {
+                "prompt_column": column.name,
+                "index": column.index,
+                "context": column.context,
+                "n_prompts": 1,
+                "output_rank": 1,
+                "output_token_id": 1,
+                "output_token": " answer",
+                "output_mean_probability": 0.75,
+                "input_positions": [],
+                "top_input_tokens": [],
+                "top_input_positions": [],
+            }
+        ]
+
+    monkeypatch.setattr(readout, "_attribute_column", fake_attribute_column)
+    output_dir = tmp_path / "with-backprop"
+    readout.analyze_prompt_outputs(
+        input_path=str(input_path),
+        model_name="fake",
+        lens_path=str(lens_path),
+        output_dir=str(output_dir),
+        top_k=1,
+        compute_input_attribution=True,
+    )
+
+    assert len(attribution_calls) == 2
+    assert (output_dir / "input_token_attribution.jsonl").is_file()
+    metadata = json.loads((output_dir / "metadata.json").read_text())
+    assert metadata["backpropagation"] is True
+    assert metadata["input_attribution"]["enabled"] is True
