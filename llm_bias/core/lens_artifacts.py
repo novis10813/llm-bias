@@ -41,12 +41,15 @@ def canonical_lens_checkpoint_path(
     model_name: str,
     calibration_sha256: str | None = None,
 ) -> Path:
-    """Return resumable fitting state inside the model lens scope."""
+    """Return resumable fitting state in the archived model scope."""
     suffix = (
         f".{calibration_sha256[:12]}" if calibration_sha256 is not None else ""
     )
     return (
-        lens_artifact_root(model_name)
+        Path("artifacts")
+        / "archive"
+        / model_slug(model_name)
+        / "jacobian-lens"
         / "checkpoints"
         / f"jacobian_lens{suffix}.checkpoint.pt"
     )

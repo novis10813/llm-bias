@@ -40,7 +40,8 @@ def promote(
     """Promote one evaluated candidate into the model-scoped active path."""
     evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
     selected = str(evaluation["selected_candidate"])
-    candidate = Path(evaluation["candidates"][selected]["lens_path"])
+    selected_record = evaluation["candidates"][selected]
+    candidate = Path(selected_record["lens_path"])
     candidate_metadata = lens_metadata_path(candidate)
     if not candidate.is_file() or not candidate_metadata.is_file():
         raise FileNotFoundError(
@@ -50,6 +51,24 @@ def promote(
     metadata = json.loads(candidate_metadata.read_text(encoding="utf-8"))
     if not isinstance(metadata, dict):
         raise ValueError(f"candidate metadata must be a JSON object: {candidate_metadata}")
+    recorded_binary_sha256 = selected_record.get("lens_binary_sha256")
+    recorded_metadata_sha256 = selected_record.get("lens_metadata_sha256")
+    if not isinstance(recorded_binary_sha256, str) or not recorded_binary_sha256:
+        raise ValueError(
+            f"evaluation is missing the selected candidate binary hash: {evaluation_path}"
+        )
+    if not isinstance(recorded_metadata_sha256, str) or not recorded_metadata_sha256:
+        raise ValueError(
+            f"evaluation is missing the selected candidate metadata hash: {evaluation_path}"
+        )
+    if metadata.get("binary_sha256") != recorded_binary_sha256:
+        raise ValueError(
+            "selected candidate binary hash disagrees with the evaluation record"
+        )
+    if metadata.get("metadata_sha256") != recorded_metadata_sha256:
+        raise ValueError(
+            "selected candidate metadata hash disagrees with the evaluation record"
+        )
     validate_lens_metadata(metadata=metadata, lens_path=candidate)
     metadata_model = metadata.get("model")
     if metadata_model is not None:

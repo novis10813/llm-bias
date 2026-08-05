@@ -7,13 +7,15 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 MODEL="${MODEL:-.cache/models/qwen3.5-4b}"
-MODEL_SLUG="${MODEL%/}"
-MODEL_SLUG="${MODEL_SLUG##*/}"
+command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
+MODEL_SLUG="$(uv run python -c \
+    'from llm_bias.core.lens_artifacts import model_slug; import sys; print(model_slug(sys.argv[1]))' \
+    "${MODEL}")"
 INPUT_CSV="${INPUT_CSV:-sp500_r1k_r2k_entityBiasPrompt.csv}"
 DATASET_FORMAT="${DATASET_FORMAT:-auto}"
 MAX_ROWS="${MAX_ROWS:-}"
 RUN_ROOT="${RUN_ROOT:-artifacts/prompt_analysis/${MODEL_SLUG}}"
-LENS="${LENS:-artifacts/lenses/${MODEL_SLUG}/jacobian_lens.pt}"
+LENS="${LENS:-artifacts/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt}"
 READOUT_BATCH_SIZE="${READOUT_BATCH_SIZE:-32}"
 if [[ -z "${READOUT_MAX_SEQ_LEN:-}" ]]; then
     if [[ "${DATASET_FORMAT}" == "return-pairs" ]]; then
@@ -44,7 +46,6 @@ for variable_name in RUN_READOUT RUN_ATTRIBUTION; do
     fi
 done
 
-command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
 [[ -f "${INPUT_CSV}" ]] || { echo "Missing input CSV: ${INPUT_CSV}" >&2; exit 1; }
 if [[ "${RUN_READOUT}" == "1" ]]; then
     [[ -f "${LENS}" ]] || {

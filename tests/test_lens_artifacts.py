@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -23,13 +26,13 @@ def test_model_specific_canonical_lens_paths():
         "artifacts/org--model-name/jacobian-lens/jacobian_lens.pt"
     )
     assert canonical_lens_checkpoint_path("org/model-name").as_posix() == (
-        "artifacts/org--model-name/jacobian-lens/checkpoints/"
+        "artifacts/archive/org--model-name/jacobian-lens/checkpoints/"
         "jacobian_lens.checkpoint.pt"
     )
     assert canonical_lens_checkpoint_path(
         "org/model-name", "abcdef0123456789"
     ).as_posix() == (
-        "artifacts/org--model-name/jacobian-lens/checkpoints/"
+        "artifacts/archive/org--model-name/jacobian-lens/checkpoints/"
         "jacobian_lens.abcdef012345.checkpoint.pt"
     )
 
@@ -92,3 +95,51 @@ def test_lens_metadata_rejects_wrong_model(tmp_path):
             model_name=".cache/models/example-model",
             lens_path=lens_path,
         )
+
+
+def test_prompt_analysis_shell_uses_canonical_hub_model_slug(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_uv = fake_bin / "uv"
+    fake_uv.write_text(
+        "#!/bin/sh\n"
+        "shift 2\n"
+        "exec python \"$@\"\n",
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    input_csv = tmp_path / "prompts.csv"
+    input_csv.write_text("prompt\n", encoding="utf-8")
+    run_root = tmp_path / "runs"
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "MODEL": "org/model-name",
+        "INPUT_CSV": str(input_csv),
+        "RUN_ROOT": str(run_root),
+        "RUN_READOUT": "0",
+        "RUN_ATTRIBUTION": "0",
+        "RUN_IN_TMUX": "0",
+    }
+
+    completed = subprocess.run(
+        ["bash", str(repo_root / "scripts/run_prompt_analysis.sh")],
+        cwd=repo_root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert f"Experiment complete: {run_root}" in completed.stdout
+    script = (repo_root / "scripts/run_prompt_analysis.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "artifacts/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt" in script
+    assert "MODEL_SLUG##*/" not in script
+    candidate_script = (repo_root / "scripts/run_qwen_lens_candidates.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "MODEL_SLUG##*/" not in candidate_script
+    assert "from llm_bias.core.lens_artifacts import model_slug" in candidate_script

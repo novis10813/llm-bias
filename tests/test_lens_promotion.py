@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 
 def _promotion_module():
     path = (
@@ -53,6 +55,8 @@ def test_promotion_archives_previous_canonical_and_copies_winner(
                 "candidates": {
                     "mixed": {
                         "lens_path": str(candidate),
+                        "lens_binary_sha256": candidate_metadata["binary_sha256"],
+                        "lens_metadata_sha256": candidate_metadata["metadata_sha256"],
                         "summary": {"selection_score": -0.5},
                     }
                 },
@@ -82,3 +86,79 @@ def test_promotion_archives_previous_canonical_and_copies_winner(
     assert result["selection_uncertainty"] == {
         "comparisons": {"english": {}}
     }
+
+
+def _evaluation_for_candidate(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    module = _promotion_module()
+    candidate = tmp_path / "candidates" / "mixed" / "jacobian_lens.pt"
+    candidate.parent.mkdir(parents=True)
+    candidate.write_bytes(b"selected lens")
+    metadata = module.complete_lens_metadata(
+        metadata={
+            "model": ".cache/models/model",
+            "source_layers": [0],
+            "provenance": {"workflow": "test"},
+        },
+        lens_path=candidate,
+    )
+    metadata_path = candidate.with_name("jacobian_lens.pt.metadata.json")
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    evaluation = tmp_path / "evaluation.json"
+    evaluation.write_text(
+        json.dumps(
+            {
+                "selected_candidate": "mixed",
+                "selection_rule": "rule",
+                "candidates": {
+                    "mixed": {
+                        "lens_path": str(candidate),
+                        "lens_binary_sha256": metadata["binary_sha256"],
+                        "lens_metadata_sha256": metadata["metadata_sha256"],
+                        "summary": {"selection_score": -0.5},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return evaluation, metadata
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("lens_binary_sha256", "missing the selected candidate binary hash"),
+        ("lens_metadata_sha256", "missing the selected candidate metadata hash"),
+    ],
+)
+def test_promotion_requires_evaluation_recorded_hashes(tmp_path, field, message):
+    evaluation, _metadata = _evaluation_for_candidate(tmp_path)
+    value = json.loads(evaluation.read_text(encoding="utf-8"))
+    del value["candidates"]["mixed"][field]
+    evaluation.write_text(json.dumps(value), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        _promotion_module().promote(
+            model_name=".cache/models/model",
+            evaluation_path=evaluation,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("lens_binary_sha256", "binary hash disagrees with the evaluation record"),
+        ("lens_metadata_sha256", "metadata hash disagrees with the evaluation record"),
+    ],
+)
+def test_promotion_rejects_evaluation_hash_mismatch(tmp_path, field, message):
+    evaluation, _metadata = _evaluation_for_candidate(tmp_path)
+    value = json.loads(evaluation.read_text(encoding="utf-8"))
+    value["candidates"]["mixed"][field] = "0" * 64
+    evaluation.write_text(json.dumps(value), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        _promotion_module().promote(
+            model_name=".cache/models/model",
+            evaluation_path=evaluation,
+        )
