@@ -67,9 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="save_prompt_uncertainty",
     )
     readout.add_argument(
-        "--no-input-attribution",
-        action="store_false",
-        dest="compute_input_attribution",
+        "--backprop",
+        action="store_true",
+        dest="backprop",
+        help="enable gradient backpropagation for input attribution",
     )
     readout.add_argument("--attribution-batch-size", type=int, default=8)
     readout.add_argument("--input-top-k", type=int, default=15)
@@ -100,6 +101,11 @@ def build_parser() -> argparse.ArgumentParser:
     attribute.add_argument("--seed", type=int)
     attribute.add_argument("--top-p", type=float, default=1.0)
     attribute.add_argument("--top-k", type=int, default=0)
+    attribute.add_argument(
+        "--backprop",
+        action="store_true",
+        help="enable gradient backpropagation for generated-token attribution",
+    )
     attribute.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
 
     evaluate_return = commands.add_parser(
@@ -189,7 +195,7 @@ def main() -> None:
             prompt_columns=args.prompt_columns,
             save_prompt_topk=args.save_prompt_topk,
             save_prompt_uncertainty=args.save_prompt_uncertainty,
-            compute_input_attribution=args.compute_input_attribution,
+            compute_input_attribution=args.backprop,
             attribution_batch_size=args.attribution_batch_size,
             input_top_k=args.input_top_k,
             use_chat_template=args.use_chat_template,
@@ -199,6 +205,10 @@ def main() -> None:
             dataset_format=args.dataset_format,
         )
     elif args.command == "attribute":
+        if not args.backprop:
+            raise ValueError(
+                "generated-token attribution requires --backprop"
+            )
         analyze_generated_attribution(
             input_path=args.input,
             model_name=args.model,
@@ -214,6 +224,7 @@ def main() -> None:
             seed=args.seed,
             top_p=args.top_p,
             top_k=args.top_k,
+            backprop=args.backprop,
             dataset_format=args.dataset_format,
         )
     elif args.command == "evaluate-return-predictions":

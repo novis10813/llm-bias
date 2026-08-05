@@ -203,8 +203,13 @@ def analyze_generated_attribution(
     seed: int | None = None,
     top_p: float = 1.0,
     top_k: int = 0,
+    backprop: bool = False,
     dataset_format: str = "auto",
 ) -> Path:
+    if not backprop:
+        raise ValueError(
+            "generated-token attribution requires backprop=True; pass --backprop from the CLI"
+        )
     if sample_per_condition < 1 or max_new_tokens < 1:
         raise ValueError("sample_per_condition and max_new_tokens must be positive")
     if input_top_k is not None and input_top_k < 1:
@@ -401,6 +406,7 @@ def analyze_generated_attribution(
             "max_seq_len": max_seq_len,
             "generation": generation_strategy,
             "generation_config": run_generation,
+            "backpropagation": True,
             "thinking": False,
             "method": "semantic_scope_target_logit_gradient_l2_norm",
             "batch_size": 1,
@@ -430,6 +436,7 @@ def analyze_generated_attribution(
             "run_indices": list(range(runs)),
             "generation": generation_strategy,
             "generation_config": generation_settings,
+            "backpropagation": True,
             "sample_per_condition": sample_per_condition,
             "selected_dates": sorted(effective_dates),
             "condition_counts": condition_counts,
