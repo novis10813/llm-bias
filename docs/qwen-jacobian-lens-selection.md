@@ -33,8 +33,32 @@ archive old canonical → atomically promote winner
 
 所有三個 candidate 都使用相同模型、chat formatting、sequence limit、layer
 coverage 與 fitting 參數。Candidate lens、checkpoint、evaluation 與 logs 位於
-ignored `artifacts/`，只有資料生成器、tracked calibration/holdout 和程式進入
+ignored model-scoped `artifacts/<model-slug>/jacobian-lens/`，只有資料生成器、tracked calibration/holdout 和程式進入
 root Git repository。
+
+## 與 prompt-analysis stage artifacts 的邊界
+
+Qwen lens selection 產生的是 model-scoped lens artifact，不是 prompt-analysis
+run 的 forward/readout/backward 結果。Lens 必須先在
+`artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt` promotion 完成，prompt-analysis
+才可使用它；不得把 candidate、partial 或另一個 model 的 lens 放入 run tree。
+
+Prompt-analysis 的 approved batch layout 是：
+
+```text
+artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
+├── manifest.json
+├── forward/   # generated token records only
+├── readout/   # Jacobian readout/uncertainty
+└── backward/  # generated-token attribution, only when enabled
+```
+
+每個 stage 的 metadata 與 root manifest 都必須保存 model identity、dataset
+identity、dataset input SHA-256、record count 與 artifact SHA-256；backward 另須
+保存 forward artifact 的 parent hash。這使得同一個 Qwen lens 被不同 dataset 或 run 誤用時
+可以在 completion check 中 fail closed。Stage 只保存 compact readout/provenance，
+不得保存 residual、embedding 或 gradient activation；這是 prompt-analysis 的
+artifact contract，不是 counterfactual-patching 全面 layout migration 的宣稱。
 
 ## Calibration 設計
 
@@ -97,20 +121,25 @@ Runner 依序 fitting `english`、`chinese_simplified`、`mixed`。已完成的
 `jacobian_lens.pt` 會被跳過；未完成的 candidate 會從以 formatted calibration
 digest 命名的 checkpoint 繼續。每個 candidate 完成後會產生 metadata，記錄
 model shape、完整 source layers、calibration input/formatted digests、chat
-settings、jlens version 與 fitting 參數。
+settings、jlens version、fitting 參數、artifact type/schema version、binary/metadata
+SHA-256 與 provenance。
 
 ```text
-artifacts/candidate_lenses/qwen3.5-4b/
-├── english/
-│   ├── fit.log
-│   ├── jacobian_lens.pt
-│   ├── jacobian_lens.pt.metadata.json
-│   └── jacobian_lens.pt.<digest>.checkpoint.pt
-├── chinese_simplified/
-├── mixed/
-├── evaluation.json
-├── evaluation.log
-└── promotion.log
+artifacts/qwen3.5-4b/jacobian-lens/
+├── checkpoints/              # canonical fit checkpoints
+├── archive/                  # replaced active lenses
+├── selection.json
+└── candidates/
+    ├── english/
+    │   ├── fit.log
+    │   ├── jacobian_lens.pt
+    │   ├── jacobian_lens.pt.metadata.json
+    │   └── jacobian_lens.pt.<digest>.checkpoint.pt
+    ├── chinese_simplified/
+    ├── mixed/
+    ├── evaluation.json
+    ├── evaluation.log
+    └── promotion.log
 ```
 
 Evaluation 會 fail closed：每個 candidate 必須實際包含 128 個成功 prompts、
@@ -148,11 +177,11 @@ token ranks、summary 與 provenance，不保存 raw activations。
 ```bash
 uv run python scripts/evaluate_qwen_lens_candidates.py \
   --model .cache/models/qwen3.5-4b \
-  --candidate-root artifacts/candidate_lenses/qwen3.5-4b \
+  --candidate-root artifacts/qwen3.5-4b/jacobian-lens/candidates \
   --holdout data/evaluations/qwen3.5-4b/bilingual_intermediate_holdout.jsonl \
   --max-seq-len 128 \
   --expected-calibration-prompts 128 \
-  --output artifacts/candidate_lenses/qwen3.5-4b/evaluation.json
+  --output artifacts/qwen3.5-4b/jacobian-lens/candidates/evaluation.json
 ```
 
 ## 2026-07-30 實驗結果
@@ -198,13 +227,13 @@ Promotion 會先把現有 canonical lens 與 metadata 複製到 timestamped arch
 ```bash
 uv run python scripts/promote_qwen_lens_candidate.py \
   --model .cache/models/qwen3.5-4b \
-  --evaluation artifacts/candidate_lenses/qwen3.5-4b/evaluation.json
+  --evaluation artifacts/qwen3.5-4b/jacobian-lens/candidates/evaluation.json
 ```
 
 Active artifact：
 
 ```text
-artifacts/lenses/qwen3.5-4b/
+artifacts/qwen3.5-4b/jacobian-lens/
 ├── jacobian_lens.pt
 ├── jacobian_lens.pt.metadata.json
 └── selection.json
@@ -213,6 +242,23 @@ artifacts/lenses/qwen3.5-4b/
 `selection.json` 記錄 canonical SHA-256、winner、evaluation 路徑、不確定性與舊
 lens archive。任何 interactive dashboard 都要求 canonical lens 完整覆蓋所有
 source layers；partial/stride experiments 不得放入 active model folder。
+
+## Prompt-analysis dataset gates
+
+Qwen lens promotion 與資料集 sampling 是兩個獨立 gate。Legacy-wide MAG7/S&P500
+compatibility workflow 的 generated-token stage 預設每個 condition deterministic
+sampling 32 個共同日期；這個數字不可套用成 return-pairs 的完整 generation 上限。
+MAG7 8-K return-pairs 必須明確使用 `return-pairs` schema 與 model/dataset-scoped
+run，full-generation 的 pair limit 覆蓋所有 unique `pair_id`，並對每個 pair 保存
+`original` 與 `counterfactual` 的完整 generated sequence。若 exact runner option
+尚未落地，文件批准的是這個 interface 與 completion contract，不是另一個未實作
+CLI。
+
+在宣告 run 完成前，tiny-fixture contract test 應檢查 model/dataset isolation、
+forward/readout/backward record identity 與 count、backward parent SHA-256、三個
+stage status、manifest/file hashes，以及 raw activation artifact 不存在。這些
+checks 不需要 Qwen checkpoint；Qwen full calibration/evaluation/promotion 才需要
+模型 inference。
 
 ## 如何解讀與下一步
 

@@ -7,10 +7,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 MODEL="${MODEL:-.cache/models/qwen3.5-4b}"
-MODEL_SLUG="${MODEL%/}"
-MODEL_SLUG="${MODEL_SLUG##*/}"
 CALIBRATION_ROOT="${CALIBRATION_ROOT:-data/calibration/qwen3.5-4b}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-artifacts/candidate_lenses/${MODEL_SLUG}}"
 CALIBRATION_PROMPTS="${CALIBRATION_PROMPTS:-128}"
 DIM_BATCH="${DIM_BATCH:-8}"
 MAX_SEQ_LEN="${MAX_SEQ_LEN:-128}"
@@ -21,6 +18,10 @@ SESSION="${SESSION:-qwen_lens_candidates}"
 RUN_IN_TMUX="${RUN_IN_TMUX:-1}"
 
 command -v uv >/dev/null || { echo "uv is required" >&2; exit 1; }
+MODEL_SLUG="$(uv run python -c \
+    'from llm_bias.core.lens_artifacts import model_slug; import sys; print(model_slug(sys.argv[1]))' \
+    "${MODEL}")"
+OUTPUT_ROOT="${OUTPUT_ROOT:-artifacts/${MODEL_SLUG}/jacobian-lens/candidates}"
 for file in english chinese_simplified mixed; do
     [[ -f "${CALIBRATION_ROOT}/${file}.jsonl" ]] || {
         echo "Missing calibration corpus: ${CALIBRATION_ROOT}/${file}.jsonl" >&2

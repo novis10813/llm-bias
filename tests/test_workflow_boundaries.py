@@ -173,7 +173,7 @@ def test_independent_cli_command_sets():
     assert lens_args.layer_stride == 1
     assert lens_args.checkpoint_every == 4
     assert canonical_lens_path(lens_args.model) == Path(
-        "artifacts/lenses/llama-3.2-1b-instruct/jacobian_lens.pt"
+        "artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt"
     )
 
 
