@@ -14,7 +14,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
         "--output",
-        help="defaults to artifacts/lenses/<model>/jacobian_lens.pt",
+        help="defaults to artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt",
     )
     parser.add_argument("--calibration-prompts", type=int, default=16)
     parser.add_argument("--calibration-file")

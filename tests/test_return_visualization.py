@@ -24,9 +24,11 @@ def _attribution_rows():
         for condition, predicted in (("original", original), ("counterfactual", counterfactual)):
             rows.append(
                 {
+                    "artifact_type": "generated_outputs",
                     "pair_id": pair_id,
                     "condition": condition,
                     "target_label": original if pair_id == "p1" else "neutral",
+                    "generated_text": json.dumps({"label": predicted, "confidence": 80 if condition == "original" else 60}),
                     "predicted_label": predicted,
                     "predicted_confidence": 80 if condition == "original" else 60,
                     "parse_status": "valid",
@@ -36,6 +38,7 @@ def _attribution_rows():
                 }
             )
     rows[-1]["parse_status"] = "invalid"
+    rows[-1]["generated_text"] = "not valid JSON"
     return rows
 
 

@@ -101,8 +101,12 @@ def _input_span(value: Any, *, row_index: int, prompt_length: int) -> tuple[int,
     return int(start), int(end)
 
 
-def _previous_parent_hash(destination: Path) -> str | None:
-    metadata = destination / "metadata.json"
+def _previous_parent_hash(destination: Path, output_path: Path) -> str | None:
+    metadata = (
+        output_path.with_suffix(".metadata.json")
+        if output_path.name != "generated_token_attribution.jsonl"
+        else destination / "metadata.json"
+    )
     if metadata.is_file():
         try:
             value = json.loads(metadata.read_text(encoding="utf-8"))
@@ -113,7 +117,11 @@ def _previous_parent_hash(destination: Path) -> str | None:
                 candidate = value.get(key)
                 if isinstance(candidate, str):
                     return candidate
-    rows_path = destination / "generated_token_attribution.jsonl"
+    rows_path = (
+        output_path
+        if output_path.name != "generated_token_attribution.jsonl"
+        else destination / "generated_token_attribution.jsonl"
+    )
     if rows_path.is_file():
         rows = read_jsonl(rows_path)
         if rows:
@@ -177,6 +185,7 @@ def run_backward_attribution(
     forward_artifact: str | Path | None = None,
     model_name: str = DEFAULT_MODEL,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    output_path: str | Path | None = None,
     input_top_k: int | None = None,
     max_seq_len: int | None = None,
     prompt_columns: Iterable[str] | None = None,
@@ -197,7 +206,17 @@ def run_backward_attribution(
         raise ValueError("output_token_top_k must be positive when provided")
 
     destination = Path(output_dir) / "backward"
-    previous_hash = _previous_parent_hash(destination)
+    requested_output = Path(output_path) if output_path is not None else None
+    if requested_output is not None:
+        if requested_output.suffix.lower() != ".jsonl":
+            raise ValueError("output_path must be a .jsonl file")
+        destination = requested_output.parent
+    output_file = (
+        requested_output
+        if requested_output is not None
+        else destination / "generated_token_attribution.jsonl"
+    )
+    previous_hash = _previous_parent_hash(destination, output_file)
     rows, parent_hash = load_parent_jsonl(
         source,
         previous_sha256=previous_hash,
@@ -318,10 +337,15 @@ def run_backward_attribution(
             )
         output_rows.append(record)
 
-    output_path = write_jsonl(destination / "generated_token_attribution.jsonl", output_rows)
+    output_path = write_jsonl(output_file, output_rows)
     output_digest = sha256_file(output_path)
+    metadata_path = (
+        destination / "metadata.json"
+        if requested_output is None
+        else output_path.with_suffix(".metadata.json")
+    )
     write_metadata(
-        destination / "metadata.json",
+        metadata_path,
         {
             "schema_version": ARTIFACT_SCHEMA_VERSION,
             "artifact_type": ARTIFACT_TYPE,
@@ -357,6 +381,7 @@ def attribute_generated_outputs(
     forward_artifact: str | Path,
     model_name: str = DEFAULT_MODEL,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    output_path: str | Path | None = None,
     input_top_k: int | None = None,
     max_seq_len: int | None = None,
     prompt_columns: Iterable[str] | None = None,
@@ -367,6 +392,7 @@ def attribute_generated_outputs(
         forward_artifact=forward_artifact,
         model_name=model_name,
         output_dir=output_dir,
+        output_path=output_path,
         input_top_k=input_top_k,
         max_seq_len=max_seq_len,
         prompt_columns=prompt_columns,
