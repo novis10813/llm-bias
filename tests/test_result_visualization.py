@@ -33,6 +33,18 @@ class _PromptTokenizer:
         return f"tok-{token_ids[0]}"
 
 
+def test_forward_only_panel_marks_token_text_and_log_probability_unavailable():
+    data = build_attribution_data(
+        [{"date": "2020-01-01", "index": "sp500", "context": "without", "generated_token_ids": [7], "generated_text": "7"}],
+        ["2020-01-01"],
+        condition_order=[("sp500", "without")],
+    )
+    token = data["dates"][0]["conditions"][0]["output_tokens"][0]
+    assert token["token_id"] == 7
+    assert token["token"] is None
+    assert token["log_probability"] is None
+
+
 def _prices():
     return [
         {"Date": "2020-01-01", "sp500": "100", "russell1000": "100", "russell2000": "100"},
@@ -99,7 +111,13 @@ def test_select_attribution_dates_chooses_crashes_and_normal_date():
 
 
 def test_build_attribution_data_keeps_output_input_alignment():
-    data = build_attribution_data(_attribution_rows(["2020-01-02"]), ["2020-01-02"], input_top_k=1)
+    rows = _attribution_rows(["2020-01-02"])
+    data = build_attribution_data(
+        rows,
+        ["2020-01-02"],
+        input_top_k=1,
+        backward_rows=rows,
+    )
     condition = data["dates"][0]["conditions"][0]
 
     assert condition["input_tokens"] == [
@@ -118,6 +136,7 @@ def test_build_attribution_data_can_show_complete_prompt_tokens():
         ["2020-01-02"],
         tokenizer=_PromptTokenizer(),
         max_seq_len=256,
+        backward_rows=rows,
     )
     condition = data["dates"][0]["conditions"][0]
 
@@ -393,7 +412,13 @@ def test_uncertainty_paths_from_root_discovers_runner_per_date_directory(tmp_pat
 
 
 def test_render_attribution_html_embeds_tokens_and_interaction_script():
-    data = build_attribution_data(_attribution_rows(["2020-01-02"]), ["2020-01-02"], input_top_k=1)
+    rows = _attribution_rows(["2020-01-02"])
+    data = build_attribution_data(
+        rows,
+        ["2020-01-02"],
+        input_top_k=1,
+        backward_rows=rows,
+    )
     html = render_attribution_html(data)
 
     assert "2020-01-02" in html
