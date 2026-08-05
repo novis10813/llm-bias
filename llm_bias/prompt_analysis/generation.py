@@ -16,6 +16,7 @@ from typing import Any, Iterable, Literal, TextIO
 
 import torch
 
+from llm_bias.core.artifact_paths import atomic_write_json, model_slug, stable_record_id
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.readout import load_prompt_table
@@ -44,9 +45,8 @@ def _sample_rows(rows: list[dict[str, str]], count: int) -> list[dict[str, str]]
 
 
 def _stable_record_id(identity: dict[str, Any]) -> str:
-    """Return an opaque, deterministic ID for one logical prompt condition."""
-    encoded = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    """Return the shared stable ID for one logical prompt condition."""
+    return stable_record_id(identity)
 
 
 def _prepare_prompt(tokenizer: Any, row: dict[str, str], prompt: str) -> str:
@@ -393,14 +393,23 @@ def generate_prompt_outputs(
         "base_seed": seed,
         "seed_policy": "base_seed_plus_run_index" if seed is not None else None,
     }
+    explicit_output_path: Path | None = None
     if output_path is not None:
         requested_output = Path(output_path)
-        if requested_output.name == "generated_outputs.jsonl":
-            output_dir = str(requested_output.parent.parent)
-        elif requested_output.name == "forward":
+        if requested_output.exists() and requested_output.is_dir():
+            output_dir = str(requested_output)
+        elif requested_output.name == "forward" and requested_output.suffix == "":
+            output_dir = str(requested_output.parent)
+        elif requested_output.suffix.lower() == ".jsonl":
+            if runs != 1:
+                raise ValueError("output_path file targets require runs=1")
+            explicit_output_path = requested_output
             output_dir = str(requested_output.parent)
         else:
-            output_dir = str(requested_output)
+            raise ValueError(
+                "output_path must be an existing directory, a forward directory, "
+                "or a .jsonl file"
+            )
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     if runs > 1 and any(destination.iterdir()):
@@ -414,9 +423,17 @@ def generate_prompt_outputs(
 
     for run_index, run_destination in enumerate(run_directories):
         run_seed = _seed_run(seed, run_index)
-        forward_destination = run_destination / "forward"
+        forward_destination = (
+            explicit_output_path.parent
+            if explicit_output_path is not None
+            else run_destination / "forward"
+        )
         forward_destination.mkdir(parents=True, exist_ok=True)
-        output_path = forward_destination / "generated_outputs.jsonl"
+        output_path = (
+            explicit_output_path
+            if explicit_output_path is not None
+            else forward_destination / "generated_outputs.jsonl"
+        )
         temporary = output_path.with_suffix(output_path.suffix + ".tmp")
         run_config = {**generation_config, "run_index": run_index, "run_seed": run_seed}
         records_written = 0
@@ -502,6 +519,7 @@ def generate_prompt_outputs(
             "input": str(source),
             "input_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "model": model_name,
+            "model_slug": model_slug(model_name),
             "dataset_format": dataset_format,
             "selection": "full" if (full_generation or selection == "full" or return_pairs_full or sample_per_condition is None) else "sampled",
             "sample_per_condition": sample_per_condition,
@@ -514,28 +532,24 @@ def generate_prompt_outputs(
             "generation_config": run_config,
             "backpropagation": False,
         }
-        (forward_destination / "metadata.json").write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(forward_destination / "metadata.json", metadata)
         run_manifest.append({"run_index": run_index, "records_written": records_written})
 
     if runs > 1:
-        (destination / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": SCHEMA_VERSION,
-                    "artifact_type": ARTIFACT_TYPE,
-                    "runs": runs,
-                    "run_directories": run_manifest,
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        atomic_write_json(
+            destination / "manifest.json",
+            {
+                "schema_version": SCHEMA_VERSION,
+                "artifact_type": ARTIFACT_TYPE,
+                "runs": runs,
+                "run_directories": run_manifest,
+            },
         )
-    return run_directories[0] / "forward" / "generated_outputs.jsonl"
+    return (
+        explicit_output_path
+        if explicit_output_path is not None
+        else run_directories[0] / "forward" / "generated_outputs.jsonl"
+    )
 
 
 # Descriptive aliases for callers that prefer the stage name.

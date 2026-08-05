@@ -93,6 +93,30 @@ def test_manifest_rejects_raw_activation_and_missing_artifact(tmp_path):
         )
 
 
+def test_reregistering_path_removes_previous_role_reference(tmp_path):
+    manifest = RunManifest.new("model", "dataset", "run", artifact_root=tmp_path)
+    artifact = manifest.run_directory / "artifact.jsonl"
+    atomic_write_jsonl(artifact, [{"record_id": "a"}])
+
+    manifest.register_artifact(
+        artifact,
+        artifact_type="prompt_input",
+        stage="readout",
+        role="input",
+    )
+    manifest.register_artifact(
+        artifact,
+        artifact_type="prompt_output",
+        stage="readout",
+        role="output",
+    )
+
+    assert not manifest.input_refs
+    assert len(manifest.output_refs) == 1
+    assert len(manifest.artifacts) == 1
+    assert manifest.artifacts[0]["role"] == "output"
+
+
 def test_failed_run_preserves_diagnostic(tmp_path):
     manifest = RunManifest.new("model", "dataset", "run", artifact_root=tmp_path)
     manifest.start().fail("readout failed").save()

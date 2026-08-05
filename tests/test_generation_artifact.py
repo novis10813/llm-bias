@@ -1,4 +1,5 @@
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -84,6 +85,7 @@ def test_generation_only_writes_complete_return_pair_artifact(tmp_path, monkeypa
     assert {record["condition"] for record in records} == {"original", "counterfactual"}
     assert {record["pair_id"] for record in records} == {"1|a.txt|item_1", "2|b.txt|item_2"}
     assert len({record["record_id"] for record in records}) == 4
+    assert all(re.fullmatch(r"record_[0-9a-f]{24}", record["record_id"]) for record in records)
 
     for record in records:
         assert record["schema_version"] == generation.SCHEMA_VERSION
@@ -100,6 +102,27 @@ def test_generation_only_writes_complete_return_pair_artifact(tmp_path, monkeypa
     metadata = json.loads((tmp_path / "run-root" / "forward" / "metadata.json").read_text())
     assert metadata["backpropagation"] is False
     assert metadata["records_written"] == 4
+
+
+def test_output_path_writes_requested_jsonl_file(tmp_path, monkeypatch):
+    input_path = tmp_path / "pairs.csv"
+    _write_return_pairs(input_path)
+    _patch_fake_model(monkeypatch)
+    requested = tmp_path / "results.jsonl"
+
+    output_path = generation.generate_prompt_outputs(
+        input_path=str(input_path),
+        model_name="fake",
+        output_path=requested,
+        full_generation=True,
+        max_new_tokens=1,
+        dataset_format="return-pairs",
+    )
+
+    assert output_path == requested
+    assert requested.is_file()
+    assert not (tmp_path / "results.jsonl" / "forward" / "generated_outputs.jsonl").exists()
+    assert (tmp_path / "metadata.json").is_file()
 
 
 def test_legacy_sampling_keeps_deterministic_32_date_selection(tmp_path, monkeypatch):

@@ -1,10 +1,10 @@
 import json
-import re
 from types import SimpleNamespace
 
 import pytest
 import torch
 
+from llm_bias.core.artifact_paths import sha256_file
 from llm_bias.prompt_analysis import attribution
 from llm_bias.prompt_analysis import generated_attribution
 
@@ -41,6 +41,10 @@ def _forward_fixture(path):
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    (path.parent / "metadata.json").write_text(
+        json.dumps({"model": "fake", "artifact_sha256": sha256_file(path)}) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _patch_model(monkeypatch):
@@ -92,7 +96,11 @@ def test_backward_reuses_forward_tokens_without_generation(tmp_path, monkeypatch
     )
 
     rows = [json.loads(line) for line in output.read_text().splitlines()]
-    assert all(re.fullmatch(r"record_[0-9a-f]{24}", row["record_id"]) for row in rows)
+    forward_rows = [json.loads(line) for line in forward.read_text().splitlines()]
+    assert [row["record_id"] for row in rows] == [
+        row["record_id"] for row in forward_rows
+    ]
+    assert all(row["record_id"] for row in rows)
     assert all(row["schema_version"] == 1 for row in rows)
     assert all(row["artifact_type"] == "generated_token_attribution" for row in rows)
     assert all(row["parent_forward_sha256"] for row in rows)
@@ -156,3 +164,53 @@ def test_input_top_k_rerun_preserves_forward_sequence(tmp_path, monkeypatch):
     ]
     assert [row["generated_text"] for row in first] == [row["generated_text"] for row in second]
     assert all(row["coverage"]["input_top_k"] == 2 for row in second)
+
+
+def test_model_mismatch_fails_closed(tmp_path, monkeypatch):
+    forward = tmp_path / "run" / "forward" / "generated_outputs.jsonl"
+    _forward_fixture(forward)
+    _patch_model(monkeypatch)
+
+    with pytest.raises(ValueError, match="model does not match"):
+        generated_attribution.run_backward_attribution(
+            forward_path=forward,
+            model_name="different-model",
+            output_dir=tmp_path / "run",
+        )
+
+
+def test_return_pair_backward_adds_prediction_fields(tmp_path, monkeypatch):
+    forward = tmp_path / "run" / "forward" / "generated_outputs.jsonl"
+    forward.parent.mkdir(parents=True, exist_ok=True)
+    forward.write_text(
+        json.dumps(
+            {
+                "record_id": "record_0123456789abcdef01234567",
+                "input_schema": "return-pairs",
+                "pair_id": "1|filing.txt|item_1",
+                "condition": "original",
+                "prompt_token_ids": [10, 11],
+                "input_span": [0, 2],
+                "generated_token_ids": [21, 22],
+                "generated_text": '{"label":"bullish","confidence":80}',
+                "target_label": "bullish",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (forward.parent / "metadata.json").write_text(
+        json.dumps({"model": "fake", "artifact_sha256": sha256_file(forward)}) + "\n",
+        encoding="utf-8",
+    )
+    _patch_model(monkeypatch)
+
+    output = generated_attribution.run_backward_attribution(
+        forward_path=forward,
+        model_name="fake",
+        output_dir=tmp_path / "run",
+    )
+    row = json.loads(output.read_text().splitlines()[0])
+    assert row["predicted_label"] == "bullish"
+    assert row["predicted_confidence"] == 80
+    assert row["parse_status"] == "valid"

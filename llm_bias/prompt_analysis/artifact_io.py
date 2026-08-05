@@ -76,10 +76,13 @@ def _metadata_hash(metadata: Mapping[str, Any]) -> str | None:
     return None
 
 
-def sidecar_artifact_hash(path: str | Path) -> str | None:
-    """Read a sibling metadata hash if one is present, without guessing rows."""
+def sidecar_metadata(path: str | Path) -> dict[str, Any] | None:
+    """Read the required sibling metadata object when one is present."""
     source = Path(path)
-    candidates = [source.parent / "metadata.json", source.with_suffix(source.suffix + ".metadata.json")]
+    candidates = [
+        source.parent / "metadata.json",
+        source.with_suffix(source.suffix + ".metadata.json"),
+    ]
     for candidate in candidates:
         if not candidate.is_file():
             continue
@@ -87,11 +90,16 @@ def sidecar_artifact_hash(path: str | Path) -> str | None:
             value = json.loads(candidate.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid metadata JSON: {candidate}") from exc
-        if isinstance(value, Mapping):
-            digest = _metadata_hash(value)
-            if digest is not None:
-                return digest
+        if not isinstance(value, Mapping):
+            raise ValueError(f"metadata must be a JSON object: {candidate}")
+        return dict(value)
     return None
+
+
+def sidecar_artifact_hash(path: str | Path) -> str | None:
+    """Read a sibling metadata hash if one is present, without guessing rows."""
+    metadata = sidecar_metadata(path)
+    return _metadata_hash(metadata) if metadata is not None else None
 
 
 def load_parent_jsonl(

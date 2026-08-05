@@ -8,7 +8,6 @@ persisted generated token.  It deliberately never calls ``generate``.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -19,11 +18,16 @@ from jspace_viz.model import WrappedModel
 
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.prompt_analysis import attribution as _forward_primitives
-from llm_bias.core.artifact_paths import sha256_file, stable_record_id as _core_stable_record_id
+from llm_bias.core.artifact_paths import (
+    model_slug,
+    sha256_file,
+    stable_record_id as _core_stable_record_id,
+)
 from llm_bias.prompt_analysis.artifact_io import (
     ARTIFACT_SCHEMA_VERSION,
     load_parent_jsonl,
     read_jsonl,
+    sidecar_metadata,
     write_jsonl,
     write_metadata,
 )
@@ -133,7 +137,7 @@ def _parent_fields(path: Path, digest: str) -> dict[str, Any]:
 
 def _record_id(row: Mapping[str, Any], *, index: int) -> str:
     existing = row.get("record_id")
-    if isinstance(existing, str) and re.fullmatch(r"record_[0-9a-f]{24}", existing):
+    if isinstance(existing, str) and existing.strip():
         return existing
     identity = {
         "index": index,
@@ -198,6 +202,17 @@ def run_backward_attribution(
         source,
         previous_sha256=previous_hash,
     )
+    forward_metadata = sidecar_metadata(source)
+    if forward_metadata is None:
+        raise ValueError("forward artifact metadata is required")
+    forward_model = forward_metadata.get("model")
+    if not isinstance(forward_model, str) or not forward_model.strip():
+        raise ValueError("forward artifact metadata is missing model identity")
+    if model_slug(forward_model) != model_slug(model_name):
+        raise ValueError(
+            "forward artifact model does not match requested attribution model: "
+            f"{forward_model!r} != {model_name!r}"
+        )
     requested_columns = set(prompt_columns or ())
     selected = [
         (index, row)
@@ -223,8 +238,6 @@ def run_backward_attribution(
         prompt_ids_list, generated_ids_list = _token_ids(parent, row_index=row_index)
         if not prompt_ids_list:
             raise ValueError(f"forward row {row_index} has empty prompt_token_ids")
-        if not generated_ids_list:
-            raise ValueError(f"forward row {row_index} has empty generated_token_ids")
         if max_seq_len is not None and len(prompt_ids_list) > max_seq_len:
             raise ValueError(
                 f"forward row {row_index} prompt length {len(prompt_ids_list)} exceeds max_seq_len {max_seq_len}"
@@ -299,6 +312,10 @@ def run_backward_attribution(
                 "output_token_top_k": output_token_top_k,
             },
         }
+        if record.get("input_schema") == "return-pairs":
+            record.update(
+                _forward_primitives.parse_generated_return_answer(generated_text)
+            )
         output_rows.append(record)
 
     output_path = write_jsonl(destination / "generated_token_attribution.jsonl", output_rows)

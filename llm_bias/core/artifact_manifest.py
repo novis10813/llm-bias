@@ -265,8 +265,10 @@ class RunManifest:
         # Re-registering a path updates it rather than creating ambiguous refs.
         self.artifacts = [item for item in self.artifacts if item.get("path") != ref["path"]]
         self.artifacts.append(ref)
+        role_refs = (self.input_refs, self.lens_refs, self.output_refs)
+        for refs in role_refs:
+            refs[:] = [item for item in refs if item.get("path") != ref["path"]]
         refs = {"input": self.input_refs, "lens": self.lens_refs, "output": self.output_refs}[role]
-        refs[:] = [item for item in refs if item.get("path") != ref["path"]]
         refs.append(dict(ref))
         self.record_counts = {}
         for item in self.artifacts:
