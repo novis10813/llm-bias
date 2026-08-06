@@ -132,9 +132,15 @@ def _pair_rows(rows: Iterable[dict[str, Any]], *, value_fields: tuple[str, ...])
             missing["missing_condition"] += 1
             continue
         original, counterfactual = conditions["original"], conditions["counterfactual"]
+        ticker = original.get("ticker") or counterfactual.get("ticker")
+        peer_ticker = original.get("peer_ticker") or counterfactual.get("peer_ticker")
+        pair_label = f"{ticker} vs {peer_ticker}" if ticker and peer_ticker else (ticker or "Unknown")
         complete.append({
             "pair_id": pair_id,
             "filing_date": original.get("filing_date", counterfactual.get("filing_date")),
+            "ticker": ticker,
+            "peer_ticker": peer_ticker,
+            "pair_label": pair_label,
             **{f"original_{field}": original.get(field) for field in value_fields},
             **{f"counterfactual_{field}": counterfactual.get(field) for field in value_fields},
         })
@@ -241,14 +247,237 @@ def plot_paired_uncertainty_delta_figures(rows: Iterable[dict[str, Any]], output
     rows = list(rows)
     if not rows:
         raise ValueError("no complete paired uncertainty rows")
-    figure, axes = plt.subplots(1, 2, figsize=(12, 5.5), constrained_layout=True)
-    for axis, field, label, color in zip(axes, ("entropy_delta_nats", "effective_temperature_delta"), ("Entropy delta (nats)", "Effective-temperature delta"), ("#2a78d6", "#eb6834"), strict=True):
-        values = [float(row[field]) for row in rows]
-        axis.axhline(0, color="#898781", linewidth=1)
-        axis.scatter(np.arange(len(values)), values, color=color, edgecolor="#fcfcfb", linewidth=0.8, s=46)
-        axis.set_xlabel("Complete pair (pair_id order)"); axis.set_ylabel("Counterfactual − original"); axis.set_title(label, loc="left", fontweight="bold"); _style(axis)
+
+    pair_labels = list(dict.fromkeys(r.get("pair_label") for r in rows if r.get("pair_label")))
+    figure, axes = plt.subplots(1, 2, figsize=(13, 5.5), constrained_layout=True)
+
+    if pair_labels:
+        cmap = plt.get_cmap("tab10")
+        label_colors = {pl: cmap(i % 10) for i, pl in enumerate(pair_labels)}
+
+        for axis, field, label in zip(
+            axes,
+            ("entropy_delta_nats", "effective_temperature_delta"),
+            ("Entropy delta (nats)", "Effective-temperature delta"),
+            strict=True,
+        ):
+            axis.axhline(0, color="#898781", linewidth=1)
+            for pl in pair_labels:
+                indices = [i for i, r in enumerate(rows) if r.get("pair_label") == pl]
+                vals = [float(rows[i][field]) for i in indices]
+                axis.scatter(
+                    indices,
+                    vals,
+                    color=label_colors[pl],
+                    label=pl,
+                    edgecolor="#fcfcfb",
+                    linewidth=0.6,
+                    s=40,
+                )
+            axis.set_xlabel("Complete pair (pair_id order)")
+            axis.set_ylabel("Counterfactual − original")
+            axis.set_title(label, loc="left", fontweight="bold")
+            _style(axis)
+            axis.legend(title="Entity Pair", loc="upper right", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=9)
+    else:
+        for axis, field, label, color in zip(
+            axes,
+            ("entropy_delta_nats", "effective_temperature_delta"),
+            ("Entropy delta (nats)", "Effective-temperature delta"),
+            ("#2a78d6", "#eb6834"),
+            strict=True,
+        ):
+            values = [float(row[field]) for row in rows]
+            axis.axhline(0, color="#898781", linewidth=1)
+            axis.scatter(np.arange(len(values)), values, color=color, edgecolor="#fcfcfb", linewidth=0.8, s=46)
+            axis.set_xlabel("Complete pair (pair_id order)")
+            axis.set_ylabel("Counterfactual − original")
+            axis.set_title(label, loc="left", fontweight="bold")
+            _style(axis)
+
     figure.suptitle("Paired final-layer uncertainty deltas", fontsize=15, fontweight="bold")
-    path = output_dir / "return_paired_uncertainty_delta.png"; figure.savefig(path, dpi=220, facecolor="#fcfcfb"); plt.close(figure)
+    path = output_dir / "return_paired_uncertainty_delta.png"
+    figure.savefig(path, dpi=220, facecolor="#fcfcfb")
+    plt.close(figure)
+    return [path]
+
+
+def plot_confidence_vs_entropy_scatter_figure(
+    attribution_rows: Iterable[dict[str, Any]],
+    uncertainty_rows: Iterable[dict[str, Any]],
+    output_dir: Path,
+) -> list[Path]:
+    import matplotlib.pyplot as plt
+
+    attr_list = list(attribution_rows)
+    unc_list = list(uncertainty_rows)
+    if not attr_list or not unc_list:
+        return []
+
+    unc_map = {(str(r["pair_id"]), str(r["condition"])): float(r["entropy_nats"]) for r in unc_list if "entropy_nats" in r}
+    merged = []
+    for r in attr_list:
+        key = (str(r["pair_id"]), str(r["condition"]))
+        if key in unc_map and r.get("parse_status") == "valid" and r.get("predicted_confidence") is not None:
+            ticker = str(r.get("ticker", ""))
+            peer = str(r.get("peer_ticker", ""))
+            pair_label = f"{ticker} vs {peer}" if ticker and peer else (ticker or "Unknown")
+            merged.append({
+                "pair_id": str(r["pair_id"]),
+                "condition": str(r["condition"]),
+                "confidence": float(r["predicted_confidence"]),
+                "entropy": unc_map[key],
+                "pair_label": pair_label,
+            })
+
+    if not merged:
+        return []
+
+    figure, axes = plt.subplots(1, 2, figsize=(14, 5.5), constrained_layout=True)
+    ax1, ax2 = axes
+
+    cond_colors = {"original": "#2a78d6", "counterfactual": "#eb6834"}
+    for cond in CONDITIONS:
+        sub = [m for m in merged if m["condition"] == cond]
+        if not sub:
+            continue
+        xs = [m["entropy"] for m in sub]
+        ys = [m["confidence"] for m in sub]
+        ax1.scatter(xs, ys, color=cond_colors.get(cond, "#898781"), label=cond.title(), alpha=0.6, edgecolor="#ffffff", linewidth=0.5, s=36)
+        if len(sub) > 1:
+            arr_x = np.array(xs)
+            arr_y = np.array(ys)
+            slope, intercept = np.polyfit(arr_x, arr_y, 1)
+            x_seq = np.linspace(arr_x.min(), arr_x.max(), 100)
+            r_val = float(np.corrcoef(arr_x, arr_y)[0, 1])
+            ax1.plot(x_seq, slope * x_seq + intercept, color=cond_colors.get(cond, "#898781"), linewidth=2, linestyle="--", label=f"{cond.title()} trend (r={r_val:.2f})")
+
+    ax1.set_xlabel("Final-layer Entropy (nats)")
+    ax1.set_ylabel("Predicted Confidence (%)")
+    ax1.set_title("Predicted Confidence vs. Final-layer Entropy (by Condition)", loc="left", fontweight="bold")
+    _style(ax1)
+    ax1.legend(loc="upper left", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=9)
+
+    pair_labels = list(dict.fromkeys(m["pair_label"] for m in merged if m.get("pair_label")))
+    if pair_labels:
+        cmap = plt.get_cmap("tab10")
+        label_colors = {pl: cmap(i % 10) for i, pl in enumerate(pair_labels)}
+        for pl in pair_labels:
+            sub = [m for m in merged if m["pair_label"] == pl]
+            xs = [m["entropy"] for m in sub]
+            ys = [m["confidence"] for m in sub]
+            ax2.scatter(xs, ys, color=label_colors[pl], label=pl, alpha=0.65, edgecolor="#ffffff", linewidth=0.5, s=36)
+        ax2.set_xlabel("Final-layer Entropy (nats)")
+        ax2.set_ylabel("Predicted Confidence (%)")
+        ax2.set_title("Predicted Confidence vs. Final-layer Entropy (by Entity Pair)", loc="left", fontweight="bold")
+        _style(ax2)
+        ax2.legend(title="Entity Pair", loc="upper left", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=9)
+
+    figure.suptitle("Scatter Analysis: Model Output Confidence vs. Final-Layer Readout Entropy", fontsize=15, fontweight="bold")
+    path = output_dir / "return_confidence_vs_entropy_scatter.png"
+    figure.savefig(path, dpi=220, facecolor="#fcfcfb")
+    plt.close(figure)
+    return [path]
+
+
+def plot_entropy_beta_regression_figure(delta_rows: Iterable[dict[str, Any]], output_dir: Path) -> list[Path]:
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    rows = list(delta_rows)
+    if not rows:
+        return []
+
+    processed = []
+    for r in rows:
+        orig_t = float(r.get("original_effective_temperature", 0))
+        cf_t = float(r.get("counterfactual_effective_temperature", 0))
+        if orig_t > 0 and cf_t > 0:
+            beta_orig = 1.0 / orig_t
+            beta_cf = 1.0 / cf_t
+            processed.append({
+                "pair_id": str(r["pair_id"]),
+                "pair_label": str(r.get("pair_label", "Unknown")),
+                "entropy_delta": float(r["entropy_delta_nats"]),
+                "beta_delta": beta_cf - beta_orig,
+            })
+
+    if not processed:
+        return []
+
+    df = pd.DataFrame(processed)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), constrained_layout=True)
+
+    pair_labels = list(dict.fromkeys(df["pair_label"]))
+    cmap = plt.get_cmap("tab10")
+    label_colors = {pl: cmap(i % 10) for i, pl in enumerate(pair_labels)}
+
+    ax1.axhline(0, color="#898781", linewidth=0.8, linestyle=":")
+    ax1.axvline(0, color="#898781", linewidth=0.8, linestyle=":")
+
+    for pl in pair_labels:
+        sub = df[df["pair_label"] == pl]
+        x = sub["beta_delta"]
+        y = sub["entropy_delta"]
+        ax1.scatter(x, y, color=label_colors[pl], label=pl, alpha=0.6, edgecolor="#ffffff", linewidth=0.5, s=36)
+        if len(sub) > 1:
+            g_gamma, g_alpha = np.polyfit(x, y, 1)
+            r_val = float(np.corrcoef(x, y)[0, 1])
+            r2_val = r_val ** 2
+            x_seq = np.linspace(x.min(), x.max(), 100)
+            ax1.plot(x_seq, g_gamma * x_seq + g_alpha, color=label_colors[pl], linewidth=1.8, linestyle="--", label=f"{pl} (γ_group={g_gamma:+.3f}, R²={r2_val:.2f})")
+
+    ax1.set_xlabel("Inverse Temperature Delta (Δβ = β_cf - β_orig)")
+    ax1.set_ylabel("Entropy Delta (ΔH, nats)")
+    ax1.set_title("Cross-Sample Regression: ΔH vs. Δβ (Grouped)", loc="left", fontweight="bold")
+    _style(ax1)
+    ax1.legend(title="Entity Pair & Group Fit", loc="upper left", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=8.5)
+
+    # Global regression for baseline decomposition
+    x_all = df["beta_delta"]
+    y_all = df["entropy_delta"]
+    gamma_global, alpha_global = np.polyfit(x_all, y_all, 1)
+
+    group_summary = []
+    for pl in pair_labels:
+        sub = df[df["pair_label"] == pl]
+        tot = float(sub["entropy_delta"].mean())
+        len_eff = float((gamma_global * sub["beta_delta"]).mean())
+        dir_res = tot - len_eff
+        group_summary.append({
+            "pair_label": pl,
+            "total_delta": tot,
+            "length_effect": len_eff,
+            "directional_residual": dir_res,
+        })
+
+    sum_df = pd.DataFrame(group_summary)
+    pos = np.arange(len(pair_labels))
+    bar_width = 0.25
+
+    ax2.axhline(0, color="#898781", linewidth=0.8)
+    b1 = ax2.bar(pos - bar_width, sum_df["total_delta"], bar_width, label="Total Observed ΔH", color="#4a5568")
+    b2 = ax2.bar(pos, sum_df["length_effect"], bar_width, label="Global Length Effect (γ_global · Δβ)", color="#3182ce")
+    b3 = ax2.bar(pos + bar_width, sum_df["directional_residual"], bar_width, label="Unexplained Residual (ε)", color="#dd6b20")
+
+    ax2.set_xticks(pos)
+    ax2.set_xticklabels(sum_df["pair_label"], rotation=15, ha="right")
+    ax2.set_ylabel("Entropy Delta (nats)")
+    ax2.set_title("Linear Decomposition: Global Length Effect vs. Unexplained Residual", loc="left", fontweight="bold")
+    _style(ax2)
+    ax2.legend(loc="upper right", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=9)
+
+    for bars in (b1, b2, b3):
+        for bar in bars:
+            h = bar.get_height()
+            offset = 0.003 if h >= 0 else -0.007
+            va = "bottom" if h >= 0 else "top"
+            ax2.text(bar.get_x() + bar.get_width()/2., h + offset, f"{h:+.3f}", ha="center", va=va, fontsize=8)
+
+    fig.suptitle("Entropy Delta (ΔH) Regression & Decomposition: Length Scaling (Δβ) vs. Directional Shift Residual (ε)", fontsize=14, fontweight="bold")
+    path = output_dir / "return_entropy_beta_regression_decomposition.png"
+    fig.savefig(path, dpi=220, facecolor="#fcfcfb")
+    plt.close(fig)
     return [path]
 
 
@@ -273,11 +502,16 @@ def visualize_return_predictions(*, forward_path: str | Path, uncertainty_path: 
     uncertainty = _validate_uncertainty(read_jsonl(uncertainty_source))
     flip_rows = build_prediction_flip_rows(attribution)
     delta_rows = build_paired_uncertainty_delta_rows(uncertainty)
-    figure_paths = plot_return_prediction_figures(attribution, output) + plot_paired_uncertainty_delta_figures(delta_rows, output)
+    figure_paths = (
+        plot_return_prediction_figures(attribution, output)
+        + plot_paired_uncertainty_delta_figures(delta_rows, output)
+        + plot_confidence_vs_entropy_scatter_figure(attribution, uncertainty, output)
+        + plot_entropy_beta_regression_figure(delta_rows, output)
+    )
     fields = sorted(FORWARD_FIELDS | {"predicted_label", "predicted_confidence", "parse_status"})
     _write_csv(output / "return_prediction_records.csv", attribution, fields)
     _write_csv(output / "return_prediction_flips.csv", flip_rows, ["pair_id", "filing_date", "original_predicted_label", "counterfactual_predicted_label", "original_target_label", "counterfactual_target_label", "original_predicted_confidence", "counterfactual_predicted_confidence", "valid_original", "valid_counterfactual", "prediction_flip"])
-    _write_csv(output / "return_paired_uncertainty_delta.csv", delta_rows, ["pair_id", "filing_date", "original_entropy_nats", "counterfactual_entropy_nats", "entropy_delta_nats", "original_effective_temperature", "counterfactual_effective_temperature", "effective_temperature_delta"])
+    _write_csv(output / "return_paired_uncertainty_delta.csv", delta_rows, ["pair_id", "filing_date", "ticker", "peer_ticker", "pair_label", "original_entropy_nats", "counterfactual_entropy_nats", "entropy_delta_nats", "original_effective_temperature", "counterfactual_effective_temperature", "effective_temperature_delta"])
     missing_prediction = _pair_rows(attribution, value_fields=("target_label",))[1]
     missing_uncertainty = _pair_rows(uncertainty, value_fields=("entropy_nats",))[1]
     forward_hash = sha256_file(forward_source)

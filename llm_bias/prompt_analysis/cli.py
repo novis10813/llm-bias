@@ -111,6 +111,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest="save_prompt_uncertainty",
     )
     readout.add_argument(
+        "--save-hidden",
+        action="store_true",
+        dest="save_prompt_hidden",
+        help="Save final-layer normalized_hidden vectors (float16) to prompt_output_hidden.jsonl for cosine similarity analysis.",
+    )
+    readout.add_argument(
         "--raw-prompt",
         action="store_false",
         dest="use_chat_template",
@@ -239,6 +245,7 @@ def main() -> None:
             prompt_columns=args.prompt_columns,
             save_prompt_topk=args.save_prompt_topk,
             save_prompt_uncertainty=args.save_prompt_uncertainty,
+            save_prompt_hidden=args.save_prompt_hidden,
             compute_input_attribution=False,
             use_chat_template=args.use_chat_template,
             enable_thinking=args.enable_thinking,

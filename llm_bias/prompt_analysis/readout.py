@@ -268,6 +268,7 @@ def _analyze_column(
     max_seq_len: int,
     prompt_output: TextIO | None,
     uncertainty_output: TextIO | None,
+    hidden_output: TextIO | None,
     use_chat_template: bool,
     enable_thinking: bool,
 ) -> tuple[list[dict[str, Any]], int, int]:
@@ -318,6 +319,8 @@ def _analyze_column(
 
         prompt_readouts: list[list[dict[str, Any]]] = [[] for _ in batch]
         uncertainty_readouts: list[list[dict[str, Any]]] = [[] for _ in batch]
+        # hidden_readouts stores final-layer normalized_hidden per sample (float16 list)
+        hidden_readouts: list[list[float] | None] = [None for _ in batch]
         for layer in layers:
             residual = activations[layer][batch_indices, final_positions].float()
             if layer != final_layer and layer in lens.jacobians:
@@ -389,6 +392,12 @@ def _analyze_column(
                             ),
                         }
                     )
+            # Capture final-layer normalized_hidden as float16 for cosine similarity analysis.
+            # Stored only when hidden_output is requested; no-op otherwise to save memory.
+            if hidden_output is not None and layer == final_layer:
+                hidden_f16 = normalized_hidden.half().cpu()
+                for batch_index in range(len(batch)):
+                    hidden_readouts[batch_index] = hidden_f16[batch_index].tolist()
             del (
                 residual,
                 normalized_hidden,
@@ -427,6 +436,25 @@ def _analyze_column(
                         "index": column.index,
                         "context": column.context,
                         "layers": readouts,
+                        **({key: row[key] for key in ("input_schema", "pair_id", "filing_date", "ticker", "peer_ticker", "condition", "target_label", "fwd_return_1d") if key in row}),
+                    },
+                )
+        if hidden_output is not None:
+            for (row_index, date, _prompt, row), vec in zip(
+                batch, hidden_readouts, strict=True
+            ):
+                _write_json_line(
+                    hidden_output,
+                    {
+                        "row_index": row_index,
+                        "date": date,
+                        "prompt_column": column.name,
+                        "index": column.index,
+                        "context": column.context,
+                        # normalized_hidden at the output layer (final_norm applied),
+                        # encoded as float16 to halve storage. Decode with:
+                        #   import torch; t = torch.tensor(row["normalized_hidden_f16"], dtype=torch.float16)
+                        "normalized_hidden_f16": vec,
                         **({key: row[key] for key in ("input_schema", "pair_id", "filing_date", "ticker", "peer_ticker", "condition", "target_label", "fwd_return_1d") if key in row}),
                     },
                 )
@@ -880,6 +908,7 @@ def analyze_prompt_outputs(
     prompt_columns: Iterable[str] | None = None,
     save_prompt_topk: bool = True,
     save_prompt_uncertainty: bool = True,
+    save_prompt_hidden: bool = False,
     compute_input_attribution: bool = False,
     attribution_batch_size: int = 8,
     input_top_k: int = 15,
@@ -961,6 +990,13 @@ def analyze_prompt_outputs(
         if save_prompt_uncertainty
         else None
     )
+    hidden_path = destination / "prompt_output_hidden.jsonl"
+    hidden_temporary = hidden_path.with_suffix(hidden_path.suffix + ".tmp")
+    hidden_handle = (
+        hidden_temporary.open("w", encoding="utf-8")
+        if save_prompt_hidden
+        else None
+    )
 
     average_records: list[dict[str, Any]] = []
     attribution_records: list[dict[str, Any]] = []
@@ -978,6 +1014,7 @@ def analyze_prompt_outputs(
                 max_seq_len=max_seq_len,
                 prompt_output=prompt_handle,
                 uncertainty_output=uncertainty_handle,
+                hidden_output=hidden_handle,
                 use_chat_template=use_chat_template,
                 enable_thinking=enable_thinking,
             )
@@ -1010,10 +1047,14 @@ def analyze_prompt_outputs(
             prompt_handle.close()
         if uncertainty_handle is not None:
             uncertainty_handle.close()
+        if hidden_handle is not None:
+            hidden_handle.close()
     if save_prompt_topk:
         prompt_temporary.replace(prompt_path)
     if save_prompt_uncertainty:
         uncertainty_temporary.replace(uncertainty_path)
+    if save_prompt_hidden:
+        hidden_temporary.replace(hidden_path)
 
     average_jsonl = destination / "average_layer_topk.jsonl"
     with average_jsonl.open("w", encoding="utf-8") as handle:
@@ -1062,6 +1103,19 @@ def analyze_prompt_outputs(
         "condition_counts": condition_counts,
         "saved_prompt_layer_topk": save_prompt_topk,
         "saved_prompt_layer_uncertainty": save_prompt_uncertainty,
+        "saved_prompt_hidden": save_prompt_hidden,
+        "hidden_schema": (
+            {
+                "file": "prompt_output_hidden.jsonl",
+                "layer": "output_layer (final_layer)",
+                "field": "normalized_hidden_f16",
+                "dtype": "float16_list",
+                "shape": "[d_model]",
+                "description": "final_norm(residual) at the last transformer layer; unit_direction = vec / norm(vec); beta = norm(vec)",
+            }
+            if save_prompt_hidden
+            else None
+        ),
         "backpropagation": compute_input_attribution,
         "input_attribution": {
             "enabled": compute_input_attribution,

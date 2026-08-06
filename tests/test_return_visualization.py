@@ -91,7 +91,7 @@ def test_visualization_writes_csv_metadata_and_all_pngs(tmp_path):
         uncertainty_path=uncertainty,
         output_dir=tmp_path / "out",
     )
-    assert len(list(output.glob("*.png"))) == 5
+    assert len(list(output.glob("*.png"))) == 7
     assert len((output / "return_prediction_records.csv").read_text().splitlines()) == 11
     assert len((output / "return_prediction_flips.csv").read_text().splitlines()) == 6
     assert len((output / "return_paired_uncertainty_delta.csv").read_text().splitlines()) == 3
