@@ -3,6 +3,7 @@ import json
 import pytest
 
 from llm_bias.prompt_analysis.return_visualization import (
+    _decompose_entropy_beta,
     build_paired_uncertainty_delta_rows,
     build_prediction_flip_rows,
     visualize_return_predictions,
@@ -79,6 +80,21 @@ def test_uncertainty_uses_final_output_layer_and_pairs_by_pair_id():
     assert len(rows) == 2
     assert rows[0]["entropy_delta_nats"] == pytest.approx(0.25)
     assert rows[1]["effective_temperature_delta"] == pytest.approx(0.25)
+
+
+def test_entropy_beta_decomposition_includes_global_intercept():
+    rows = [
+        {"pair_label": "A", "entropy_delta": 5.0, "beta_delta": 1.0},
+        {"pair_label": "B", "entropy_delta": 7.0, "beta_delta": 2.0},
+        {"pair_label": "A", "entropy_delta": 9.0, "beta_delta": 3.0},
+    ]
+
+    summary, gamma, alpha = _decompose_entropy_beta(rows)
+
+    assert gamma == pytest.approx(2.0)
+    assert alpha == pytest.approx(3.0)
+    assert [row["fitted_effect"] for row in summary] == pytest.approx([7.0, 7.0])
+    assert [row["directional_residual"] for row in summary] == pytest.approx([0.0, 0.0])
 
 
 def test_visualization_writes_csv_metadata_and_all_pngs(tmp_path):

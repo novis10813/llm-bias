@@ -380,6 +380,36 @@ def plot_confidence_vs_entropy_scatter_figure(
     return [path]
 
 
+def _decompose_entropy_beta(
+    processed: Iterable[dict[str, Any]],
+) -> tuple[list[dict[str, float | str]], float, float]:
+    rows = list(processed)
+    if not rows:
+        raise ValueError("processed entropy-beta rows must not be empty")
+
+    x_all = np.array([row["beta_delta"] for row in rows], dtype=float)
+    y_all = np.array([row["entropy_delta"] for row in rows], dtype=float)
+    gamma_global, alpha_global = np.polyfit(x_all, y_all, 1)
+
+    summaries: list[dict[str, float | str]] = []
+    pair_labels = list(dict.fromkeys(row["pair_label"] for row in rows))
+    for pair_label in pair_labels:
+        group = [row for row in rows if row["pair_label"] == pair_label]
+        total_delta = float(np.mean([row["entropy_delta"] for row in group]))
+        fitted_effect = float(
+            alpha_global + gamma_global * np.mean([row["beta_delta"] for row in group])
+        )
+        summaries.append(
+            {
+                "pair_label": pair_label,
+                "total_delta": total_delta,
+                "fitted_effect": fitted_effect,
+                "directional_residual": total_delta - fitted_effect,
+            }
+        )
+    return summaries, float(gamma_global), float(alpha_global)
+
+
 def plot_entropy_beta_regression_figure(delta_rows: Iterable[dict[str, Any]], output_dir: Path) -> list[Path]:
     import matplotlib.pyplot as plt
     import pandas as pd
@@ -433,23 +463,8 @@ def plot_entropy_beta_regression_figure(delta_rows: Iterable[dict[str, Any]], ou
     _style(ax1)
     ax1.legend(title="Entity Pair & Group Fit", loc="upper left", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=8.5)
 
-    # Global regression for baseline decomposition
-    x_all = df["beta_delta"]
-    y_all = df["entropy_delta"]
-    gamma_global, alpha_global = np.polyfit(x_all, y_all, 1)
-
-    group_summary = []
-    for pl in pair_labels:
-        sub = df[df["pair_label"] == pl]
-        tot = float(sub["entropy_delta"].mean())
-        len_eff = float((gamma_global * sub["beta_delta"]).mean())
-        dir_res = tot - len_eff
-        group_summary.append({
-            "pair_label": pl,
-            "total_delta": tot,
-            "length_effect": len_eff,
-            "directional_residual": dir_res,
-        })
+    # Global regression for baseline decomposition.
+    group_summary, gamma_global, alpha_global = _decompose_entropy_beta(processed)
 
     sum_df = pd.DataFrame(group_summary)
     pos = np.arange(len(pair_labels))
@@ -457,13 +472,13 @@ def plot_entropy_beta_regression_figure(delta_rows: Iterable[dict[str, Any]], ou
 
     ax2.axhline(0, color="#898781", linewidth=0.8)
     b1 = ax2.bar(pos - bar_width, sum_df["total_delta"], bar_width, label="Total Observed ΔH", color="#4a5568")
-    b2 = ax2.bar(pos, sum_df["length_effect"], bar_width, label="Global Length Effect (γ_global · Δβ)", color="#3182ce")
+    b2 = ax2.bar(pos, sum_df["fitted_effect"], bar_width, label="Global Fitted Effect (α_global + γ_global · Δβ)", color="#3182ce")
     b3 = ax2.bar(pos + bar_width, sum_df["directional_residual"], bar_width, label="Unexplained Residual (ε)", color="#dd6b20")
 
     ax2.set_xticks(pos)
     ax2.set_xticklabels(sum_df["pair_label"], rotation=15, ha="right")
     ax2.set_ylabel("Entropy Delta (nats)")
-    ax2.set_title("Linear Decomposition: Global Length Effect vs. Unexplained Residual", loc="left", fontweight="bold")
+    ax2.set_title("Linear Decomposition: Global Fitted Effect vs. Unexplained Residual", loc="left", fontweight="bold")
     _style(ax2)
     ax2.legend(loc="upper right", frameon=True, facecolor="#ffffff", edgecolor="#e1e0d9", fontsize=9)
 
