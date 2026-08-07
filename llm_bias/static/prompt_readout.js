@@ -2,13 +2,114 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  const state = { result: null, pinnedCell: null };
+  const state = { result: null, pinnedCell: null, vocabularyFocus: null };
+  const MAX_VOCABULARY_OPTIONS = 20;
   const compact = (value) => String(value).replace(/\n/g, "↵").replace(/\t/g, "⇥").replace(/^ /, "·") || "∅";
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
   })[char]);
   const token = (result, id) => compact(result.vocab[String(id)] ?? result.vocab[id] ?? `#${id}`);
   const percent = (value) => `${(Number(value) * 100).toFixed(Number(value) >= 0.1 ? 1 : 2)}%`;
+
+  function compareTokenIds(left, right) {
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+      return leftNumber - rightNumber;
+    }
+    return String(left).localeCompare(String(right));
+  }
+
+  function rankVocabulary(counter) {
+    return [...counter.entries()]
+      .sort(([leftId, leftCount], [rightId, rightCount]) =>
+        rightCount - leftCount || compareTokenIds(leftId, rightId));
+  }
+
+  function collectVocabularyStats(result) {
+    const global = new Map();
+    const rows = result.grid.map((row, rowIndex) => {
+      const counts = new Map();
+      let cellCount = 0;
+      (row.top_ids || []).forEach((ids) => {
+        if (!Array.isArray(ids) || !ids.length) return;
+        cellCount += 1;
+        new Set(ids.map((id) => String(id))).forEach((id) => {
+          counts.set(id, (counts.get(id) || 0) + 1);
+          global.set(id, (global.get(id) || 0) + 1);
+        });
+      });
+      return { row, rowIndex, counts, cellCount };
+    });
+    return {
+      global,
+      rows,
+      totalCells: rows.reduce((total, row) => total + row.cellCount, 0),
+    };
+  }
+
+  function applyVocabularyFocus() {
+    const select = $("vocabulary-focus");
+    const option = select?.selectedOptions[0];
+    const scope = option?.dataset.scope;
+    const tokenId = option?.dataset.tokenId;
+    const rowIndex = option?.dataset.rowIndex;
+    state.vocabularyFocus = scope && tokenId ? { scope, tokenId, rowIndex } : null;
+
+    document.querySelectorAll(".readout-cell").forEach((cell) => {
+      cell.classList.remove("vocab-match");
+      delete cell.dataset.vocabRank;
+      if (!state.vocabularyFocus) return;
+      const cellRow = Number(cell.dataset.row);
+      const cellPosition = Number(cell.dataset.position);
+      const ids = state.result?.grid?.[cellRow]?.top_ids?.[cellPosition];
+      const rank = Array.isArray(ids)
+        ? ids.findIndex((id) => String(id) === tokenId)
+        : -1;
+      const rowMatches = scope === "global" || cellRow === Number(rowIndex);
+      if (rank >= 0 && rowMatches) {
+        cell.classList.add("vocab-match");
+        cell.dataset.vocabRank = String(rank + 1);
+      }
+    });
+  }
+
+  function renderVocabularyFocus(result) {
+    const select = $("vocabulary-focus");
+    if (!select) return;
+    const stats = collectVocabularyStats(result);
+    select.innerHTML = "<option value=\"\">選擇常見 top-k token…</option>";
+
+    function addGroup(label, scope, counter, cellCount, rowIndex = null) {
+      const entries = rankVocabulary(counter).slice(0, MAX_VOCABULARY_OPTIONS);
+      if (!entries.length) return;
+      const group = document.createElement("optgroup");
+      group.label = label;
+      entries.forEach(([tokenId, count]) => {
+        const option = document.createElement("option");
+        option.value = `${scope}:${rowIndex ?? ""}:${tokenId}`;
+        option.dataset.scope = scope;
+        option.dataset.tokenId = tokenId;
+        if (rowIndex !== null) option.dataset.rowIndex = String(rowIndex);
+        option.textContent = `${token(result, tokenId)} · #${tokenId} · ${count}/${cellCount} cells`;
+        group.append(option);
+      });
+      select.append(group);
+    }
+
+    addGroup("全域 / Global · all readout rows", "global", stats.global, stats.totalCells);
+    stats.rows.forEach(({ row, rowIndex, counts, cellCount }) => {
+      addGroup(
+        `By layer / ${row.is_output ? "OUTPUT" : `L${row.layer}`}`,
+        "row",
+        counts,
+        cellCount,
+        rowIndex,
+      );
+    });
+    select.disabled = !select.querySelector("option[data-token-id]");
+    select.onchange = applyVocabularyFocus;
+  }
 
   function setBusy(busy) {
     $("run").disabled = busy;
@@ -129,6 +230,7 @@
   function render(result) {
     state.result = result;
     state.pinnedCell = null;
+    state.vocabularyFocus = null;
     $("results").hidden = false;
     $("summary").innerHTML = [
       [result.seq_len, "tokens"],
@@ -146,6 +248,7 @@
     $("position").onchange = () => focusPosition(Number($("position").value));
 
     renderGrid(result);
+    renderVocabularyFocus(result);
     renderMetrics(result.layer_metrics);
     const initialPosition = Math.max(0, result.prompt_len - 1);
     focusPosition(initialPosition);

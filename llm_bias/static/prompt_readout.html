@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Prompt Lens Explorer</title>
-    <link rel="stylesheet" href="/static/prompt_readout.css?v=3" />
+    <link rel="stylesheet" href="/static/prompt_readout.css?v=4" />
   </head>
   <body>
     <header class="masthead">
@@ -114,6 +114,12 @@
             <label for="position">Focus position</label>
             <select id="position"></select>
           </div>
+          <div class="vocabulary-control">
+            <label for="vocabulary-focus">Common vocabulary</label>
+            <select id="vocabulary-focus" disabled>
+              <option value="">選擇常見 top-k token…</option>
+            </select>
+          </div>
         </div>
 
         <div class="workspace">
@@ -144,6 +150,6 @@
       <span>Prompt Lens Explorer</span>
       <span>Compact top-k readouts only · raw activations are not persisted</span>
     </footer>
-    <script src="/static/prompt_readout.js?v=5"></script>
+    <script src="/static/prompt_readout.js?v=6"></script>
   </body>
 </html>

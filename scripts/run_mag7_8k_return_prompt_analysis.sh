@@ -13,9 +13,9 @@ MODEL_SLUG="$(uv run python -c \
     "${MODEL}")"
 ARTIFACT_ROOT="${ARTIFACT_ROOT:-artifacts}"
 LENS="${LENS:-${ARTIFACT_ROOT}/${MODEL_SLUG}/jacobian-lens/jacobian_lens.pt}"
-INPUT_CSV="${INPUT_CSV:-mag7_8k_return_prompts.csv}"
+INPUT_CSV="${INPUT_CSV:-data/mag7_8k_context_only_prompts.csv}"
 DATASET_FORMAT="${DATASET_FORMAT:-return-pairs}"
-DATASET="${DATASET:-mag7_8k_return_pairs}"
+DATASET="${DATASET:-mag7_8k_context_only}"
 RUN_ID="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 READOUT_MAX_SEQ_LEN="${READOUT_MAX_SEQ_LEN:-512}"
 # Zero means all pairs. Return-pairs expands each pair into original and counterfactual records.

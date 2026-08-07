@@ -961,7 +961,6 @@ def analyze_prompt_outputs(
         if save_prompt_uncertainty
         else None
     )
-
     average_records: list[dict[str, Any]] = []
     attribution_records: list[dict[str, Any]] = []
     condition_counts: dict[str, dict[str, int]] = {}

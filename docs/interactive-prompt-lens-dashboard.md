@@ -48,15 +48,45 @@ Server 啟動時只載入一次 model 與 lens。它會檢查 hidden width、mod
 | Enable thinking | 只在 tokenizer template 支援時啟用 |
 | Generate response | 對完全相同的 formatted prompt 執行 deterministic greedy generation |
 | Max new tokens | 1–256 |
+| Common vocabulary | 依目前 compact grid 的完整 top-k membership，列出全域與各 readout row 的前 20 個 token；選取後高亮匹配 cells |
 
 Grid 的 column 是 input token position，row 是 model layer。每個 cell 顯示 top-1
 readout，hover 顯示完整 top-k。Dashboard 也回傳 input prompt、實際 formatted
 prompt、token IDs/text、prompt length、是否截斷、fitted layer coverage 與 lens
 calibration prompt count。
 
+### Vocabulary focus
+
+`Common vocabulary` 是針對**目前這一次 prompt readout**的互動式檢視工具：每個
+cell 的完整 `top_ids` top-k 中，每個 token ID 對該 cell 的 membership 計一次。
+`Global` group 跨所有 returned layer rows、token positions（包含 `OUTPUT`）；
+`By layer` group 只統計指定的實際 grid row。每個 group 顯示前 20 名，排序為
+occurrence count 降冪、token ID 升冪；decoded token 只用於顯示，統計與比對仍以
+token ID 為準，因此相同文字但不同 vocabulary ID 會維持為不同選項。
+
+選取 token 後，包含它的 cells 會加上 highlight，並標示它在該 cell 的 top-k
+rank；切換選單只更新現有 DOM，不會重新請求或重新執行模型。placeholder 可清除
+所有 highlight。這不是完整 vocabulary softmax 的機率聚合、跨 prompt/batch 的
+全域詞頻、tokenized word frequency，也不是 chain-of-thought、reasoning trace 或
+causal evidence。
+
 勾選 Generate response 後，頁面額外顯示模型從同一份 formatted prompt 生成的
 實際文字與 token count。例如輸入 `Do you love me?` 時，可以同時比較逐層
 J-lens readout 與模型真正回答的 continuation。
+
+手動驗證 vocabulary focus 時，可用以下流程啟動 dashboard：
+
+```bash
+uv run prompt-analysis serve \
+  --model .cache/models/qwen3.5-4b \
+  --host 127.0.0.1 \
+  --port 8322
+```
+
+在 `http://127.0.0.1:8322` hard reload 後執行短 prompt，確認選單包含 Global、
+每個 returned row 與 `OUTPUT`；選取 Global 時跨 row 的 top-k matches 都高亮，
+選取 By layer 時只高亮該 row。再選一個非 top-1 token，確認顯示其 top-k rank；
+切換 Focus position、pin cell 與提交新 prompt 時，既有互動保留且舊選項會重建。
 
 ## HTTP API
 
