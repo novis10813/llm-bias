@@ -62,12 +62,18 @@ The implemented entry point is:
 uv run counterfactual-patching <command> [options]
 ```
 
-It has five subcommands:
+It has the core patching subcommands below, plus a separate exploratory
+binary-association surface described in [the easy-bias protocol](easy-bias-binary-association.md):
 
 | Command | Purpose |
 |---|---|
 | `prepare-data` | Tokenize the built-in factual smoke/generalisation pair source and save aligned pairs. |
 | `run` | Run source, target, patched, and control forwards across patch layers. |
+| `prepare-binary-association` | Render the independent easy-bias career/order dataset for a local model. |
+| `baseline-binary-association` | Score the fixed multi-token-safe mother-minus-father continuation margin. |
+| `run-binary-patch` | Run a selected-layer two-occurrence binary-association patch smoke. |
+| `fit-binary-direction` | Fit a train-only aggregate residual direction. |
+| `run-binary-steering` | Run single-token steering confirmation rows at explicit strengths. |
 | `summarize` | Aggregate patch rows into `layer_summary.csv` and the factual transfer plot. |
 | `visualize` | Rebuild the summary and write patch/readout heatmaps. |
 | `serve` | Start the interactive local dashboard for one model, lens, and pair file. |
@@ -169,6 +175,17 @@ Do not treat the existence of a rendered pair file as proof that the dataset is
 research-ready. The content must have passed the review/promotion gate, and the
 result must still include controls and uncertainty before supporting a primary
 entity-bias claim.
+
+## Exploratory binary association task
+
+The `easy-bias` career prompt is an independent non-financial feasibility task.
+It uses `task_type=binary_association` and a continuation-likelihood margin,
+not the reviewed 8-K `entity_bias` contract or factual normalized transfer.
+Its two career occurrences are patched together, and its direction-steering
+stage is train/calibration/confirmation split-aware. See
+[easy-bias binary association](easy-bias-binary-association.md) for its data
+schema, gates, controls, and claim boundaries. Never pool its margins or
+steering effects with financial entity-bias summaries.
 
 ## Variable-length span patching
 

@@ -5,10 +5,13 @@ from torch import nn
 
 from llm_bias.counterfactual_patching.interventions import (
     _patch_tensor_span,
+    _patch_tensor_spans,
     _replace_first,
     next_logits,
     normalized_span_mapping,
     patched_next_logits,
+    patched_next_logits_multi,
+    steered_next_logits,
 )
 
 

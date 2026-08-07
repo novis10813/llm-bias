@@ -72,6 +72,65 @@ def _patch_tensor_span(
     return patched
 
 
+def _patch_tensor_spans(
+    tensor: torch.Tensor,
+    *,
+    source_spans: Iterable[tuple[int, int]],
+    replacements: Iterable[torch.Tensor],
+) -> torch.Tensor:
+    """Patch several disjoint spans without changing sequence length."""
+    spans = list(source_spans)
+    values = list(replacements)
+    if len(spans) != len(values) or not spans:
+        raise ValueError("source_spans and replacements must be equally non-empty")
+    ordered = sorted(spans)
+    if any(start < 0 or end <= start for start, end in ordered):
+        raise ValueError("source spans must be non-empty and ordered")
+    if any(left[1] > right[0] for left, right in zip(ordered, ordered[1:])):
+        raise ValueError("source spans must not overlap")
+    patched = tensor
+    for span, replacement in zip(spans, values, strict=True):
+        patched = _patch_tensor_span(
+            patched,
+            source_span=span,
+            replacement=replacement,
+        )
+    return patched
+
+
+def _add_tensor_spans(
+    tensor: torch.Tensor,
+    *,
+    source_spans: Iterable[tuple[int, int]],
+    direction: torch.Tensor,
+    alpha: float,
+) -> torch.Tensor:
+    """Add one direction at every token in several disjoint spans."""
+    spans = list(source_spans)
+    if not spans:
+        raise ValueError("source_spans must be non-empty")
+    ordered = sorted(spans)
+    if any(start < 0 or end <= start for start, end in ordered):
+        raise ValueError("source spans must be non-empty and ordered")
+    if any(left[1] > right[0] for left, right in zip(ordered, ordered[1:])):
+        raise ValueError("source spans must not overlap")
+    if direction.ndim == 1:
+        direction = direction.view(1, 1, -1)
+    elif direction.ndim == 2:
+        direction = direction.unsqueeze(0)
+    if direction.ndim != 3 or direction.shape[0] not in {1, tensor.shape[0]}:
+        raise ValueError("direction must have shape [d_model] or [batch, 1, d_model]")
+    if direction.shape[0] == 1 and tensor.shape[0] != 1:
+        direction = direction.expand(tensor.shape[0], -1, -1)
+    direction = direction.to(device=tensor.device, dtype=tensor.dtype)
+    patched = tensor.clone()
+    for start, end in spans:
+        if start < 0 or end <= start or end > tensor.shape[1]:
+            raise ValueError(f"invalid source span {(start, end)}")
+        patched[:, start:end, :] = patched[:, start:end, :] + alpha * direction
+    return patched
+
+
 def record_residuals(model: Any, input_ids: torch.Tensor, layers: Iterable[int]) -> dict[int, torch.Tensor]:
     requested = sorted(set(layers))
     with torch.no_grad(), ActivationRecorder(model.layers, at=requested) as recorder:
@@ -130,6 +189,74 @@ def patched_next_logits(
         finally:
             for handle in handles:
                 handle.remove()
+    return model.unembed(final).float().cpu()[0]
+
+
+def patched_next_logits_multi(
+    model: Any,
+    input_ids: torch.Tensor,
+    *,
+    layer: int,
+    source_spans: Iterable[tuple[int, int]],
+    replacements: Iterable[torch.Tensor],
+) -> torch.Tensor:
+    """Run a forward pass while replacing several residual spans."""
+    final_layer = model.n_layers - 1
+    spans = list(source_spans)
+    values = list(replacements)
+    handles: list[Any] = []
+
+    def patch_hook(_module: Any, _inputs: Any, output: Any) -> Any:
+        tensor = output if torch.is_tensor(output) else output[0]
+        patched = _patch_tensor_spans(
+            tensor,
+            source_spans=spans,
+            replacements=values,
+        )
+        return _replace_first(output, patched)
+
+    with torch.no_grad():
+        handles.append(model.layers[layer].register_forward_hook(patch_hook))
+        try:
+            with ActivationRecorder(model.layers, at=[final_layer]) as recorder:
+                model.forward(input_ids)
+                final = recorder.activations[final_layer][:, -1, :].detach()
+        finally:
+            for handle in handles:
+                handle.remove()
+    return model.unembed(final).float().cpu()[0]
+
+
+def steered_next_logits(
+    model: Any,
+    input_ids: torch.Tensor,
+    *,
+    layer: int,
+    source_spans: Iterable[tuple[int, int]],
+    direction: torch.Tensor,
+    alpha: float,
+) -> torch.Tensor:
+    """Inject a direction at all selected span tokens and return final logits."""
+    final_layer = model.n_layers - 1
+    spans = list(source_spans)
+
+    def steer_hook(_module: Any, _inputs: Any, output: Any) -> Any:
+        tensor = output if torch.is_tensor(output) else output[0]
+        steered = _add_tensor_spans(
+            tensor,
+            source_spans=spans,
+            direction=direction,
+            alpha=alpha,
+        )
+        return _replace_first(output, steered)
+
+    handle = model.layers[layer].register_forward_hook(steer_hook)
+    try:
+        with torch.no_grad(), ActivationRecorder(model.layers, at=[final_layer]) as recorder:
+            model.forward(input_ids)
+            final = recorder.activations[final_layer][:, -1, :].detach()
+    finally:
+        handle.remove()
     return model.unembed(final).float().cpu()[0]
 
 
