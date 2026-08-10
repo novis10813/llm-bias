@@ -238,7 +238,7 @@ def _csv_rows(events: Iterable[ChangeEvent], canonical: Iterable[FilingObservati
         for filing in _window_rows(canonical, event):
             for field in event.changed_fields:
                 rows.append({"year": filing.fiscal_year, "cik": filing.cik, "item": f"{field}={getattr(filing, field)}"})
-    return rows
+    return sorted(rows, key=lambda row: (int(row["cik"]), int(row["year"]), str(row["item"])))
 
 
 def build_change_dataset(
@@ -417,6 +417,7 @@ def validate_change_dataset(input_dir: str | Path = DEFAULT_OUTPUT) -> dict[str,
             raise TenKChangeDataError("change_events.jsonl: duplicate event")
         event_ids.add(event.get("event_id"))
         expected_rows.extend(_validate_event(event))
+    expected_rows.sort(key=lambda row: (int(row["cik"]), int(row["year"]), str(row["item"])))
     normalized_rows = []
     for row in csv_rows:
         try:
