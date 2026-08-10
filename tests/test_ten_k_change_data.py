@@ -66,9 +66,9 @@ def test_window_excludes_missing_years_and_empty_metadata_is_not_change(tmp_path
     rows = _csv(tmp_path / "output" / "change_window_items.csv")
     assert manifest["counts"]["change_events"] == 1
     assert rows == [
-        {"year": "2018", "sic": "3571", "item": "company=OLD"},
-        {"year": "2020", "sic": "3571", "item": "company=NEW"},
-        {"year": "2022", "sic": "3571", "item": "company=NEW"},
+        {"year": "2018", "cik": "1", "item": "company=OLD"},
+        {"year": "2020", "cik": "1", "item": "company=NEW"},
+        {"year": "2022", "cik": "1", "item": "company=NEW"},
     ]
     event = json.loads((tmp_path / "output" / "change_events.jsonl").read_text())
     assert event["missing_window_years"] == [2019, 2021]
