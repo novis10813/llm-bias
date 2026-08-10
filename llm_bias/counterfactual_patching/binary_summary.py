@@ -3,16 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import json
-from pathlib import Path
 from typing import Any, Iterable
 
 import torch
-
-
-def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    with Path(path).open(encoding="utf-8") as handle:
-        return [json.loads(line) for line in handle if line.strip()]
 
 
 def _mean_ci(values: list[float], *, seed: int, n_resamples: int) -> dict[str, Any]:

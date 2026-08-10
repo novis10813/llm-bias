@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -16,8 +17,7 @@ from llm_bias.counterfactual_patching.binary_association import (
     CANDIDATES,
     BinaryAssociationPair,
     RenderedPrompt,
-    load_binary_pairs,
-    load_rendered_prompts,
+    iter_rendered_prompts,
     validate_pair,
 )
 from llm_bias.counterfactual_patching.interventions import (
@@ -186,14 +186,14 @@ def run_baseline(
     device: torch.device | str,
     max_rows: int | None = None,
 ) -> Path:
-    records = load_rendered_prompts(rendered_path)
+    records = iter_rendered_prompts(rendered_path)
     if max_rows is not None:
-        records = records[:max_rows]
-    rows = [score_rendered_prompt(model, tokenizer, record, device=device) for record in records]
+        records = islice(records, max_rows)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
-        for row in rows:
+        for record in records:
+            row = score_rendered_prompt(model, tokenizer, record, device=device)
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     return output
 
@@ -421,8 +421,3 @@ def validate_binary_lens(
         "source_layers": [int(layer) for layer in lens.source_layers],
         "metadata": metadata,
     }
-
-
-def load_baseline_rows(path: str | Path) -> list[dict[str, Any]]:
-    with Path(path).open(encoding="utf-8") as handle:
-        return [json.loads(line) for line in handle if line.strip()]

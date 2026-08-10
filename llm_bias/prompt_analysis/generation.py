@@ -19,7 +19,7 @@ import torch
 from llm_bias.core.artifact_paths import atomic_write_json, model_slug, stable_record_id
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
-from llm_bias.prompt_analysis.readout import load_prompt_table
+from llm_bias.prompt_analysis.input_data import PromptTable, load_prompt_table
 from jspace_viz.model import WrappedModel
 
 
@@ -168,8 +168,7 @@ def _finish_reason(
 
 
 def _select_rows(
-    columns: list[Any],
-    rows: list[dict[str, str]],
+    table: PromptTable,
     *,
     sample_per_condition: int | None,
     dates: Iterable[str] | None,
@@ -180,7 +179,9 @@ def _select_rows(
     """Apply the legacy-wide sampling or explicit return-pairs full selection."""
     if selection not in {"default", "sampled", "full"}:
         raise ValueError("selection must be default, sampled, or full")
-    is_return_pairs = bool(rows and rows[0].get("input_schema") == "return-pairs")
+    columns = table.columns
+    rows = table.rows
+    is_return_pairs = table.dataset_format == "return-pairs"
     selected_dates = set(dates or ())
     effective_dates = set(selected_dates)
     effective_pairs: set[str] = set()
@@ -360,14 +361,14 @@ def generate_prompt_outputs(
     if not source.is_file():
         raise FileNotFoundError(source)
 
-    columns, rows = load_prompt_table(
+    table = load_prompt_table(
         source,
         prompt_columns,
         dataset_format=dataset_format,
     )
+    columns = table.columns
     candidates_by_column, effective_dates, effective_pairs, is_return_pairs = _select_rows(
-        columns,
-        rows,
+        table,
         sample_per_condition=sample_per_condition,
         dates=dates,
         selection=selection,

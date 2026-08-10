@@ -5,11 +5,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-import math
-import re
 import subprocess
 from collections import Counter
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, TextIO
 
@@ -23,84 +20,14 @@ from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import decode_token, format_messages, format_prompt
 from llm_bias.core.readout import last_unmasked_positions
+from llm_bias.prompt_analysis.input_data import PromptColumn, load_prompt_table
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
-PROMPT_COLUMN_PATTERN = re.compile(
-    r"^prompt_(?P<context>with|without)_context_(?P<index>.+)$"
-)
 INDEX_LABELS = {
     "sp500": "S&P 500",
     "russell1000": "Russell 1000",
     "russell2000": "Russell 2000",
 }
-
-
-@dataclass(frozen=True)
-class PromptColumn:
-    """A prompt column and its condition metadata."""
-
-    name: str
-    index: str
-    context: str
-    condition: str | None = None
-
-
-RETURN_PAIR_REQUIRED = (
-    "cik", "filename", "item", "filing_date", "ticker", "peer_ticker",
-    "system_prompt", "prompt", "counterfactual_prompt", "return_label",
-    "fwd_return_1d",
-)
-RETURN_LABELS = ("very bullish", "bullish", "neutral", "bearish", "very bearish")
-
-
-def detect_dataset_format(fieldnames: Iterable[str], dataset_format: str = "auto") -> str:
-    """Select a dataset schema without guessing from partial columns."""
-    if dataset_format not in {"auto", "legacy-wide", "return-pairs"}:
-        raise ValueError("dataset_format must be auto, legacy-wide, or return-pairs")
-    names = set(fieldnames)
-    complete = set(RETURN_PAIR_REQUIRED) <= names
-    if dataset_format == "return-pairs":
-        missing = [name for name in RETURN_PAIR_REQUIRED if name not in names]
-        if missing:
-            raise ValueError(f"return-pairs CSV is missing required columns: {', '.join(missing)}")
-        return dataset_format
-    if dataset_format == "auto" and complete:
-        return "return-pairs"
-    return "legacy-wide"
-
-
-def discover_prompt_columns(
-    fieldnames: Iterable[str],
-    selected: Iterable[str] | None = None,
-) -> list[PromptColumn]:
-    """Find and parse ``prompt_{with,without}_context_*`` CSV columns."""
-    available = list(fieldnames)
-    requested = list(selected) if selected is not None else [
-        name for name in available if PROMPT_COLUMN_PATTERN.fullmatch(name)
-    ]
-    if not requested:
-        raise ValueError("CSV has no prompt_with_context_* or prompt_without_context_* columns")
-
-    missing = [name for name in requested if name not in available]
-    if missing:
-        raise ValueError(f"CSV is missing requested prompt columns: {', '.join(missing)}")
-
-    columns: list[PromptColumn] = []
-    for name in requested:
-        match = PROMPT_COLUMN_PATTERN.fullmatch(name)
-        if match is None:
-            raise ValueError(
-                f"prompt column {name!r} must match "
-                "'prompt_with_context_*' or 'prompt_without_context_*'"
-            )
-        columns.append(
-            PromptColumn(
-                name=name,
-                index=match.group("index"),
-                context=match.group("context"),
-            )
-        )
-    return columns
 
 
 def _decode_token(tokenizer: Any, token_id: int) -> str:
@@ -154,83 +81,6 @@ def _dependency_revisions(root: Path) -> dict[str, str]:
         except (OSError, subprocess.CalledProcessError):
             revisions[name] = "unknown"
     return revisions
-
-
-def load_prompt_table(
-    input_path: Path,
-    selected_columns: Iterable[str] | None = None,
-    max_rows: int | None = None,
-    *,
-    dataset_format: str = "auto",
-) -> tuple[list[PromptColumn], list[dict[str, str]]]:
-    """Load legacy-wide rows or expand each return pair into two conditions."""
-    with input_path.open(newline="", encoding="utf-8-sig") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise ValueError(f"{input_path} has no header")
-        resolved = detect_dataset_format(reader.fieldnames, dataset_format)
-        if resolved == "legacy-wide":
-            if "Date" not in reader.fieldnames:
-                raise ValueError("legacy-wide CSV requires a Date column")
-            columns = discover_prompt_columns(reader.fieldnames, selected_columns)
-            rows = []
-            for row_index, row in enumerate(reader):
-                if max_rows is not None and row_index >= max_rows:
-                    break
-                rows.append(row)
-        else:
-            if selected_columns:
-                invalid = set(selected_columns) - {"original", "counterfactual"}
-                if invalid:
-                    raise ValueError("return-pairs prompt columns must be original or counterfactual")
-            columns = [
-                PromptColumn("original", "return_pair", "original", "original"),
-                PromptColumn("counterfactual", "return_pair", "counterfactual", "counterfactual"),
-            ]
-            rows = []
-            seen: set[str] = set()
-            for pair_index, row in enumerate(reader):
-                if max_rows is not None and pair_index >= max_rows:
-                    break
-                pair_id = "|".join(row[name].strip() for name in ("cik", "filename", "item"))
-                if not all(row[name].strip() for name in ("cik", "filename", "item")):
-                    raise ValueError(f"return-pairs row {pair_index} has empty pair identity field")
-                if pair_id in seen:
-                    raise ValueError(f"duplicate return-pairs pair_id: {pair_id}")
-                seen.add(pair_id)
-                try:
-                    fwd_return_1d = float(row["fwd_return_1d"])
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(
-                        f"return-pairs row {pair_index} has invalid fwd_return_1d"
-                    ) from exc
-                if not math.isfinite(fwd_return_1d):
-                    raise ValueError(
-                        f"return-pairs row {pair_index} has non-finite fwd_return_1d"
-                    )
-                target_label = row["return_label"].strip()
-                if target_label not in RETURN_LABELS:
-                    raise ValueError(
-                        f"return-pairs row {pair_index} has invalid return_label: "
-                        f"{target_label!r}"
-                    )
-                for condition, prompt_key in (
-                    ("original", "prompt"),
-                    ("counterfactual", "counterfactual_prompt"),
-                ):
-                    expanded = dict(row)
-                    expanded.update({
-                        "input_schema": "return-pairs", "pair_id": pair_id,
-                        "filing_date": row["filing_date"], "ticker": row["ticker"],
-                        "peer_ticker": row["peer_ticker"], "condition": condition,
-                        "target_label": target_label, "fwd_return_1d": fwd_return_1d,
-                        "prompt_column": condition, "prompt": row[prompt_key],
-                        "Date": row["filing_date"], "index": "return_pair", "context": condition,
-                    })
-                    rows.append(expanded)
-    if not rows:
-        raise ValueError(f"{input_path} contains no data rows")
-    return columns, rows
 
 
 def _prepare_prompt(
@@ -910,7 +760,11 @@ def analyze_prompt_outputs(
     lens_source = Path(lens_path) if lens_path is not None else canonical_lens_path(model_name)
     if not lens_source.is_file():
         raise FileNotFoundError(lens_source)
-    columns, rows = load_prompt_table(source, prompt_columns, max_rows, dataset_format=dataset_format)
+    table = load_prompt_table(
+        source, prompt_columns, max_rows, dataset_format=dataset_format
+    )
+    columns = table.columns
+    rows = table.rows
 
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)

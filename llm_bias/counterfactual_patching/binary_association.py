@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 from llm_bias.core.continuation_scoring import continuation_token_ids
 from llm_bias.counterfactual_patching.interventions import normalized_span_mapping
@@ -445,24 +445,24 @@ def _write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def load_rendered_prompts(path: str | Path) -> list[RenderedPrompt]:
-    rows = []
+def iter_rendered_prompts(path: str | Path) -> Iterator[RenderedPrompt]:
+    """Yield rendered prompts without materializing the full artifact."""
     with Path(path).open(encoding="utf-8") as handle:
         for line in handle:
             if line.strip():
                 value = json.loads(line)
-                value["entity_spans"] = [SpanRecord(**span) for span in value["entity_spans"]]
-                rows.append(RenderedPrompt(**value))
-    return rows
+                value["entity_spans"] = [
+                    SpanRecord(**span) for span in value["entity_spans"]
+                ]
+                yield RenderedPrompt(**value)
 
 
-def load_binary_pairs(path: str | Path) -> list[BinaryAssociationPair]:
-    rows = []
+def iter_binary_pairs(path: str | Path) -> Iterator[BinaryAssociationPair]:
+    """Yield binary pairs without materializing the full artifact."""
     with Path(path).open(encoding="utf-8") as handle:
         for line in handle:
             if line.strip():
-                rows.append(BinaryAssociationPair(**json.loads(line)))
-    return rows
+                yield BinaryAssociationPair(**json.loads(line))
 
 
 def validate_pair(pair: BinaryAssociationPair) -> None:

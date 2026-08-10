@@ -192,10 +192,9 @@ def main() -> None:
         run_patch(args.model, args.pairs, args.lens, args.output, args.max_pairs)
     elif args.command == "prepare-binary-association":
         from llm_bias.counterfactual_patching.binary_association import prepare_binary_association
-        from llm_bias.core.model import load_model
+        from llm_bias.core.model import load_tokenizer
 
-        model, tokenizer, _device = load_model(args.model)
-        del model
+        tokenizer = load_tokenizer(args.model)
         manifest = _manifest_for(args)
         prepare_binary_association(
             tokenizer,
@@ -241,15 +240,17 @@ def main() -> None:
         )
     elif args.command == "run-binary-patch":
         import json
-        from llm_bias.counterfactual_patching.binary_association import load_binary_pairs
+        from itertools import islice
+
+        from llm_bias.counterfactual_patching.binary_association import iter_binary_pairs
         from llm_bias.counterfactual_patching.binary_runner import patch_pair_single_layer
         from llm_bias.core.model import load_model
 
         model, tokenizer, device = load_model(args.model)
         manifest = _manifest_for(args)
-        pairs = load_binary_pairs(args.pairs)
+        pairs = iter_binary_pairs(args.pairs)
         if args.max_pairs is not None:
-            pairs = pairs[: args.max_pairs]
+            pairs = islice(pairs, args.max_pairs)
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("w", encoding="utf-8") as handle:
@@ -265,13 +266,13 @@ def main() -> None:
             outputs=[(output, "patch_results", "output", None)],
         )
     elif args.command == "fit-binary-direction":
-        from llm_bias.counterfactual_patching.binary_runner import load_baseline_rows
+        from llm_bias.counterfactual_patching.artifact_io import read_jsonl
         from llm_bias.counterfactual_patching.steering import fit_direction, save_direction
         from llm_bias.core.model import load_model
 
         model, tokenizer, device = load_model(args.model)
         manifest = _manifest_for(args)
-        rows = [row for row in load_baseline_rows(args.baseline) if row.get("split") == "train"]
+        rows = [row for row in read_jsonl(args.baseline) if row.get("split") == "train"]
         direction, metadata = fit_direction(
             model,
             rows,
@@ -292,10 +293,10 @@ def main() -> None:
         )
     elif args.command == "run-binary-steering":
         import json
+        from llm_bias.counterfactual_patching.artifact_io import read_jsonl
         from llm_bias.counterfactual_patching.binary_runner import (
             _last_non_entity_position,
             _span_tuples,
-            load_baseline_rows,
             steer_pair,
         )
         from llm_bias.counterfactual_patching.steering import (
@@ -317,7 +318,7 @@ def main() -> None:
             direction = norm_matched_random_direction(direction, seed=args.seed)
         elif args.direction_variant == "permuted":
             direction = permuted_direction(direction)
-        rows = [row for row in load_baseline_rows(args.baseline) if row.get("split") == args.split]
+        rows = [row for row in read_jsonl(args.baseline) if row.get("split") == args.split]
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("w", encoding="utf-8") as handle:
@@ -353,16 +354,14 @@ def main() -> None:
         )
     elif args.command == "summarize-binary-association":
         import json
-        from llm_bias.counterfactual_patching.binary_summary import (
-            load_jsonl,
-            summarize_binary,
-        )
+        from llm_bias.counterfactual_patching.artifact_io import read_jsonl
+        from llm_bias.counterfactual_patching.binary_summary import summarize_binary
 
         manifest = _manifest_for(args)
         result = summarize_binary(
-            load_jsonl(args.baseline),
-            patch_rows=load_jsonl(args.patch) if args.patch else None,
-            steering_rows=load_jsonl(args.steering) if args.steering else None,
+            read_jsonl(args.baseline),
+            patch_rows=read_jsonl(args.patch) if args.patch else None,
+            steering_rows=read_jsonl(args.steering) if args.steering else None,
             seed=args.seed,
             n_resamples=args.resamples,
         )

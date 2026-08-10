@@ -22,21 +22,6 @@ BACKWARD_ARTIFACT_TYPES = {"generated_token_attribution"}
 ABLATION_RATES = (0.0, 0.05, 0.10, 0.20)
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        raise FileNotFoundError(path)
-    rows: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            value = json.loads(line)
-            if not isinstance(value, dict):
-                raise ValueError(f"expected JSON object in {path}:{line_number}")
-            rows.append(value)
-    return rows
-
-
 def _artifact_metadata(source: Path) -> tuple[dict[str, Any], Path | None]:
     candidate = source.parent / "metadata.json"
     if not candidate.is_file():

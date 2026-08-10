@@ -12,12 +12,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-LEGACY_PROMPT_RE = re.compile(r"^prompt_(with|without)_context_(.+)$")
-RETURN_REQUIRED = (
-    "cik", "filename", "item", "filing_date", "ticker", "peer_ticker",
-    "system_prompt", "prompt", "counterfactual_prompt", "return_label",
-    "fwd_return_1d",
+from llm_bias.prompt_analysis.input_schema import (
+    PROMPT_COLUMN_PATTERN,
+    RETURN_PAIR_REQUIRED,
+    describe_prompt_input,
 )
+
 LABELS = ("very bearish", "bearish", "neutral", "bullish", "very bullish")
 THRESHOLDS = {
     "very_bearish": "return < -0.02",
@@ -87,21 +87,22 @@ def inspect_input(path: str | Path) -> dict[str, Any]:
         if len(fields) != len(set(fields)):
             report["errors"].append("CSV header contains duplicate column names")
             return report
-        legacy_columns = [f for f in fields if LEGACY_PROMPT_RE.fullmatch(f)]
-        legacy_complete = "Date" in fields and bool(legacy_columns)
-        return_complete = all(f in fields for f in RETURN_REQUIRED)
-        if legacy_complete and return_complete:
+        schema = describe_prompt_input(fields)
+        legacy_columns = list(schema.legacy_columns)
+        if schema.legacy_complete and schema.return_pairs_complete:
             report["errors"].append("input matches both legacy-wide and return-pairs schemas; specify a non-ambiguous CSV")
             return report
-        if not legacy_complete and not return_complete:
-            missing_return = [f for f in RETURN_REQUIRED if f not in fields]
+        if not schema.legacy_complete and not schema.return_pairs_complete:
             report["errors"].append(
                 "input does not match a complete formal schema (legacy-wide requires Date and prompt_with/without_context_*; "
-                f"return-pairs is missing: {', '.join(missing_return)})"
+                "return-pairs is missing: "
+                + ", ".join(schema.missing_return_pair_columns)
+                + ")"
             )
             return report
-        schema = "legacy-wide" if legacy_complete else "return-pairs"
-        report["schema"] = schema
+        report["schema"] = (
+            "legacy-wide" if schema.legacy_complete else "return-pairs"
+        )
         rows: list[dict[str, str | None]] = []
         for row_number, row in enumerate(reader, start=2):
             if None in row:
@@ -131,20 +132,25 @@ def _inspect_legacy(rows: list[dict[str, str | None]], fields: list[str], column
     }
     if invalid_dates or missing.get("Date"):
         report["errors"].append(f"Date contains {invalid_dates} invalid ISO dates and {missing.get('Date', 0)} missing values")
-    malformed = [f for f in fields if f.startswith("prompt_") and f not in columns]
+    malformed = [
+        field
+        for field in fields
+        if field.startswith("prompt_")
+        and not PROMPT_COLUMN_PATTERN.fullmatch(field)
+    ]
     if malformed:
         report["errors"].append("prompt-like columns must match ^prompt_(with|without)_context_(.+)$: " + ", ".join(malformed))
 
 
 def _inspect_returns(rows: list[dict[str, str | None]], report: dict[str, Any]) -> None:
-    missing = {f: sum(_empty(r.get(f)) for r in rows) for f in RETURN_REQUIRED}
+    missing = {f: sum(_empty(r.get(f)) for r in rows) for f in RETURN_PAIR_REQUIRED}
     report["missing"] = {k: v for k, v in missing.items() if v}
     duplicate_ids: Counter[str] = Counter()
     labels: Counter[str] = Counter()
     tickers: Counter[str] = Counter()
     invalid_dates = invalid_returns = label_mismatches = 0
     for row in rows:
-        values = {k: "" if row.get(k) is None else str(row[k]).strip() for k in RETURN_REQUIRED}
+        values = {k: "" if row.get(k) is None else str(row[k]).strip() for k in RETURN_PAIR_REQUIRED}
         pair_id = "|".join(values[k] for k in ("cik", "filename", "item"))
         duplicate_ids[pair_id] += 1
         if values["filing_date"] and not _date_ok(values["filing_date"]):

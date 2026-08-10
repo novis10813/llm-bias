@@ -28,25 +28,6 @@ FORWARD_FIELDS = {
 }
 
 
-def _read_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    source = Path(path)
-    if not source.is_file():
-        raise FileNotFoundError(source)
-    rows: list[dict[str, Any]] = []
-    with source.open(encoding="utf-8") as handle:
-        for number, line in enumerate(handle, 1):
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"invalid JSON in {source}:{number}") from exc
-            if not isinstance(row, dict):
-                raise ValueError(f"expected JSON object in {source}:{number}")
-            rows.append(row)
-    return rows
-
-
 def _validate_forward(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     """Normalize forward generated outputs and derive prediction fields."""
     result = []

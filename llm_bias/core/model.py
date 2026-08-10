@@ -52,6 +52,12 @@ def resolve_model_name(model: str) -> str:
     return model
 
 
+def load_tokenizer(model: str = DEFAULT_MODEL) -> Any:
+    """Load only the tokenizer for data preparation workflows."""
+    name = resolve_model_name(model)
+    return transformers.AutoTokenizer.from_pretrained(name, use_fast=True)
+
+
 def _module_device(module: torch.nn.Module) -> torch.device:
     try:
         return next(module.parameters()).device
@@ -129,7 +135,8 @@ def load_model(
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     dtype = torch.bfloat16 if use_cuda else torch.float32
-    tokenizer = transformers.AutoTokenizer.from_pretrained(name, use_fast=True)
+    print(f"Loading {name} on {device} with {dtype} (transformers {transformers.__version__})")
+    tokenizer = load_tokenizer(name)
     auto_model = transformers.AutoModelForCausalLM
     if _is_conditional_generation_checkpoint(name):
         auto_model = getattr(transformers, "AutoModelForMultimodalLM", None)
