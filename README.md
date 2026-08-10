@@ -13,6 +13,8 @@ target entity activation causally changes the answer distribution.
 - `prepare-edgar-8k`: auditable staging-data preparation for extracted 8-K filings.
 - `prepare-counterfactual-data`: point-in-time entity histories, reviewed
   entity-only counterfactual generation, model-specific rendering, and validation.
+- `prepare-10k-change-data`: auditable, prompt-agnostic `year,cik,item` CSV
+  for extracted 10-K metadata-change windows.
 - `fit-jacobian-lens`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -36,6 +38,7 @@ chain-of-thought or discrete reasoning paths.
 - [Counterfactual patching](docs/counterfactual-patching.md)
 - [8-K counterfactual entity dataset](docs/counterfactual-dataset-generation.md)
 - [EDGAR 8-K preparation](docs/edgar-8k-preparation.md)
+- [10-K metadata-change LLM dataset](docs/ten-k-change-dataset.md)
 - [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
 - [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
