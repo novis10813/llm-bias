@@ -2,7 +2,9 @@
 
 This contract describes the canonical run manifest emitted by the prompt-analysis
 runner. Producers use the helpers in `llm_bias.core.artifact_paths` and
-`llm_bias.core.artifact_manifest` directly.
+`llm_bias.core.artifact_manifest` directly. The synthetic entity-bias workflow has
+an additional normative artifact contract in [synthetic-entity-bias.md](synthetic-entity-bias.md);
+its compact schemas, no-raw rules, and lifecycle postchecks apply to synthetic runs.
 
 ## Canonical layout
 

@@ -39,6 +39,7 @@ chain-of-thought or discrete reasoning paths.
 - [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
 - [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
+- [Synthetic entity-bias pilot](docs/synthetic-entity-bias.md)
 
 ## Setup
 
