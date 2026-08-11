@@ -28,7 +28,7 @@ def _index_name(path: Path, row: dict[str,str]) -> str:
 def load_entity_pool(paths: Iterable[str|Path], *, start_year=2020, end_year=2025, seed=0) -> list[EntityRecord]:
  paths = [Path(p) for p in paths]
  if not paths: raise ValueError("at least one explicit constituent CSV is required")
- rows=[]; identities=set(); duplicate_source_rows=0; raw_tickers={}
+ rows=[]; identities=set(); duplicate_counts={}; raw_tickers={}
  for path in paths:
   if not path.is_file(): raise FileNotFoundError(path)
   with path.open(newline="",encoding="utf-8-sig") as f:
@@ -43,7 +43,7 @@ def load_entity_pool(paths: Iterable[str|Path], *, start_year=2020, end_year=202
     if not name: raise ValueError(f"empty company_name in {path}:{n+2}")
     index=_index_name(path,row); identity=(index,year,ticker,name,row.get("gics_sector","").strip())
     if identity in identities:
-     duplicate_source_rows += 1
+     duplicate_counts[ticker]=duplicate_counts.get(ticker,0)+1
      continue
     identities.add(identity); rows.append((index,year,ticker,name,row.get("gics_sector","").strip()))
  grouped={}
@@ -59,7 +59,7 @@ def load_entity_pool(paths: Iterable[str|Path], *, start_year=2020, end_year=202
   if all_year_name_conflict: anomalies.append("conflicting_company_name")
   if any(len({v[0] for v in values if v[1]==year})>1 for year in years): anomalies.append("membership_overlap")
   if len(raw_tickers.get(ticker,()))>1: anomalies.append("ticker_normalization_collision")
-  if duplicate_source_rows: anomalies.append("duplicate_source_row")
+  if duplicate_counts.get(ticker,0): anomalies.append("duplicate_source_row")
   sectors=sorted({v[3] for v in values if v[3]});
   if len(sectors)>1: anomalies.append("conflicting_sector")
   membership_years=sorted({f"{v[0]}:{v[1]}" for v in values})

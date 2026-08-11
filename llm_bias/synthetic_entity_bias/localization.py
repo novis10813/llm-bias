@@ -15,7 +15,7 @@ def transported_delta(entity: torch.Tensor, baseline: torch.Tensor, *, layer: in
  delta=entity-baseline
  if not torch.isfinite(delta).all(): raise ValueError("residual delta must be finite")
  if layer != final_layer:
-  if lens is None: raise ValueError("non-final localization requires canonical lens")
+  if lens is None and jacobian_cache is None: raise ValueError("non-final localization requires canonical lens or cached Jacobian")
   if jacobian_cache is not None:
    if layer not in jacobian_cache: raise ValueError(f"missing cached Jacobian for layer {layer}")
    J=jacobian_cache[layer]

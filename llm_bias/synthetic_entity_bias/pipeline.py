@@ -123,7 +123,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
     direction,norm=directions[layer].normalized(); fitted[layer]=(direction,{"q25":q25,"q75":q75,"n_train":len(train),"n_high":directions[layer].n_high,"n_low":directions[layer].n_low,"high_ids_sha256":id_hash(high_ids),"low_ids_sha256":id_hash(low_ids),"direction_norm":norm,"direction_sha256":direction_hash(direction),"template":t,"layer":layer,"fit_split":"train","source_train_row_count":len(train)})
    eval_cos={layer:[] for layer in layers}; eval_y=[]
    for start in range(0,len(ev),batch_size):
-    batch=ev[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad); eval_y.extend(targets[e.ticker] for e in batch)
+    batch=ev[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad,keep_activations_device=True); eval_y.extend(targets[e.ticker] for e in batch)
     for layer in layers:
      delta=transported_delta(acts_batch[layer],baseline_vectors[t][layer][0].expand(len(batch),-1),layer=layer,final_layer=final,lens=lens,jacobian_cache=localization_jacobians); direction=fitted[layer][0]; denom=delta.norm(dim=1).clamp_min(1e-12)*direction.norm().clamp_min(1e-12); eval_cos[layer].extend((delta@direction/denom).tolist())
    for layer in layers:

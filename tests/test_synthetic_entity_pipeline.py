@@ -21,3 +21,9 @@ def test_forward_batch_never_exceeds_requested_batch():
  model=FakeModel(); rows=[[i] for i in range(5)]; batch_size=2
  for start in range(0,len(rows),batch_size): _forward_batch(model,rows[start:start+batch_size],[0],'cpu')
  assert model.calls == [2,2,1] and max(model.calls) <= batch_size
+
+def test_eval_localization_uses_cached_jacobian_on_residual_device():
+ from llm_bias.synthetic_entity_bias.localization import transported_delta
+ residual=torch.tensor([[1.,2.],[3.,4.]])
+ result=transported_delta(residual,torch.zeros_like(residual),layer=0,final_layer=1,jacobian_cache={0:torch.eye(2)})
+ assert result.device == residual.device and torch.equal(result,residual)
