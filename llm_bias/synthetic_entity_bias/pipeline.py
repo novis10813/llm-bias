@@ -51,15 +51,24 @@ def _forward(model, ids: list[int], layers: list[int], device: Any):
  logits,acts,temps=_forward_batch(model,[ids],layers,device,final_norm=getattr(model,"_final_norm",None))
  return logits[0],{k:v.unsqueeze(1) for k,v in acts.items()},float(temps[0])
 
+def _resolve_device(model, explicit=None):
+ if explicit is not None: return torch.device(explicit)
+ value=getattr(model,"device",None)
+ if value is None and hasattr(model,"_hf_model"):
+  value=next(model._hf_model.parameters()).device
+ if value is None: raise ValueError("device must be explicit when model exposes no reliable device")
+ return torch.device(value)
+
 def _flat(value): return json.dumps(value,separators=(",",":"))
 
-def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifacts", dataset="synthetic-entity-bias-2020-2025", run_id="run", model=None, tokenizer=None, lens=None, seed=0, max_seq_len=2048, batch_size=16, use_chat_template=True) -> Path:
+def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifacts", dataset="synthetic-entity-bias-2020-2025", run_id="run", model=None, tokenizer=None, lens=None, device=None, seed=0, max_seq_len=2048, batch_size=16, use_chat_template=True) -> Path:
  pool=load_entity_pool(constituents,seed=seed)
  if not pool: raise ValueError("entity pool is empty")
  if model is None:
   from llm_bias.core.model import load_model
   model,tokenizer,device=load_model(model_path)
- else: device=getattr(model,"device","cpu")
+ else:
+  device=_resolve_device(model,device)
  if tokenizer is None: raise ValueError("tokenizer is required")
  if lens is None and lens_path:
   from jspace_viz.lens import JacobianLens

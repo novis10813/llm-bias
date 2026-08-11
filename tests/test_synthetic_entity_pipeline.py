@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 import torch
-from llm_bias.synthetic_entity_bias.pipeline import _forward_batch
+from llm_bias.synthetic_entity_bias.pipeline import _forward_batch, _resolve_device
 
 class DeviceSensitiveFinalNorm:
  def __init__(self): self.seen=[]
@@ -9,9 +9,14 @@ class DeviceSensitiveFinalNorm:
   if x.device.type != 'cpu': return x
   return x
 class FakeModel:
- def __init__(self): self.calls=[]; self._final_norm=DeviceSensitiveFinalNorm()
+ def __init__(self): self.calls=[]; self.seen_devices=[]; self._final_norm=DeviceSensitiveFinalNorm()
  def __call__(self,x,attention_mask=None):
-  self.calls.append(int(x.shape[0])); return SimpleNamespace(logits=torch.zeros(x.shape[0],x.shape[1],32,device=x.device))
+  self.calls.append(int(x.shape[0])); self.seen_devices.append(x.device); return SimpleNamespace(logits=torch.zeros(x.shape[0],x.shape[1],32,device=x.device))
+
+def test_wrapper_device_comes_from_underlying_model_parameter():
+ class Wrapper:
+  _hf_model=torch.nn.Linear(2,2)
+ assert _resolve_device(Wrapper()) == next(Wrapper._hf_model.parameters()).device
 
 def test_forward_batch_computes_temperature_before_cpu_transfer():
  model=FakeModel(); logits,acts,temps=_forward_batch(model,[[1,2],[3]], [0], 'cpu', final_norm=model._final_norm)

@@ -32,5 +32,5 @@ def main():
   result=validate_token_contract(tokenizer,rendered); result.update(pool_count=len(pool),anomaly_count=sum(bool(e.anomalies) for e in pool),model=args.model,lens=args.lens)
   print(json.dumps(result,ensure_ascii=False,indent=2)); return
  from .pipeline import run_pipeline
- root=run_pipeline(constituents=args.constituents,model_path=args.model,lens_path=args.lens,artifact_root=args.artifact_root,dataset=args.dataset,run_id=args.run_id,model=model,tokenizer=tokenizer,seed=args.seed,max_seq_len=args.max_seq_len,batch_size=args.batch_size)
+ root=run_pipeline(constituents=args.constituents,model_path=args.model,lens_path=args.lens,artifact_root=args.artifact_root,dataset=args.dataset,run_id=args.run_id,model=model,tokenizer=tokenizer,device=device,seed=args.seed,max_seq_len=args.max_seq_len,batch_size=args.batch_size)
  print(root)
