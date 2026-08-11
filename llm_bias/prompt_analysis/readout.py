@@ -22,6 +22,7 @@ from jspace_viz.model import WrappedModel
 from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import decode_token, format_messages, format_prompt
+from llm_bias.core.readout import last_unmasked_positions
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
 PROMPT_COLUMN_PATTERN = re.compile(
@@ -133,11 +134,7 @@ def topk_token_records(
     ]
 
 
-def _last_unmasked_positions(attention_mask: torch.Tensor) -> torch.Tensor:
-    positions = torch.arange(attention_mask.shape[1], device=attention_mask.device)
-    positions = positions.unsqueeze(0).expand_as(attention_mask)
-    return positions.masked_fill(attention_mask == 0, -1).max(dim=1).values
-
+_last_unmasked_positions = last_unmasked_positions
 
 def _write_json_line(handle: TextIO, value: dict[str, Any]) -> None:
     handle.write(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n")
