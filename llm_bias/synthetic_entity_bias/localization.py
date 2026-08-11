@@ -10,11 +10,15 @@ def answer_residual(activation: torch.Tensor, position: int) -> torch.Tensor:
  raise ValueError("activation must be [batch, sequence, d_model] or [sequence, d_model]")
 
 def transported_delta(entity: torch.Tensor, baseline: torch.Tensor, *, layer: int, final_layer: int, lens: Any|None=None) -> torch.Tensor:
- delta=entity.float()-baseline.float()
+ entity=entity.float(); baseline=baseline.float()
+ if entity.ndim not in (1,2) or baseline.shape[-1]!=entity.shape[-1]: raise ValueError("residuals must be [d] or [batch,d] with matching width")
+ delta=entity-baseline
+ if not torch.isfinite(delta).all(): raise ValueError("residual delta must be finite")
  if layer != final_layer:
   if lens is None: raise ValueError("non-final localization requires canonical lens")
   delta=lens.transport(delta,layer)
- return delta
+  if not torch.isfinite(delta).all() or delta.shape!=entity.shape: raise ValueError("lens transport returned invalid residual batch")
+ return delta.float()
 
 def fit_layer_direction(vectors: Iterable[torch.Tensor], targets: Iterable[float], *, ids: Iterable[str]|None=None, splits: Iterable[str]|None=None, seed: int|None=None) -> tuple[torch.Tensor,dict[str,Any]]:
  vectors=list(vectors); targets=list(targets)
