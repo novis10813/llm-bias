@@ -56,6 +56,7 @@ def load_entity_pool(paths: Iterable[str|Path], *, start_year=2020, end_year=202
   sectors=sorted({v[3] for v in values if v[3]});
   if len(sectors)>1: anomalies.append("conflicting_sector")
   membership_years=sorted({f"{v[0]}:{v[1]}" for v in values})
-  key=f"{seed}:{ticker}"; split="train" if int(hashlib.sha256(key.encode()).hexdigest()[:16],16)%100 < 80 else "eval"
-  out.append(EntityRecord(ticker,chosen,latest,tuple(years),tuple(memberships),tuple(membership_years),tuple(sectors),NAMES[max_tier],len(values),tuple(anomalies),split))
- return sorted(out,key=lambda e:e.ticker)
+  out.append(EntityRecord(ticker,chosen,latest,tuple(years),tuple(memberships),tuple(membership_years),tuple(sectors),NAMES[max_tier],len(values),tuple(anomalies),""))
+ by_tier={tier:sorted([e for e in out if e.familiarity_tier==NAMES[tier]],key=lambda e:hashlib.sha256(f"{seed}:{e.ticker}".encode()).hexdigest()) for tier in NAMES}
+ assigned={e.ticker:("train" if i < max(1,int(len(group)*.8)) else "eval") for group in by_tier.values() for i,e in enumerate(group)}
+ return sorted([EntityRecord(**(e.to_dict() | {"years":e.years,"memberships":e.memberships,"membership_years":e.membership_years,"sectors":e.sectors,"anomalies":e.anomalies,"split":assigned[e.ticker]})) for e in out],key=lambda e:e.ticker)

@@ -32,7 +32,9 @@ def write_csv(path: str|Path, rows: Iterable[dict[str,Any]], fields: list[str]) 
  return p
 
 def start_manifest(model,dataset,run_id,artifact_root):
- m=RunManifest.new(model,dataset,run_id,artifact_root=artifact_root); m.start(); m.save(); return m
+ m=RunManifest.new(model,dataset,run_id,artifact_root=artifact_root)
+ if m.run_directory.exists() or m.manifest_path.exists(): raise FileExistsError(f"refusing to overwrite existing run: {m.run_directory}")
+ m.start(); m.save(); return m
 
 def fail_manifest(m,error):
  if m.status not in {"complete","failed"}: m.fail(str(error)); m.save()

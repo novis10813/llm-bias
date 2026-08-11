@@ -26,11 +26,11 @@ def distribution_stats(probabilities: torch.Tensor, scores: torch.Tensor | list[
     entropy = -(p.clamp_min(1e-12) * p.clamp_min(1e-12).log()).sum()
     mean = (p * s).sum()
     centered = s - mean
-    variance = (p * centered.square()).sum()
-    return {"expected_score": float(mean), "entropy_nats": float(entropy), "effective_temperature": float(variance.sqrt().clamp_min(1e-12))}
+    return {"expected_score": float(mean), "entropy_nats": float(entropy)}
 
 
 def effective_temperature(hidden: torch.Tensor, final_norm: Any | None = None) -> torch.Tensor:
     normalized = final_norm(hidden) if final_norm is not None else hidden
     inverse = normalized.float().norm(dim=-1)
-    return inverse.reciprocal().clamp_min(1e-12)
+    if not torch.isfinite(inverse).all() or (inverse <= 0).any(): raise ValueError("final-normalized residual norm must be finite and positive")
+    return inverse.reciprocal()

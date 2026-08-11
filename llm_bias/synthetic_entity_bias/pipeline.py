@@ -15,26 +15,37 @@ RAW_FIELDS=["ticker","company_name","template","split","familiarity_tier","entit
 BASE_FIELDS=["template","entity","probabilities","expected_score","entropy_nats","effective_temperature"]
 LOC_FIELDS=["layer","template","mean_cosine","pearson_r","spearman_r","linear_r2","n_train","n_eval","q25","q75","direction_sha256","statistic_flag"]
 
-def _forward(model, ids: list[int], layers: list[int], device: Any):
- x=torch.tensor([ids],dtype=torch.long,device=device)
+def _forward_batch(model, ids: list[list[int]], layers: list[int], device: Any, *, pad_token_id: int = 0):
+ if not ids: raise ValueError("empty batch")
+ width=max(map(len,ids)); x=torch.full((len(ids),width),pad_token_id,dtype=torch.long,device=device); mask=torch.zeros_like(x)
+ for i,row in enumerate(ids):
+  if not row: raise ValueError("all-padding row")
+  x[i,:len(row)]=torch.as_tensor(row,dtype=torch.long,device=device); mask[i,:len(row)]=1
+ positions=mask.sum(-1)-1
+ if (positions<0).any(): raise ValueError("all-padding batch row")
  if hasattr(model,"layers"):
   from jlens.hooks import ActivationRecorder
   with torch.no_grad(), ActivationRecorder(model.layers,at=layers) as rec:
-   out=model.forward(x)
-   acts={int(k):v.detach().float().cpu() for k,v in rec.activations.items()}
-  if hasattr(out,"logits"): logits=out.logits[0,-1].detach().float().cpu()
-  elif hasattr(model,"unembed"): logits=model.unembed(acts[max(layers)][:,-1,:]).float().cpu()[0]
+   try: out=model.forward(x,attention_mask=mask)
+   except TypeError: out=model.forward(x)
+   answer={int(k):v[torch.arange(len(ids),device=device),positions].float() for k,v in rec.activations.items()}
+  if hasattr(out,"logits"): logits=out.logits[torch.arange(len(ids),device=device),positions].float()
+  elif isinstance(out,dict) and "logits" in out: logits=out["logits"][torch.arange(len(ids),device=device),positions].float()
+  elif hasattr(model,"unembed"): logits=model.unembed(answer[max(layers)]).float()
   else: raise ValueError("model output has no logits")
-  return logits,acts
+  return logits.detach().cpu(),{k:v.detach().cpu() for k,v in answer.items()}
  with torch.no_grad():
-  out=model(x)
- if hasattr(out,"logits"): return out.logits[0,-1].detach().float().cpu(),{}
- if isinstance(out,dict) and "logits" in out: return out["logits"][0,-1].detach().float().cpu(),{}
- raise ValueError("model output has no logits")
+  out=model(x,attention_mask=mask)
+ logits=out.logits if hasattr(out,"logits") else out["logits"]
+ return logits[torch.arange(len(ids),device=device),positions].float().detach().cpu(),{}
+
+def _forward(model, ids: list[int], layers: list[int], device: Any):
+ logits,acts=_forward_batch(model,[ids],layers,device)
+ return logits[0],{k:v.unsqueeze(1) for k,v in acts.items()}
 
 def _flat(value): return json.dumps(value,separators=(",",":"))
 
-def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifacts", dataset="synthetic-entity-bias-2020-2025", run_id="run", model=None, tokenizer=None, lens=None, seed=0, max_seq_len=2048, use_chat_template=True) -> Path:
+def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifacts", dataset="synthetic-entity-bias-2020-2025", run_id="run", model=None, tokenizer=None, lens=None, seed=0, max_seq_len=2048, batch_size=16, use_chat_template=True) -> Path:
  pool=load_entity_pool(constituents,seed=seed)
  if not pool: raise ValueError("entity pool is empty")
  if model is None:
@@ -70,32 +81,25 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
   base_rows=[{"template":t,"entity":BASELINE_ENTITY,"probabilities":_flat(baselines[t]["probabilities"]),"expected_score":baselines[t]["expected_score"],"entropy_nats":baselines[t]["entropy_nats"],"effective_temperature":baselines[t]["effective_temperature"]} for t in TEMPLATES]
   write_csv(root/"no_entity_baselines.csv",base_rows,BASE_FIELDS); m.start_stage("baseline"); m.finish_stage("baseline",record_count=3); m.save()
   rows=[]
-  for e in pool:
-   for t in TEMPLATES:
-    p=render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len)
-    logits,acts=_forward(model,list(p.input_ids),layers,device); score=score_distribution(logits,label_ids,residual=(acts.get(final)[:,-1,:] if acts else None),final_norm=getattr(model,"_final_norm",None)); base=baselines[t]
+  metric_items=[(e,t,render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len)) for e in pool for t in TEMPLATES]
+  pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
+  for start in range(0,len(metric_items),batch_size):
+   batch=metric_items[start:start+batch_size]; logits_batch,acts_batch=_forward_batch(model,[list(p.input_ids) for _,_,p in batch],layers,device,pad_token_id=pad)
+   for i,(e,t,p) in enumerate(batch):
+    acts={k:v[i:i+1].unsqueeze(1) for k,v in acts_batch.items()}; score=score_distribution(logits_batch[i],label_ids,residual=(acts.get(final)[:,0,:] if acts else None),final_norm=getattr(model,"_final_norm",None)); base=baselines[t]
     rows.append({"ticker":e.ticker,"company_name":e.company_name,"template":t,"split":e.split,"familiarity_tier":e.familiarity_tier,"entity_probabilities":_flat(score["probabilities"]),"baseline_probabilities":_flat(base["probabilities"]),"entity_expected_score":score["expected_score"],"baseline_expected_score":base["expected_score"],"entity_entropy_nats":score["entropy_nats"],"baseline_entropy_nats":base["entropy_nats"],"entity_effective_temperature":score["effective_temperature"],"baseline_effective_temperature":base["effective_temperature"],"delta_expected_score":score["expected_score"]-base["expected_score"],"entity_span_start":p.entity_span[0],"entity_span_end":p.entity_span[1],"answer_position":p.answer_position})
   write_csv(root/"raw_entity_template_results.csv",rows,RAW_FIELDS); m.start_stage("metric"); m.finish_stage("metric",record_count=len(rows)); m.save()
   loc=[]
   for t in TEMPLATES:
-   targets={e.ticker:next(r["delta_expected_score"] for r in rows if r["ticker"]==e.ticker and r["template"]==t) for e in pool}
-   train=[e for e in pool if e.split=="train"]; ev=[e for e in pool if e.split=="eval"]
+   targets={e.ticker:next(r["delta_expected_score"] for r in rows if r["ticker"]==e.ticker and r["template"]==t) for e in pool}; train=[e for e in pool if e.split=="train"]; ev=[e for e in pool if e.split=="eval"]
+   train_prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in train]; eval_prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in ev]; pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
+   _,train_acts=_forward_batch(model,[list(p.input_ids) for p in train_prompts],layers,device,pad_token_id=pad); _,eval_acts=_forward_batch(model,[list(p.input_ids) for p in eval_prompts],layers,device,pad_token_id=pad) if ev else (None,{})
    for layer in layers:
-    vecs=[]; ys=[]
-    for e in train:
-     p=render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len)
-     _logits, entity_acts = _forward(model,list(p.input_ids),layers,device)
-     if baseline_vectors[t]:
-      a=entity_acts[layer][:,-1,:].squeeze(0); b=baseline_vectors[t][layer][:,-1,:].squeeze(0)
-      vecs.append(transported_delta(a,b,layer=layer,final_layer=final,lens=lens)); ys.append(targets[e.ticker])
+    b=baseline_vectors[t][layer][0,0]; vecs=[transported_delta(train_acts[layer][i],b,layer=layer,final_layer=final,lens=lens) for i in range(len(train))]; ys=[targets[e.ticker] for e in train]
     if len(vecs)<2: continue
-    direction,meta=fit_layer_direction(vecs,ys,ids=[e.ticker for e in train],splits=[e.split for e in train],seed=seed); meta.update({"template":t,"layer":layer,"source_train_row_count":len(train),"baseline_template":t}); eval_vec=[]; eval_y=[]
-    for e in ev:
-     p=render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len)
-     _logits, entity_acts = _forward(model,list(p.input_ids),layers,device)
-     if baseline_vectors[t]: eval_vec.append(transported_delta(entity_acts[layer][:,-1,:].squeeze(0),baseline_vectors[t][layer][:,-1,:].squeeze(0),layer=layer,final_layer=final,lens=lens)); eval_y.append(targets[e.ticker])
+    direction,meta=fit_layer_direction(vecs,ys,ids=[e.ticker for e in train],splits=[e.split for e in train],seed=seed); meta.update({"template":t,"layer":layer,"source_train_row_count":len(train),"baseline_template":t}); eval_vec=[transported_delta(eval_acts[layer][i],b,layer=layer,final_layer=final,lens=lens) for i in range(len(ev))]
     if not eval_vec: continue
-    stats=evaluate_layer_direction(eval_vec,eval_y,direction,meta,ids=[e.ticker for e in ev],splits=[e.split for e in ev]); loc.append({"layer":layer,"template":t,**{k:stats.get(k) for k in LOC_FIELDS if k not in {"layer","template"}}})
+    stats=evaluate_layer_direction(eval_vec,[targets[e.ticker] for e in ev],direction,meta,ids=[e.ticker for e in ev],splits=[e.split for e in ev]); loc.append({"layer":layer,"template":t,**{k:stats.get(k) for k in LOC_FIELDS if k not in {"layer","template"}}})
   write_csv(root/"layer_template_localization.csv",loc,LOC_FIELDS); m.start_stage("localization"); m.finish_stage("localization",record_count=len(loc)); m.save()
   write_json(root/"README.md.json",{"note":"See README.md; constituent source files may be current snapshots copied across years and years are source-row provenance, not independently verified historical membership.","pool_count":len(pool),"anomaly_count":sum(bool(e.anomalies) for e in pool)})
   (root/"README.md").write_text(f"# Synthetic entity-bias pilot\n\nModel: `{model_path}`\n\nBaseline: `{BASELINE_ENTITY}`. Nine labels 0..8 map to scores -4..4. Templates and scoring instruction are immutable. Pool rows preserve source years and memberships; source CSV history may be snapshot-derived and is not independently verified historical membership evidence. No per-example activations, residuals, hidden states, or gradients are written.\n",encoding="utf-8")
