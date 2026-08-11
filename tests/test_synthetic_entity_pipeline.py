@@ -33,6 +33,12 @@ def test_online_direction_sums_are_cpu_float32():
  direction.add(torch.ones(3),high=True)
  assert direction.high_sum.device.type == 'cpu' and direction.high_sum.dtype == torch.float32
 
+def test_eval_direction_is_aligned_once_to_delta_device():
+ direction=torch.tensor([1.,0.])
+ delta=torch.tensor([[1.,0.],[0.,1.]])
+ aligned=direction.to(device=delta.device,dtype=torch.float32)
+ assert torch.allclose(delta @ aligned,torch.tensor([1.,0.]))
+
 def test_eval_localization_uses_cached_jacobian_on_residual_device():
  from llm_bias.synthetic_entity_bias.localization import transported_delta
  residual=torch.tensor([[1.,2.],[3.,4.]])
