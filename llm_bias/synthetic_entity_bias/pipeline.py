@@ -14,9 +14,9 @@ from .artifacts import write_csv, write_json, start_manifest, fail_manifest, com
 
 RAW_FIELDS=["ticker","company_name","template","split","familiarity_tier","entity_probabilities","baseline_probabilities","entity_expected_score","baseline_expected_score","entity_entropy_nats","baseline_entropy_nats","entity_effective_temperature","baseline_effective_temperature","delta_expected_score","entity_span_start","entity_span_end","answer_position"]
 BASE_FIELDS=["template","entity","probabilities","expected_score","entropy_nats","effective_temperature"]
-LOC_FIELDS=["layer","template","mean_cosine","pearson_r","spearman_r","linear_r2","n_train","n_eval","q25","q75","direction_sha256","statistic_flag"]
+LOC_FIELDS=["layer","template","mean_cosine","pearson_r","spearman_r","linear_r2","n_train","n_eval","q25","q75","n_high","n_low","high_ids_sha256","low_ids_sha256","fit_split","direction_sha256","statistic_flag"]
 
-def _forward_batch(model, ids: list[list[int]], layers: list[int], device: Any, *, pad_token_id: int = 0, final_norm: Any|None = None):
+def _forward_batch(model, ids: list[list[int]], layers: list[int], device: Any, *, pad_token_id: int = 0, final_norm: Any|None = None, keep_activations_device: bool = False):
  if not ids: raise ValueError("empty batch")
  width=max(map(len,ids)); x=torch.full((len(ids),width),pad_token_id,dtype=torch.long,device=device); mask=torch.zeros_like(x)
  for i,row in enumerate(ids):
@@ -38,7 +38,8 @@ def _forward_batch(model, ids: list[list[int]], layers: list[int], device: Any, 
   normalized=final_norm(final_residual) if final_norm is not None else final_residual
   temperatures=normalized.float().norm(dim=-1).reciprocal()
   if not torch.isfinite(temperatures).all() or (temperatures<=0).any(): raise ValueError("non-finite effective temperature")
-  return logits.detach().cpu(),{k:v.detach().cpu() for k,v in answer.items()},temperatures.detach().cpu()
+  stored={k:v.detach() if keep_activations_device else v.detach().cpu() for k,v in answer.items()}
+  return logits.detach().cpu(),stored,temperatures.detach().cpu()
  with torch.no_grad():
   out=model(x,attention_mask=mask)
  logits=out.logits if hasattr(out,"logits") else out["logits"]
@@ -76,14 +77,20 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
  m=start_manifest(model_path,dataset,run_id,artifact_root)
  root=m.run_directory; root.mkdir(parents=True,exist_ok=True)
  try:
-  write_json(root/"config.json",{"model":model_path,"lens":str(lens_path),"tokenizer_class":type(tokenizer).__name__,"tokenizer_name_or_path":getattr(tokenizer,"name_or_path",None),"input_hashes":{str(p):hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in constituents},"seed":seed,"split":"stable sha256(seed:ticker), 80/20 within tier","templates":TEMPLATES,"template_hash":TEMPLATE_HASH,"label_hash":LABEL_HASH,"score_mapping":dict(zip(LABELS,SCORES))})
+  model_config=Path(model_path)/"config.json"; lens_meta=Path(str(lens_path)+".metadata.json")
+  hash_file=lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None
+  chat_hash=hashlib.sha256(str(getattr(tokenizer,"chat_template","")).encode()).hexdigest()
+  provenance={"model_path":model_path,"model_config_sha256":hash_file(model_config),"tokenizer_class":type(tokenizer).__name__,"tokenizer_name_or_path":getattr(tokenizer,"name_or_path",None),"transformers_version":__import__("transformers").__version__,"chat_template_sha256":chat_hash,"lens_binary_sha256":hash_file(lens_path),"lens_metadata_sha256":hash_file(lens_meta),"input_hashes":{str(p):hash_file(p) for p in constituents},"label_token_ids":token_report["label_token_ids"],"label_decoded":token_report["decoded"],"score_mapping":dict(zip(LABELS,SCORES)),"templates":TEMPLATES,"scoring_instruction":SCORING_INSTRUCTION,"pool_count":len(pool),"tier_counts":{tier:sum(e.familiarity_tier==tier for e in pool) for tier in set(e.familiarity_tier for e in pool)},"split_counts":{s:sum(e.split==s for e in pool) for s in ("train","eval")},"anomaly_count":sum(bool(e.anomalies) for e in pool)}
+  write_json(root/"config.json",provenance | {"seed":seed,"split":"stable sha256(seed:ticker), 80/20 within tier","template_hash":TEMPLATE_HASH,"label_hash":LABEL_HASH})
   write_csv(root/"entity_pool.csv",[e.to_dict() for e in pool],list(pool[0].to_dict()))
   write_json(root/"tokenization_validation.json",token_report)
   m.start_stage("preflight"); m.finish_stage("preflight",record_count=len(rendered)); m.save()
+  localization_jacobians={layer: lens.jacobians[layer].to(device=device,dtype=torch.float32) for layer in getattr(lens,"source_layers",[]) } if lens is not None else {}
   baselines={}; baseline_vectors={}
   for t in TEMPLATES:
    p=render_prompt(tokenizer,t,entity=BASELINE_ENTITY,use_chat_template=use_chat_template,max_seq_len=max_seq_len)
-   logits,acts,temp=_forward(model,list(p.input_ids),layers,device)
+   logits,acts,temp=_forward_batch(model,[list(p.input_ids)],layers,device,final_norm=getattr(model,"_final_norm",None),keep_activations_device=True)
+   acts={k:v for k,v in acts.items()}; temp=float(temp[0])
    baselines[t]=score_distribution(logits,label_ids,effective_temperature_value=temp); baseline_vectors[t]=acts
   base_rows=[{"template":t,"entity":BASELINE_ENTITY,"probabilities":_flat(baselines[t]["probabilities"]),"expected_score":baselines[t]["expected_score"],"entropy_nats":baselines[t]["entropy_nats"],"effective_temperature":baselines[t]["effective_temperature"]} for t in TEMPLATES]
   write_csv(root/"no_entity_baselines.csv",base_rows,BASE_FIELDS); m.start_stage("baseline"); m.finish_stage("baseline",record_count=3); m.save()
@@ -99,28 +106,32 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
   loc=[]
   for t in TEMPLATES:
    targets={e.ticker:next(r["delta_expected_score"] for r in rows if r["ticker"]==e.ticker and r["template"]==t) for e in pool}; train=[e for e in pool if e.split=="train"]; ev=[e for e in pool if e.split=="eval"]
-   q25,q75=quantile_bounds(targets.values()); directions={layer:OnlineDirection(torch.zeros_like(baseline_vectors[t][layer][0,0]),torch.zeros_like(baseline_vectors[t][layer][0,0])) for layer in layers}; pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
+   if set(e.ticker for e in train) & set(e.ticker for e in ev): raise ValueError("train/eval ticker leakage")
+   q25,q75=quantile_bounds([targets[e.ticker] for e in train]); high_ids={e.ticker for e in train if targets[e.ticker]>=q75}; low_ids={e.ticker for e in train if targets[e.ticker]<=q25}
+   if q25>=q75 or len(high_ids)<2 or len(low_ids)<2 or high_ids & low_ids: raise ValueError("degenerate train high/low groups")
+   id_hash=lambda values: hashlib.sha256("\\n".join(sorted(values)).encode()).hexdigest()
+   directions={layer:OnlineDirection(torch.zeros_like(baseline_vectors[t][layer][0]),torch.zeros_like(baseline_vectors[t][layer][0])) for layer in layers}; pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
    for start in range(0,len(train),batch_size):
-    batch=train[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad)
+    batch=train[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad,keep_activations_device=True)
     for layer in layers:
-     delta=transported_delta(acts_batch[layer],baseline_vectors[t][layer][0,0].expand(len(batch),-1),layer=layer,final_layer=final,lens=lens)
+     delta=transported_delta(acts_batch[layer],baseline_vectors[t][layer][0].expand(len(batch),-1),layer=layer,final_layer=final,lens=lens,jacobian_cache=localization_jacobians)
      for i,e in enumerate(batch):
       if targets[e.ticker]>=q75: directions[layer].add(delta[i],high=True)
       elif targets[e.ticker]<=q25: directions[layer].add(delta[i],high=False)
    fitted={}
    for layer in layers:
-    direction,norm=directions[layer].normalized(); fitted[layer]=(direction,{"q25":q25,"q75":q75,"n_train":len(train),"n_high":directions[layer].n_high,"n_low":directions[layer].n_low,"direction_norm":norm,"direction_sha256":direction_hash(direction),"template":t,"layer":layer,"fit_split":"train","source_train_row_count":len(train)})
+    direction,norm=directions[layer].normalized(); fitted[layer]=(direction,{"q25":q25,"q75":q75,"n_train":len(train),"n_high":directions[layer].n_high,"n_low":directions[layer].n_low,"high_ids_sha256":id_hash(high_ids),"low_ids_sha256":id_hash(low_ids),"direction_norm":norm,"direction_sha256":direction_hash(direction),"template":t,"layer":layer,"fit_split":"train","source_train_row_count":len(train)})
    eval_cos={layer:[] for layer in layers}; eval_y=[]
    for start in range(0,len(ev),batch_size):
     batch=ev[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad); eval_y.extend(targets[e.ticker] for e in batch)
     for layer in layers:
-     delta=transported_delta(acts_batch[layer],baseline_vectors[t][layer][0,0].expand(len(batch),-1),layer=layer,final_layer=final,lens=lens); direction=fitted[layer][0]; denom=delta.norm(dim=1).clamp_min(1e-12)*direction.norm().clamp_min(1e-12); eval_cos[layer].extend((delta@direction/denom).tolist())
+     delta=transported_delta(acts_batch[layer],baseline_vectors[t][layer][0].expand(len(batch),-1),layer=layer,final_layer=final,lens=lens,jacobian_cache=localization_jacobians); direction=fitted[layer][0]; denom=delta.norm(dim=1).clamp_min(1e-12)*direction.norm().clamp_min(1e-12); eval_cos[layer].extend((delta@direction/denom).tolist())
    for layer in layers:
     direction,meta=fitted[layer]
     stats=cosine_and_statistics(eval_cos[layer],eval_y); stats.update(meta); loc.append({"layer":layer,"template":t,**{k:stats.get(k) for k in LOC_FIELDS if k not in {"layer","template"}}})
   write_csv(root/"layer_template_localization.csv",loc,LOC_FIELDS); m.start_stage("localization"); m.finish_stage("localization",record_count=len(loc)); m.save()
   write_json(root/"README.md.json",{"note":"See README.md; constituent source files may be current snapshots copied across years and years are source-row provenance, not independently verified historical membership.","pool_count":len(pool),"anomaly_count":sum(bool(e.anomalies) for e in pool)})
-  (root/"README.md").write_text(f"# Synthetic entity-bias pilot\n\nModel: `{model_path}`\n\nBaseline: `{BASELINE_ENTITY}`. Nine labels 0..8 map to scores -4..4. Templates and scoring instruction are immutable. Pool rows preserve source years and memberships; source CSV history may be snapshot-derived and is not independently verified historical membership evidence. No per-example activations, residuals, hidden states, or gradients are written.\n",encoding="utf-8")
+  (root/"README.md").write_text("# Synthetic entity-bias pilot\n\n"+json.dumps(provenance,ensure_ascii=False,indent=2)+"\n\n## Metrics\nRestricted nine-label softmax only; expected score is the probability-weighted -4..+4 score, entropy is categorical nats, effective temperature is reciprocal final-normalized answer residual norm, and signed delta-E is entity minus baseline. Localization uses answer-position entity-minus-baseline residuals, canonical Jacobian transport for non-final layers, train-only q25/q75 high-minus-low directions, and eval-only cosine/Pearson/Spearman/linear-R2.\n\n## Limitations\nInput years and memberships preserve source-file provenance; source CSV history may be snapshot-derived and is not independently verified historical membership evidence. No per-example activations, residuals, hidden states, or gradients are written.\n",encoding="utf-8")
   for source in constituents:
    source_path=Path(source)
    m.register_artifact(source_path,artifact_type="constituent_input",stage="preflight",role="input",metadata={"sha256":hashlib.sha256(source_path.read_bytes()).hexdigest()})

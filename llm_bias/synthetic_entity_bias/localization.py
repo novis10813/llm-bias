@@ -9,14 +9,20 @@ def answer_residual(activation: torch.Tensor, position: int) -> torch.Tensor:
  if activation.ndim==2: return activation[position,:].float()
  raise ValueError("activation must be [batch, sequence, d_model] or [sequence, d_model]")
 
-def transported_delta(entity: torch.Tensor, baseline: torch.Tensor, *, layer: int, final_layer: int, lens: Any|None=None) -> torch.Tensor:
+def transported_delta(entity: torch.Tensor, baseline: torch.Tensor, *, layer: int, final_layer: int, lens: Any|None=None, jacobian_cache: dict[int,torch.Tensor]|None=None) -> torch.Tensor:
  entity=entity.float(); baseline=baseline.float()
  if entity.ndim not in (1,2) or baseline.shape[-1]!=entity.shape[-1]: raise ValueError("residuals must be [d] or [batch,d] with matching width")
  delta=entity-baseline
  if not torch.isfinite(delta).all(): raise ValueError("residual delta must be finite")
  if layer != final_layer:
   if lens is None: raise ValueError("non-final localization requires canonical lens")
-  delta=lens.transport(delta,layer)
+  if jacobian_cache is not None:
+   if layer not in jacobian_cache: raise ValueError(f"missing cached Jacobian for layer {layer}")
+   J=jacobian_cache[layer]
+   if J.device != delta.device: raise ValueError("cached Jacobian and residual device mismatch")
+   delta=delta @ J.float().T
+  else:
+   delta=lens.transport(delta,layer)
   if not torch.isfinite(delta).all() or delta.shape!=entity.shape: raise ValueError("lens transport returned invalid residual batch")
  return delta.float()
 
