@@ -119,7 +119,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
    q25,q75=quantile_bounds([targets[e.ticker] for e in train]); high_ids={e.ticker for e in train if targets[e.ticker]>=q75}; low_ids={e.ticker for e in train if targets[e.ticker]<=q25}
    if q25>=q75 or len(high_ids)<2 or len(low_ids)<2 or high_ids & low_ids: raise ValueError("degenerate train high/low groups")
    id_hash=lambda values: hashlib.sha256("\\n".join(sorted(values)).encode()).hexdigest()
-   directions={layer:OnlineDirection(torch.zeros_like(baseline_vectors[t][layer][0]),torch.zeros_like(baseline_vectors[t][layer][0])) for layer in layers}; pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
+   d_model=int(baseline_vectors[t][final].shape[-1]); directions={layer:OnlineDirection(torch.zeros(d_model,dtype=torch.float32),torch.zeros(d_model,dtype=torch.float32)) for layer in layers}; pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
    for start in range(0,len(train),batch_size):
     batch=train[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad,keep_activations_device=True)
     for layer in layers:
