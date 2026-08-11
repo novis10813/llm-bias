@@ -18,6 +18,7 @@ from llm_bias.core.lens_artifacts import (
     load_lens_metadata,
     model_slug,
     validate_lens_metadata,
+    sha256_file,
 )
 from llm_bias.core.model import load_model
 from llm_bias.core.prompting import format_prompt
@@ -412,6 +413,71 @@ def _score_lens(
             items, native_values, bilingual_values, strict=True
         )
     ]
+
+
+def fixed_evaluation_band(n_layers: int) -> list[int]:
+    """Return the preregistered middle band, independent of model selection."""
+    start = math.ceil(n_layers / 3)
+    end = math.ceil(n_layers * 3 / 4)
+    return list(range(start, end))
+
+
+def summarize_single_lens_rows(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize one preselected lens without candidate-selection language."""
+    summary = summarize_candidate_rows(rows)
+    summary.pop("selection_score", None)
+    summary["evaluation_mode"] = "preselected_single_lens"
+    summary["selection_claim"] = "none"
+    return summary
+
+
+def evaluate_single_lens(
+    *,
+    model_name: str,
+    lens_path: str | Path,
+    holdout_path: str | Path,
+    output_path: str | Path,
+    max_seq_len: int = 128,
+    use_chat_template: bool = True,
+    expected_n_prompts: int = 128,
+    device_map: Any = None,
+    max_memory: Any = None,
+) -> dict[str, Any]:
+    """Evaluate a single inherited-condition lens on fixed L22-L47-style band."""
+    items = load_bilingual_holdout(holdout_path)
+    model, tokenizer, _ = load_model(model_name, device_map=device_map, max_memory=max_memory)
+    expected_layers = expected_source_layers(model.n_layers)
+    lens = jlens.JacobianLens.load(str(lens_path))
+    if expected_n_prompts != 128:
+        raise ValueError("single-candidate promotion requires exactly 128 calibration prompts")
+    if lens.d_model != model.d_model or lens.source_layers != expected_layers:
+        raise ValueError("single lens must cover every model source layer with matching width")
+    if model.n_layers != 64 or model.d_model != 5120:
+        raise ValueError("Qwen27B single-lens evaluation requires 64 layers and d_model=5120")
+    metadata = validate_candidate_calibration(name="chinese_simplified", lens=lens, lens_path=lens_path, expected_n_prompts=expected_n_prompts, model_name=model_name)
+    residuals = _record_final_position_residuals(model, tokenizer, items, expected_layers, max_seq_len=max_seq_len, use_chat_template=use_chat_template)
+    rows = _score_lens(model=model, lens=lens, residuals=residuals, items=items, tokenizer=tokenizer, band_layers=fixed_evaluation_band(model.n_layers))
+    result = {
+        "schema_version": 1,
+        "evaluation_mode": "preselected_single_lens",
+        "selection_claim": "none",
+        "model": model_name,
+        "lens_path": str(lens_path),
+        "lens_binary_sha256": sha256_file(lens_path),
+        "lens_metadata_sha256": sha256_file(str(lens_path) + ".metadata.json"),
+        "holdout_path": str(holdout_path),
+        "holdout_count": len(items),
+        "layer_band": {"start": 22, "end": 48, "layers": fixed_evaluation_band(model.n_layers)},
+        "source_layers": expected_layers,
+        "n_layers": model.n_layers,
+        "d_model": model.d_model,
+        "metadata": metadata,
+        "summary": summarize_single_lens_rows(rows),
+        "rows": rows,
+    }
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    return result
 
 
 def evaluate_candidates(

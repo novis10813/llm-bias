@@ -52,6 +52,9 @@ def fit_jacobian_lens(
     use_chat_template: bool = False,
     enable_thinking: bool = False,
     checkpoint_every: int = 4,
+    device_map: str | dict[str, int | str] | None = None,
+    max_memory: dict[int | str, int | str] | None = None,
+    selection_basis: str | None = None,
 ) -> Path:
     """Fit and save a model-specific lens plus reproducibility metadata."""
     if calibration_count < 1:
@@ -77,7 +80,7 @@ def fit_jacobian_lens(
         else builtin_calibration_prompts(calibration_count)
     )
     jlens.configure_logging()
-    model, tokenizer, _device = load_model(model_name)
+    model, tokenizer, _device = load_model(model_name, device_map=device_map, max_memory=max_memory)
     if enable_thinking and not use_chat_template:
         raise ValueError("enable_thinking requires use_chat_template")
     prompts = [
@@ -139,6 +142,9 @@ def fit_jacobian_lens(
         "jlens_version": _package_version("jacobian-lens", "jlens"),
         "checkpoint_path": str(checkpoint),
         "checkpoint_every": checkpoint_every,
+        "selection_basis": selection_basis,
+        "requested_device_map": model.requested_device_map if hasattr(model, "requested_device_map") else None,
+        "resolved_device_diagnostics": model.model_diagnostics.as_dict() if hasattr(model, "model_diagnostics") else None,
         "provenance": {
             "workflow": "fit-jacobian-lens",
             "module": "llm_bias.lens_fitting.fitting",

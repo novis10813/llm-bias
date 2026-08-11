@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 from llm_bias.core.model import DEFAULT_MODEL
 from llm_bias.core.lens_artifacts import canonical_lens_path
@@ -29,6 +30,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="fit on prompts formatted as user turns with a generation prompt",
     )
     parser.add_argument("--enable-thinking", action="store_true")
+    parser.add_argument("--device-map", choices=("balanced", "qwen27b_two_gpu"), default=None)
+    parser.add_argument("--device-map-json", help="JSON explicit module-to-GPU map")
+    parser.add_argument("--max-memory-json", help="JSON mapping GPU IDs to memory budgets")
+    parser.add_argument("--selection-basis")
     parser.add_argument(
         "--checkpoint-every",
         type=int,
@@ -53,6 +58,9 @@ def main() -> None:
         use_chat_template=args.chat_template,
         enable_thinking=args.enable_thinking,
         checkpoint_every=args.checkpoint_every,
+        device_map=json.loads(args.device_map_json) if args.device_map_json else args.device_map,
+        max_memory=json.loads(args.max_memory_json) if args.max_memory_json else None,
+        selection_basis=args.selection_basis,
     )
 
 

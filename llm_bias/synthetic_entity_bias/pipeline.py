@@ -29,13 +29,17 @@ def _forward_batch(model, ids: list[list[int]], layers: list[int], device: Any, 
   with torch.no_grad(), ActivationRecorder(model.layers,at=layers) as rec:
    try: out=model.forward(x,attention_mask=mask)
    except TypeError: out=model.forward(x)
-   answer={int(k):v[torch.arange(len(ids),device=device),positions].float() for k,v in rec.activations.items()}
+   answer={int(k):v[torch.arange(len(ids),device=v.device),positions.to(v.device)].float() for k,v in rec.activations.items()}
   if hasattr(out,"logits"): logits=out.logits[torch.arange(len(ids),device=device),positions].float()
   elif isinstance(out,dict) and "logits" in out: logits=out["logits"][torch.arange(len(ids),device=device),positions].float()
   elif hasattr(model,"unembed"): logits=model.unembed(answer[max(layers)]).float()
   else: raise ValueError("model output has no logits")
   final_residual=answer[max(layers)]
-  normalized=final_norm(final_residual) if final_norm is not None else final_residual
+  if final_norm is not None:
+   params=list(final_norm.parameters())
+   norm_device=params[0].device if params else final_residual.device
+   normalized=final_norm(final_residual.to(norm_device))
+  else: normalized=final_residual
   temperatures=normalized.float().norm(dim=-1).reciprocal()
   if not torch.isfinite(temperatures).all() or (temperatures<=0).any(): raise ValueError("non-finite effective temperature")
   stored={k:v.detach() if keep_activations_device else v.detach().cpu() for k,v in answer.items()}
@@ -94,7 +98,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
   write_csv(root/"entity_pool.csv",[e.to_dict() for e in pool],list(pool[0].to_dict()))
   write_json(root/"tokenization_validation.json",token_report)
   m.start_stage("preflight"); m.finish_stage("preflight",record_count=len(rendered)); m.save()
-  localization_jacobians={layer: lens.jacobians[layer].to(device=device,dtype=torch.float32) for layer in getattr(lens,"source_layers",[]) } if lens is not None else {}
+  localization_jacobians={layer: lens.jacobians[layer].detach().float().cpu() for layer in getattr(lens,"source_layers",[]) } if lens is not None else {}
   baselines={}; baseline_vectors={}
   for t in TEMPLATES:
    p=render_prompt(tokenizer,t,entity=BASELINE_ENTITY,use_chat_template=use_chat_template,max_seq_len=max_seq_len)
@@ -130,7 +134,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
    fitted={}
    for layer in layers:
     direction,norm=directions[layer].normalized(); fitted[layer]=(direction,{"q25":q25,"q75":q75,"n_train":len(train),"n_high":directions[layer].n_high,"n_low":directions[layer].n_low,"high_ids_sha256":id_hash(high_ids),"low_ids_sha256":id_hash(low_ids),"direction_norm":norm,"direction_sha256":direction_hash(direction),"template":t,"layer":layer,"fit_split":"train","source_train_row_count":len(train)})
-   eval_directions={layer:fitted[layer][0].to(device=device,dtype=torch.float32) for layer in layers}
+   eval_directions={layer:fitted[layer][0].to(device=baseline_vectors[t][layer].device,dtype=torch.float32) for layer in layers}
    eval_cos={layer:[] for layer in layers}; eval_y=[]
    for start in range(0,len(ev),batch_size):
     batch=ev[start:start+batch_size]; prompts=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len) for e in batch]; _,acts_batch,_temps=_forward_batch(model,[list(p.input_ids) for p in prompts],layers,device,pad_token_id=pad,keep_activations_device=True); eval_y.extend(targets[e.ticker] for e in batch)

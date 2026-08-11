@@ -401,7 +401,7 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def build(output_dir: Path) -> dict[str, Any]:
+def build(output_dir: Path, *, model_slug: str | None = None, model_config: dict[str, Any] | None = None, tokenizer_name: str | None = None) -> dict[str, Any]:
     english, chinese = _records()
     mixed = []
     for topic_index in range(len(TOPICS)):
@@ -439,6 +439,12 @@ def build(output_dir: Path) -> dict[str, Any]:
             ("mixed", mixed),
         )
     }
+    tokenizer_stats = {}
+    if tokenizer_name:
+        import transformers
+        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
+        lengths = [len(tokenizer(row["text"], add_special_tokens=False).input_ids) for row in english + chinese + mixed]
+        tokenizer_stats = {"tokenizer_name_or_path": getattr(tokenizer, "name_or_path", tokenizer_name), "count": len(lengths), "min_tokens": min(lengths), "max_tokens": max(lengths), "mean_tokens": sum(lengths) / len(lengths), "chat_template_sha256": hashlib.sha256(str(getattr(tokenizer, "chat_template", "")).encode()).hexdigest()}
     manifest = {
         "schema_version": 1,
         "design": "parallel_domain_style_matched",
@@ -450,6 +456,10 @@ def build(output_dir: Path) -> dict[str, Any]:
         "domains": [topic["domain"] for topic in TOPICS],
         "styles": [style for style, _templates in STYLES],
         "sha256": hashes,
+        "model_slug": model_slug or output_dir.parent.name,
+        "model_config": model_config or {},
+        "selection_basis": "inherited_qwen3.5_4b_operational_winner" if (model_slug or output_dir.parent.name) == "qwen3.6-27b" else "not_applicable",
+        "tokenizer_stats": tokenizer_stats,
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -461,8 +471,12 @@ def build(output_dir: Path) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--model-slug", default=None)
+    parser.add_argument("--model-config-json", type=Path, default=None)
+    parser.add_argument("--tokenizer", default=None)
     args = parser.parse_args()
-    manifest = build(args.output_dir)
+    config = json.loads(args.model_config_json.read_text()) if args.model_config_json else None
+    manifest = build(args.output_dir, model_slug=args.model_slug, model_config=config, tokenizer_name=args.tokenizer)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 

@@ -36,12 +36,27 @@ def promote(
     model_name: str,
     evaluation_path: Path,
     archive_root: Path | None = None,
+    single_candidate: Path | None = None,
 ) -> dict[str, object]:
     """Promote one evaluated candidate into the model-scoped active path."""
     evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
-    selected = str(evaluation["selected_candidate"])
-    selected_record = evaluation["candidates"][selected]
-    candidate = Path(selected_record["lens_path"])
+    single = single_candidate is not None
+    if single:
+        if evaluation.get("evaluation_mode") != "preselected_single_lens":
+            raise ValueError("single-candidate promotion requires preselected_single_lens evaluation")
+        if evaluation.get("model") != model_name or evaluation.get("holdout_count") != 64:
+            raise ValueError("single-lens evaluation model or holdout count is invalid")
+        if evaluation.get("layer_band", {}).get("layers") != list(range(22, 48)):
+            raise ValueError("single-lens evaluation must use fixed L22-L47 band")
+        if evaluation.get("source_layers") != list(range(63)) or evaluation.get("n_layers") != 64 or evaluation.get("d_model") != 5120:
+            raise ValueError("single-lens evaluation has incomplete 27B coverage")
+        selected = "chinese_simplified"
+        selected_record = {"lens_path": str(single_candidate), "lens_binary_sha256": evaluation.get("lens_binary_sha256"), "lens_metadata_sha256": evaluation.get("lens_metadata_sha256")}
+        candidate = single_candidate
+    else:
+        selected = str(evaluation["selected_candidate"])
+        selected_record = evaluation["candidates"][selected]
+        candidate = Path(selected_record["lens_path"])
     candidate_metadata = lens_metadata_path(candidate)
     if not candidate.is_file() or not candidate_metadata.is_file():
         raise FileNotFoundError(
@@ -93,11 +108,10 @@ def promote(
             "selection_status": "canonical",
             "selected_candidate": selected,
             "selection_evaluation": str(evaluation_path),
-            "selection_rule": evaluation["selection_rule"],
-            "selection_score": evaluation["candidates"][selected]["summary"][
-                "selection_score"
-            ],
-            "selection_uncertainty": evaluation.get("selection_uncertainty"),
+            "selection_rule": evaluation.get("selection_rule", "preselected_single_candidate" if single else "candidate_selection"),
+            "selection_score": None if single else evaluation["candidates"][selected]["summary"]["selection_score"],
+            "selection_uncertainty": None if single else evaluation.get("selection_uncertainty"),
+            "promotion_basis": "inherited_qwen3.5_4b_operational_winner_then_qwen27b_holdout_validation" if single else "candidate_selection",
             "promoted_at": datetime.now(UTC).isoformat(),
             "previous_canonical_archive": (
                 str(archive) if archive.is_dir() else None
@@ -129,9 +143,12 @@ def promote(
         "canonical_lens": str(canonical),
         "canonical_sha256": metadata["binary_sha256"],
         "canonical_metadata_sha256": metadata["metadata_sha256"],
-        "selected_candidate": selected,
+        "promotion_mode": "preselected_single_candidate" if single else "candidate_selection",
+        "preselected_condition": selected if single else None,
+        "selected_candidate": None if single else selected,
         "evaluation": str(evaluation_path),
-        "selection_uncertainty": evaluation.get("selection_uncertainty"),
+        "selection_uncertainty": None if single else evaluation.get("selection_uncertainty"),
+        "promotion_basis": "inherited_qwen3.5_4b_operational_winner_then_qwen27b_holdout_validation" if single else "candidate_selection",
         "archive": str(archive) if archive.is_dir() else None,
         "provenance": {
             "workflow": "promote-jacobian-lens-candidate",
@@ -154,6 +171,7 @@ def main() -> None:
     parser.add_argument("--model", default=".cache/models/qwen3.5-4b")
     parser.add_argument("--evaluation", type=Path)
     parser.add_argument("--archive-root", type=Path)
+    parser.add_argument("--single-candidate", type=Path)
     args = parser.parse_args()
     evaluation = args.evaluation or lens_evaluation_path(args.model)
     print(
@@ -162,6 +180,7 @@ def main() -> None:
                 model_name=args.model,
                 evaluation_path=evaluation,
                 archive_root=args.archive_root,
+                single_candidate=args.single_candidate,
             ),
             ensure_ascii=False,
             indent=2,

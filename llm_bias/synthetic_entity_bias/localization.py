@@ -18,9 +18,8 @@ def transported_delta(entity: torch.Tensor, baseline: torch.Tensor, *, layer: in
   if lens is None and jacobian_cache is None: raise ValueError("non-final localization requires canonical lens or cached Jacobian")
   if jacobian_cache is not None:
    if layer not in jacobian_cache: raise ValueError(f"missing cached Jacobian for layer {layer}")
-   J=jacobian_cache[layer]
-   if J.device != delta.device: raise ValueError("cached Jacobian and residual device mismatch")
-   delta=delta @ J.float().T
+   J=jacobian_cache[layer].to(device=delta.device,dtype=torch.float32)
+   delta=delta @ J.T
   else:
    delta=lens.transport(delta,layer)
   if not torch.isfinite(delta).all() or delta.shape!=entity.shape: raise ValueError("lens transport returned invalid residual batch")

@@ -271,3 +271,25 @@ promotion 才需要 model inference。
 下一步應凍結這份 holdout，先用新的 confirmatory bilingual set 檢查 winner
 是否重現，再把 canonical lens 用於 span activation patch、bias-specific
 counterfactual pairs、雙向 causal controls 與 paired statistics。
+
+## Qwen3.6-27B GPU-only single-condition workflow
+
+27B checkpoint 的 `config.json` 可能實際宣告 `Qwen3_5ForConditionalGeneration`、
+64 layers、`d_model=5120`；artifact metadata 必須保存這個實際 identity，而不能把
+目錄名稱當成 architecture。使用 `llm_bias.core.model.load_model` 時，只有明確傳入
+`device_map` 才啟用 Accelerate sharding；default 仍是單 GPU。27B workflow 使用兩張
+GPU 的 balanced map 與顯式 `max_memory`，禁止 CPU、disk、meta offload、quantization、
+DDP、DataParallel 與 compile，並保存 `model_diagnostics` 的 resolved map、layer
+placement、norm/head device 與 parameter bytes。
+
+先執行 load/forward/autograd probe，再執行 1-prompt 與 8-prompt full L0--L62
+benchmarks。benchmark 與 progress/log 僅能寫入
+`artifacts/qwen3.6-27b/jacobian-lens/candidates/chinese_simplified/benchmarks/`
+下的 `one_prompt/`、`eight_prompts/` noncanonical scope；舊 canonical 或真正
+partial/stride checkpoint 才能使用 archive。48 小時估算、finite Jacobian、資源
+穩定及 checkpoint resume 任一失敗時必須 fail closed，不能建立 canonical lens。
+只有 128 Chinese prompts 的完整 L0--L62 lens
+通過固定 L22--L47 holdout evaluation 後，才可使用 preselected single-candidate
+promotion。這不是在 27B 上重新選擇 Chinese/English/mixed condition；metadata 的
+`selection_basis` 應為
+`inherited_qwen3.5_4b_operational_winner_then_qwen27b_holdout_validation`。

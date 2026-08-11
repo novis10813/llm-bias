@@ -48,7 +48,7 @@ PAIRS = [
 ]
 
 
-def build(output: Path) -> dict[str, object]:
+def build(output: Path, *, model_slug: str | None = None, model_config: dict[str, object] | None = None, tokenizer_name: str | None = None) -> dict[str, object]:
     rows = []
     for index, (
         name,
@@ -82,12 +82,22 @@ def build(output: Path) -> dict[str, object]:
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(payload, encoding="utf-8")
+    tokenizer_stats = {}
+    if tokenizer_name:
+        import transformers
+        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
+        concepts = [value for row in rows for value in (row["native_intermediate"], row["crosslingual_intermediate"], row["target"])]
+        tokenizer_stats = {"tokenizer_name_or_path": getattr(tokenizer, "name_or_path", tokenizer_name), "single_token_count": sum(len(tokenizer(value, add_special_tokens=False).input_ids) == 1 for value in concepts), "concept_count": len(concepts)}
     manifest = {
         "schema_version": 1,
         "design": "32_semantically_paired_bilingual_intermediate_prompts",
         "count": 64,
         "languages": {"en": 32, "zh-CN": 32},
         "sha256": hashlib.sha256(payload.encode()).hexdigest(),
+        "model_slug": model_slug or output.parent.parent.name,
+        "model_config": model_config or {},
+        "selection_basis": "inherited_qwen3.5_4b_operational_winner" if (model_slug or output.parent.parent.name) == "qwen3.6-27b" else "not_applicable",
+        "tokenizer_stats": tokenizer_stats,
     }
     output.with_suffix(".manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -99,8 +109,12 @@ def build(output: Path) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--model-slug", default=None)
+    parser.add_argument("--model-config-json", type=Path, default=None)
+    parser.add_argument("--tokenizer", default=None)
     args = parser.parse_args()
-    print(json.dumps(build(args.output), ensure_ascii=False, indent=2))
+    config = json.loads(args.model_config_json.read_text()) if args.model_config_json else None
+    print(json.dumps(build(args.output, model_slug=args.model_slug, model_config=config, tokenizer_name=args.tokenizer), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
