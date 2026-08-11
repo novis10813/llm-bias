@@ -176,6 +176,23 @@ def test_return_pairs_expand_by_pair_and_preserve_identity(tmp_path):
     assert [row["fwd_return_1d"] for row in table.rows[:2]] == [0.0, 0.0]
 
 
+def test_load_prompt_table_supports_ten_k_change_rows(tmp_path):
+    path = tmp_path / "ten_k.csv"
+    path.write_text(
+        "year,cik,item\n2020,320193,company=ACME INC\n2021,320193,state_of_inc=DE=ARCHIVE\n",
+        encoding="utf-8",
+    )
+
+    table = load_prompt_table(path, dataset_format="auto")
+
+    assert table.dataset_format == "ten-k-change"
+    assert [row["prompt"] for row in table.rows] == [
+        "In year 2020, what is the company name of the company with CIK code 320193? Answer without explanation",
+        "In year 2021, what is the state of incorporation of the company with CIK code 320193? Answer without explanation",
+    ]
+    assert table.rows[1]["item_value"] == "DE=ARCHIVE"
+
+
 def test_auto_does_not_treat_partial_pair_schema_as_return_pairs(tmp_path):
     path = tmp_path / "legacy.csv"
     path.write_text("cik,prompt_without_context_x\n1,hello\n", encoding="utf-8")

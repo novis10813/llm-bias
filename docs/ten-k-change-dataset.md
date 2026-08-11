@@ -64,3 +64,50 @@ uv run prepare-10k-change-data build \
 uv run prepare-10k-change-data validate \
   --input artifacts/ten_k_change_windows/v1
 ```
+
+## 10-K metadata QA generation
+
+`generate` 讀取已驗證的 `change_window_items.csv`，將 `item=field=value` 的欄位名稱映射為：
+
+- `company` → `company name`
+- `state_location` → `state/location`
+- `state_of_inc` → `state of incorporation`
+- `sic` → `SIC code`
+
+每列使用固定 prompt：
+
+```text
+In year {year}, what is the {item_name} of the company with CIK code {cik}? Answer without explanation
+```
+
+這個階段不將 CSV 中的答案值拼入問題；原始 `item` 與解析後的值會保留在 generated-output record 中供稽核。使用本地 Qwen 3.5 4B：
+
+```bash
+uv run prepare-10k-change-data generate \
+  --input artifacts/ten_k_change_windows/v1/change_window_items.csv \
+  --model .cache/models/qwen3.5-4b \
+  --output artifacts/qwen3.5-4b/ten-k-change-windows-v1/runs/001/forward \
+  --max-new-tokens 16 \
+  --max-seq-len 256 \
+  --temperature 0
+```
+
+輸出為 `forward/generated_outputs.jsonl` 與 `forward/metadata.json`；metadata 會記錄 source CSV hash、model、prompt template、mapping version 與 row count。
+
+### Schema-constrained generation
+
+若本機有 OpenAI-compatible llama.cpp server，可使用 `generate-structured`。它透過
+`response_format=json_schema` 強制模型輸出唯一的 `answer` 字串欄位，不依賴自然語言中的
+「不要解釋」指示：
+
+```bash
+uv run prepare-10k-change-data generate-structured \
+  --input artifacts/ten_k_change_windows/v1/change_window_items.csv \
+  --output artifacts/qwen3.5-9b-mtp/ten-k-change-windows-v1/runs/003 \
+  --base-url http://127.0.0.1:11433/v1 \
+  --model qwen3.5-9b-mtp \
+  --max-tokens 64
+```
+
+輸出為 `structured_answers.jsonl` 與 `metadata.json`。每筆 record 同時保存
+`generated_text`、解析後的 `parsed_answer`、`parse_status`、`finish_reason` 與來源 row metadata。

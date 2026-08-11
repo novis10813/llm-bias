@@ -248,7 +248,7 @@ def build_change_dataset(
     max_files: int | None = None,
     fail_on_input_issues: bool = False,
 ) -> dict[str, Any]:
-    """Publish one `year,sic,item` CSV scoped to metadata-change windows."""
+    """Publish one ``year,cik,item`` CSV scoped to metadata-change windows."""
     source_root, destination = Path(input_dir).resolve(), Path(output_dir)
     if not source_root.is_dir():
         raise TenKChangeDataError(f"input directory does not exist: {source_root}")

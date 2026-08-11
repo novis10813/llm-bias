@@ -10,7 +10,8 @@ def main() -> None:
         "  counterfactual-patching Run residual activation patch experiments\n"
         "  prompt-analysis         Run prompt readout and attribution experiments\n"
         "  prepare-edgar-8k        Clean extracted 8-K filings into staging data\n"
-        "  prepare-counterfactual-data Build reviewed entity-only bias pairs"
+        "  prepare-counterfactual-data Build reviewed entity-only bias pairs\n"
+        "  prepare-10k-change-data Build and run 10-K metadata-change experiments"
     )
 
 

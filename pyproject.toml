@@ -27,6 +27,7 @@ prompt-analysis = "llm_bias.prompt_analysis.cli:main"
 prepare-edgar-8k = "llm_bias.edgar_preparation.cli:main"
 prepare-counterfactual-data = "llm_bias.counterfactual_data.cli:main"
 synthetic-entity-bias = "llm_bias.synthetic_entity_bias.cli:main"
+prepare-10k-change-data = "llm_bias.ten_k_change_data.cli:main"
 
 [project.optional-dependencies]
 extraction = [

@@ -116,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="use_chat_template",
     )
     readout.add_argument("--enable-thinking", action="store_true")
-    readout.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs"), default="auto")
+    readout.add_argument("--dataset-format", choices=("auto", "legacy-wide", "return-pairs", "ten-k-change"), default="auto")
 
     generate = commands.add_parser(
         "generate", help="generate and persist complete forward outputs"
@@ -141,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--top-k", type=int, default=0)
     generate.add_argument(
         "--dataset-format",
-        choices=("auto", "legacy-wide", "return-pairs"),
+        choices=("auto", "legacy-wide", "return-pairs", "ten-k-change"),
         default="auto",
     )
 

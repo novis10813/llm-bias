@@ -45,6 +45,18 @@ def test_legacy_bom_and_quoted_multiline(tmp_path):
     assert not report["errors"]
 
 
+def test_ten_k_change_report_validates_rows(tmp_path):
+    path = tmp_path / "ten_k.csv"
+    write_csv(path, [
+        {"year": "2020", "cik": "1", "item": "company=ACME"},
+        {"year": "2021", "cik": "1", "item": "sic="},
+    ])
+    report = inspect_input(path)
+    assert report["schema"] == "ten-k-change"
+    assert report["counts"]["fields"] == {"company": 1, "sic": 1}
+    assert not report["errors"]
+
+
 def test_bad_return_quality_is_reported(tmp_path):
     path = tmp_path / "bad.csv"
     write_csv(path, [_return_row(fwd_return_1d="nan"), _return_row()])

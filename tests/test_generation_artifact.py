@@ -105,6 +105,35 @@ def test_generation_only_writes_complete_return_pair_artifact(tmp_path, monkeypa
     assert metadata["records_written"] == 4
 
 
+def test_ten_k_generation_writes_one_record_per_source_row(tmp_path, monkeypatch):
+    input_path = tmp_path / "ten_k.csv"
+    input_path.write_text(
+        "year,cik,item\n2020,1,company=ACME\n2020,1,sic=1234\n2020,1,company=ACME\n",
+        encoding="utf-8",
+    )
+    _patch_fake_model(monkeypatch)
+
+    output_path = generation.generate_prompt_outputs(
+        input_path=str(input_path),
+        model_name="fake",
+        output_dir=tmp_path / "run-root",
+        max_new_tokens=1,
+        dataset_format="ten-k-change",
+    )
+
+    records = [json.loads(line) for line in output_path.read_text().splitlines()]
+    assert len(records) == 3
+    assert len({record["record_id"] for record in records}) == 3
+    assert records[0]["prompt"] == (
+        "In year 2020, what is the company name of the company with CIK code 1? "
+        "Answer without explanation"
+    )
+    assert records[1]["item_name"] == "SIC code"
+    metadata = json.loads((tmp_path / "run-root" / "forward" / "metadata.json").read_text())
+    assert metadata["dataset_format"] == "ten-k-change"
+    assert metadata["records_written"] == 3
+
+
 def test_multi_run_writes_sampling_manifest_and_forward_paths(tmp_path, monkeypatch):
     input_path = tmp_path / "legacy.csv"
     input_path.write_text(

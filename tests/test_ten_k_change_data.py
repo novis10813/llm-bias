@@ -100,6 +100,16 @@ def test_input_issues_are_audited_all_invalid_fails_and_strict_publishes(tmp_pat
     assert (tmp_path / "strict" / "change_window_items.csv").is_file()
 
 
+def test_generate_cli_defaults_and_arguments() -> None:
+    args = build_parser().parse_args([
+        "generate", "--model", ".cache/models/qwen3.5-4b", "--output", "out/forward"
+    ])
+    assert args.command == "generate"
+    assert args.input.endswith("change_window_items.csv")
+    assert args.temperature == 0.0
+    assert args.full_generation is True
+
+
 def test_validator_detects_tampered_csv_and_cli_defaults(tmp_path: Path) -> None:
     source = tmp_path / "source"; source.mkdir()
     _years(source, company="NEW")

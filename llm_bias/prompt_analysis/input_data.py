@@ -14,6 +14,16 @@ from llm_bias.prompt_analysis.input_schema import (
 )
 
 RETURN_LABELS = ("very bullish", "bullish", "neutral", "bearish", "very bearish")
+TEN_K_ITEM_NAMES = {
+    "company": "company name",
+    "state_location": "state/location",
+    "state_of_inc": "state of incorporation",
+    "sic": "SIC code",
+}
+TEN_K_PROMPT_TEMPLATE = (
+    "In year {year}, what is the {item_name} of the company with CIK code {cik}? "
+    "Answer without explanation"
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +109,50 @@ def load_prompt_table(
                 if max_rows is not None and row_index >= max_rows:
                     break
                 rows.append(row)
+        elif resolved == "ten-k-change":
+            if selected_columns:
+                invalid = set(selected_columns) - {"prompt"}
+                if invalid:
+                    raise ValueError("ten-k-change prompt columns only support prompt")
+            columns = [PromptColumn("prompt", "ten_k_change", "ten_k_change")]
+            rows = []
+            for row_index, row in enumerate(reader):
+                if max_rows is not None and row_index >= max_rows:
+                    break
+                year = row.get("year", "").strip()
+                cik = row.get("cik", "").strip()
+                item = row.get("item", "").strip()
+                if not year.isdigit() or len(year) != 4:
+                    raise ValueError(f"ten-k-change row {row_index} has invalid year")
+                if not cik:
+                    raise ValueError(f"ten-k-change row {row_index} has empty cik")
+                if "=" not in item:
+                    raise ValueError(f"ten-k-change row {row_index} item must contain '='")
+                item_field, item_value = item.split("=", 1)
+                item_field, item_value = item_field.strip(), item_value.strip()
+                if item_field not in TEN_K_ITEM_NAMES:
+                    raise ValueError(f"ten-k-change row {row_index} has invalid item")
+                item_name = TEN_K_ITEM_NAMES[item_field]
+                expanded = dict(row)
+                expanded.update(
+                    {
+                        "input_schema": "ten-k-change",
+                        "row_index": row_index,
+                        "year": int(year),
+                        "cik": cik,
+                        "item": item,
+                        "item_field": item_field,
+                        "item_value": item_value,
+                        "item_name": item_name,
+                        "prompt": TEN_K_PROMPT_TEMPLATE.format(
+                            year=year, item_name=item_name, cik=cik
+                        ),
+                        "Date": f"{year}-12-31",
+                        "index": "ten_k_change",
+                        "context": "ten_k_change",
+                    }
+                )
+                rows.append(expanded)
         else:
             if selected_columns:
                 invalid = set(selected_columns) - {"original", "counterfactual"}

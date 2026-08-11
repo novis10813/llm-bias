@@ -89,10 +89,12 @@ def inspect_input(path: str | Path) -> dict[str, Any]:
             return report
         schema = describe_prompt_input(fields)
         legacy_columns = list(schema.legacy_columns)
-        if schema.legacy_complete and schema.return_pairs_complete:
+        if schema.ten_k_change_complete:
+            report["schema"] = "ten-k-change"
+        elif schema.legacy_complete and schema.return_pairs_complete:
             report["errors"].append("input matches both legacy-wide and return-pairs schemas; specify a non-ambiguous CSV")
             return report
-        if not schema.legacy_complete and not schema.return_pairs_complete:
+        elif not schema.legacy_complete and not schema.return_pairs_complete:
             report["errors"].append(
                 "input does not match a complete formal schema (legacy-wide requires Date and prompt_with/without_context_*; "
                 "return-pairs is missing: "
@@ -100,9 +102,10 @@ def inspect_input(path: str | Path) -> dict[str, Any]:
                 + ")"
             )
             return report
-        report["schema"] = (
-            "legacy-wide" if schema.legacy_complete else "return-pairs"
-        )
+        if report["schema"] is None:
+            report["schema"] = (
+                "legacy-wide" if schema.legacy_complete else "return-pairs"
+            )
         rows: list[dict[str, str | None]] = []
         for row_number, row in enumerate(reader, start=2):
             if None in row:
@@ -116,8 +119,10 @@ def inspect_input(path: str | Path) -> dict[str, Any]:
 
     if report["schema"] == "legacy-wide":
         _inspect_legacy(rows, fields, legacy_columns, report)
-    else:
+    elif report["schema"] == "return-pairs":
         _inspect_returns(rows, report)
+    else:
+        _inspect_ten_k_change(rows, report)
     return report
 
 
@@ -140,6 +145,39 @@ def _inspect_legacy(rows: list[dict[str, str | None]], fields: list[str], column
     ]
     if malformed:
         report["errors"].append("prompt-like columns must match ^prompt_(with|without)_context_(.+)$: " + ", ".join(malformed))
+
+
+def _inspect_ten_k_change(rows: list[dict[str, str | None]], report: dict[str, Any]) -> None:
+    from llm_bias.prompt_analysis.input_data import TEN_K_ITEM_NAMES
+
+    invalid_year = invalid_cik = invalid_item = 0
+    fields: Counter[str] = Counter()
+    for row in rows:
+        year = str(row.get("year") or "").strip()
+        cik = str(row.get("cik") or "").strip()
+        item = str(row.get("item") or "").strip()
+        if not re.fullmatch(r"\d{4}", year):
+            invalid_year += 1
+        if not cik:
+            invalid_cik += 1
+        if "=" not in item:
+            invalid_item += 1
+            continue
+        field, value = (part.strip() for part in item.split("=", 1))
+        if field not in TEN_K_ITEM_NAMES:
+            invalid_item += 1
+        else:
+            fields[field] += 1
+    report["counts"] = {
+        "fields": dict(sorted(fields.items())),
+        "invalid_year": invalid_year,
+        "invalid_cik": invalid_cik,
+        "invalid_item": invalid_item,
+    }
+    if invalid_year or invalid_cik or invalid_item:
+        report["errors"].append(
+            f"ten-k-change rows invalid: year={invalid_year}, cik={invalid_cik}, item={invalid_item}"
+        )
 
 
 def _inspect_returns(rows: list[dict[str, str | None]], report: dict[str, Any]) -> None:

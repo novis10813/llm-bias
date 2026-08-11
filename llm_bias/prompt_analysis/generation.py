@@ -182,11 +182,16 @@ def _select_rows(
     columns = table.columns
     rows = table.rows
     is_return_pairs = table.dataset_format == "return-pairs"
+    is_ten_k_change = table.dataset_format == "ten-k-change"
     selected_dates = set(dates or ())
     effective_dates = set(selected_dates)
     effective_pairs: set[str] = set()
 
-    if is_return_pairs:
+    if is_ten_k_change:
+        if selected_dates:
+            raise ValueError("dates are not supported for ten-k-change inputs")
+        effective_pairs = set()
+    elif is_return_pairs:
         if selected_dates:
             effective_pairs = {
                 row["pair_id"]
@@ -263,6 +268,14 @@ def _record_identity(
             "input_schema": "return-pairs",
             "pair_id": row["pair_id"],
             "condition": row["condition"],
+        }
+    if row.get("input_schema") == "ten-k-change":
+        return {
+            "input_schema": "ten-k-change",
+            "row_index": row["row_index"],
+            "year": row["year"],
+            "cik": row["cik"],
+            "item": row["item"],
         }
     return {
         "input_schema": "legacy-wide",
@@ -367,6 +380,7 @@ def generate_prompt_outputs(
         dataset_format=dataset_format,
     )
     columns = table.columns
+    is_ten_k_change = table.dataset_format == "ten-k-change"
     candidates_by_column, effective_dates, effective_pairs, is_return_pairs = _select_rows(
         table,
         sample_per_condition=sample_per_condition,
@@ -510,8 +524,10 @@ def generate_prompt_outputs(
                         ),
                     }
                     for key in (
-                        "input_schema", "pair_id", "filing_date", "ticker", "peer_ticker",
-                        "condition", "target_label", "fwd_return_1d", "system_prompt",
+                        "input_schema", "row_index", "year", "cik", "item", "item_field",
+                        "item_value", "item_name", "pair_id", "filing_date", "ticker",
+                        "peer_ticker", "condition", "target_label", "fwd_return_1d",
+                        "system_prompt",
                     ):
                         if key in row:
                             record[key] = row[key]
@@ -529,8 +545,13 @@ def generate_prompt_outputs(
             "input_sha256": input_sha256,
             "model": model_name,
             "model_slug": model_slug(model_name),
-            "dataset_format": dataset_format,
-            "selection": "full" if (full_generation or selection == "full" or return_pairs_full or sample_per_condition is None) else "sampled",
+            "dataset_format": table.dataset_format,
+            "selection": "full" if (is_ten_k_change or full_generation or selection == "full" or return_pairs_full or sample_per_condition is None) else "sampled",
+            "prompt_template": (
+                "In year {year}, what is the {item_name} of the company with CIK code {cik}? Answer without explanation"
+                if is_ten_k_change else None
+            ),
+            "item_name_mapping_version": "ten-k-change-v1" if is_ten_k_change else None,
             "sample_per_condition": sample_per_condition,
             "selected_dates": sorted(effective_dates),
             "selected_pairs": sorted(effective_pairs),
@@ -567,8 +588,8 @@ def generate_prompt_outputs(
                 "model_slug": model_slug(model_name),
                 "input": str(source),
                 "input_sha256": input_sha256,
-                "dataset_format": dataset_format,
-                "selection": "full" if (full_generation or selection == "full" or return_pairs_full or sample_per_condition is None) else "sampled",
+                "dataset_format": table.dataset_format,
+                "selection": "full" if (is_ten_k_change or full_generation or selection == "full" or return_pairs_full or sample_per_condition is None) else "sampled",
                 "runs": runs,
                 "run_indices": list(range(runs)),
                 "selected_dates": sorted(effective_dates),

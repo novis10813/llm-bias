@@ -22,6 +22,7 @@ RETURN_PAIR_REQUIRED = (
     "return_label",
     "fwd_return_1d",
 )
+TEN_K_CHANGE_REQUIRED = ("year", "cik", "item")
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class PromptInputSchema:
     legacy_complete: bool
     return_pairs_complete: bool
     missing_return_pair_columns: tuple[str, ...]
+    ten_k_change_complete: bool
 
 
 def describe_prompt_input(fieldnames: Iterable[str]) -> PromptInputSchema:
@@ -49,6 +51,7 @@ def describe_prompt_input(fieldnames: Iterable[str]) -> PromptInputSchema:
         legacy_complete="Date" in available and bool(legacy_columns),
         return_pairs_complete=not missing_return_pair_columns,
         missing_return_pair_columns=missing_return_pair_columns,
+        ten_k_change_complete=tuple(names) == TEN_K_CHANGE_REQUIRED,
     )
 
 
@@ -56,9 +59,18 @@ def detect_dataset_format(
     fieldnames: Iterable[str], dataset_format: str = "auto"
 ) -> str:
     """Resolve the execution schema while rejecting incomplete explicit inputs."""
-    if dataset_format not in {"auto", "legacy-wide", "return-pairs"}:
-        raise ValueError("dataset_format must be auto, legacy-wide, or return-pairs")
+    if dataset_format not in {"auto", "legacy-wide", "return-pairs", "ten-k-change"}:
+        raise ValueError(
+            "dataset_format must be auto, legacy-wide, return-pairs, or ten-k-change"
+        )
     schema = describe_prompt_input(fieldnames)
+    if dataset_format == "ten-k-change":
+        if not schema.ten_k_change_complete:
+            raise ValueError(
+                "ten-k-change CSV requires exact columns: "
+                + ",".join(TEN_K_CHANGE_REQUIRED)
+            )
+        return dataset_format
     if dataset_format == "return-pairs":
         if schema.missing_return_pair_columns:
             raise ValueError(
@@ -66,6 +78,9 @@ def detect_dataset_format(
                 + ", ".join(schema.missing_return_pair_columns)
             )
         return dataset_format
-    if dataset_format == "auto" and schema.return_pairs_complete:
-        return "return-pairs"
+    if dataset_format == "auto":
+        if schema.ten_k_change_complete:
+            return "ten-k-change"
+        if schema.return_pairs_complete:
+            return "return-pairs"
     return "legacy-wide"
