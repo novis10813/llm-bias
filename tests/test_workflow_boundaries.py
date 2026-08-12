@@ -127,6 +127,7 @@ def test_independent_cli_command_sets():
     assert visualize_defaults.run_root == "completed-run"
     assert visualize_defaults.output_dir is None
     assert visualize_defaults.replace_existing is False
+    assert visualize_defaults.with_dashboard is False
     assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
     readout_defaults = prompt_parser().parse_args(

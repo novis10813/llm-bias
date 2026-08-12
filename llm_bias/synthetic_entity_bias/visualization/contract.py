@@ -41,7 +41,15 @@ REQUIRED_OUTPUTS = {
         "layer_template_localization.csv", "localization", LOCALIZATION_FIELDS
     ),
 }
-VISUALIZATION_SCHEMA_VERSION = 1
+VISUALIZATION_SCHEMA_VERSION = 3
+FIGURE_IDS = (
+    "entity_effect_distribution",
+    "entity_effect_by_tier",
+    "template_relationships",
+    "localization_profiles",
+    "sector_effects",
+)
+FIGURE_FORMATS = ("png", "svg", "pdf")
 SUMMARY_FILES = {
     "template": "template_summary.csv",
     "tier": "familiarity_tier_summary.csv",

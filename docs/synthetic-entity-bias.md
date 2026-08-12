@@ -52,26 +52,41 @@ uv run synthetic-entity-bias visualize \
   --run-root artifacts/qwen3.5-4b/synthetic-entity-bias-2020-2025/runs/pretrained-wikitext-20260812
 ```
 
-The visualizer accepts only a schema-version-1 run whose manifest and all four stages are complete. Before writing output it verifies the required output references, relative paths, SHA-256 digests, CSV schemas, record counts, immutable template/label hashes, ticker/template/layer coverage, probability normalization, numeric domains, and cross-file entity/baseline identity. It rejects failed or partial runs, stale hashes, mixed artifacts, malformed distributions, and incomplete grids. The source `manifest.json` is never modified.
+The visualizer accepts only a source run whose schema-version-1 manifest and all four stages are complete. Before writing output it verifies the required output references, relative paths, SHA-256 digests, CSV schemas, record counts, immutable template/label hashes, ticker/template/layer coverage, probability normalization, numeric domains, and cross-file entity/baseline identity. It rejects failed or partial runs, stale hashes, mixed artifacts, malformed distributions, and incomplete grids. The source `manifest.json` is never modified. The derived visualization bundle currently uses its own schema version 3.
 
-The default output is `<run-root>/visualization/`; an existing non-empty bundle is refused unless `--replace-existing` is explicit. `--output-dir` may select another destination. The bundle contains:
+The default output is `<run-root>/visualization/`; an existing non-empty bundle is refused unless `--replace-existing` is explicit. `--output-dir` may select another destination. The default is paper-first and contains:
 
 ```text
 visualization/
 ├── visualization_metadata.json
-├── dashboard.html
-├── template_summary.csv
-├── familiarity_tier_summary.csv
-├── sector_summary.csv
-├── ticker_template_effects.csv
-├── localization_summary.csv
-├── entity_effect_distribution.{png,svg}
-├── entity_effect_by_tier.{png,svg}
-├── template_relationships.{png,svg}
-├── localization_profiles.{png,svg}
-└── sector_effects.{png,svg}
+├── figures/
+│   ├── entity_effect_distribution.{png,svg,pdf}
+│   ├── entity_effect_by_tier.{png,svg,pdf}
+│   ├── template_relationships.{png,svg,pdf}
+│   ├── localization_profiles.{png,svg,pdf}
+│   └── sector_effects.{png,svg,pdf}
+├── captions/
+│   └── <one publication caption per figure>.md
+└── tables/
+    ├── template_summary.csv
+    ├── familiarity_tier_summary.csv
+    ├── sector_summary.csv
+    ├── ticker_template_effects.csv
+    └── localization_summary.csv
 ```
 
-The metadata records the source run identity, manifest and artifact hashes/counts, validation checks, aggregation definitions, lens condition, output hashes, and the explicit fact that no model loading occurred. Sector summaries explode the pipe-delimited source sector memberships; missing sectors are reported as `Unknown`, and the plot applies a documented minimum group count. Localization plots use normalized layer depth so runs with different layer counts remain visually comparable, but this command is a single-run report: it does not perform a statistical 4B-versus-27B comparison.
+Each static figure is designed to remain interpretable outside the repository: it includes a publication title, metric definition, sample size, panel labels, reference annotations, complete legend, and concise figure note. PNG is a high-resolution raster export, while SVG and PDF preserve vector marks and text. Each deterministic Markdown caption identifies its figure stem and supporting table and includes the relevant interpretation limits.
+
+The metadata records the source run identity, manifest and artifact hashes/counts, validation checks, aggregation definitions, paper formats/layout, caption linkage, lens condition, output hashes, and the explicit fact that no model loading occurred. Sector summaries explode the pipe-delimited source sector memberships; missing sectors are reported as `Unknown`, and the plot applies a documented minimum group count. Localization plots use normalized layer depth so runs with different layer counts remain visually comparable, but this command is a single-run report: it does not perform a statistical 4B-versus-27B comparison.
+
+An interactive dashboard is optional:
+
+```bash
+uv run synthetic-entity-bias visualize \
+  --run-root <completed-run> \
+  --with-dashboard
+```
+
+The auxiliary dashboard renders inline SVG without a CDN or server dependency and links to the paper figures in `figures/`. Embedded ticker/company values are serialized as script-safe JSON and inserted into the DOM with `textContent`, not data-driven HTML.
 
 All figures are descriptive. `delta_expected_score` is the entity expected score minus its matched no-entity baseline under the restricted nine-label distribution; it is not by itself a standalone causal effect. Localization remains Jacobian-transported representation evidence, not chain-of-thought, and lens calibration remains an experimental condition. No activation, residual, hidden state, or gradient payload is written.

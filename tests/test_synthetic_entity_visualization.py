@@ -13,11 +13,18 @@ from llm_bias.synthetic_entity_bias.visualization import (
     validate_run,
     visualize_run,
 )
+from llm_bias.synthetic_entity_bias.visualization.chart_specs import build_chart_specs
 from llm_bias.synthetic_entity_bias.visualization.contract import (
     BASELINE_FIELDS,
     ENTITY_POOL_FIELDS,
     LOCALIZATION_FIELDS,
     RESULT_FIELDS,
+)
+from llm_bias.synthetic_entity_bias.visualization.dashboard import _safe_json, render_dashboard
+from llm_bias.synthetic_entity_bias.visualization.theme import (
+    DARK_COLORS,
+    LIGHT_COLORS,
+    template_style,
 )
 
 
@@ -118,14 +125,44 @@ def test_visualize_run_writes_auditable_bundle(tmp_path):
     run = validate_run(root)
     assert len(run.results) == 6
     output = visualize_run(root)
-    assert (output / "dashboard.html").is_file()
-    assert len(list(output.glob("*.png"))) == 5
-    assert len(list(output.glob("*.svg"))) == 5
+    assert not (output / "dashboard.html").exists()
+    assert len(list((output / "figures").glob("*.png"))) == 5
+    assert len(list((output / "figures").glob("*.svg"))) == 5
+    assert len(list((output / "figures").glob("*.pdf"))) == 5
+    assert len(list((output / "captions").glob("*.md"))) == 5
+    assert len(list((output / "tables").glob("*.csv"))) == 5
+    for path in (output / "figures").glob("*.pdf"):
+        assert path.read_bytes().startswith(b"%PDF")
     metadata = json.loads((output / "visualization_metadata.json").read_text())
     assert metadata["validation"]["model_loading_performed"] is False
     assert metadata["records"]["entity_template_results"] == 6
-    assert {row["path"] for row in metadata["outputs"]} >= {"template_summary.csv", "dashboard.html"}
-    assert "https://" not in (output / "dashboard.html").read_text()
+    assert metadata["schema_version"] == 3
+    assert metadata["render_profile"] == "paper_first"
+    assert metadata["paper_exports"]["formats"] == ["png", "svg", "pdf"]
+    assert metadata["dashboard"]["requested"] is False
+    assert metadata["accessibility"]["self_explained_static_figures"] is True
+    assert metadata["chart_specs"]["count"] == 5
+    assert {row["path"] for row in metadata["outputs"]} >= {
+        "tables/template_summary.csv",
+        "figures/entity_effect_distribution.pdf",
+        "captions/entity_effect_distribution.md",
+    }
+    caption = (output / "captions" / "entity_effect_distribution.md").read_text()
+    assert "Figure caption" in caption
+    assert "ΔE" in caption
+    assert "standalone causal effect" in caption
+
+
+def test_visualize_optionally_writes_interactive_dashboard(tmp_path):
+    output = visualize_run(_fixture(tmp_path), with_dashboard=True)
+    dashboard = (output / "dashboard.html").read_text()
+    assert "https://" not in dashboard
+    assert dashboard.count('class="chart"') == 5
+    assert 'href="figures/entity_effect_distribution.pdf"' in dashboard
+    assert "forced-colors:active" in dashboard
+    assert "theme-toggle" in dashboard
+    assert "target.innerHTML" not in dashboard
+    assert "textContent" in dashboard
 
 
 def test_visualize_refuses_existing_bundle_without_explicit_replacement(tmp_path):
@@ -152,3 +189,45 @@ def test_validate_run_rejects_non_complete_manifest(tmp_path):
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ArtifactContractError, match="complete"):
         validate_run(root)
+
+
+def test_theme_identity_is_fixed_and_unknown_templates_fail():
+    assert LIGHT_COLORS == {
+        "negative": "#2a78d6",
+        "positive": "#eb6834",
+        "neutral": "#1baf7a",
+    }
+    assert DARK_COLORS == {
+        "negative": "#3987e5",
+        "positive": "#d95926",
+        "neutral": "#199e70",
+    }
+    assert template_style("positive")["marker"] == "s"
+    with pytest.raises(ValueError, match="unknown template"):
+        template_style("other")
+
+
+def test_chart_specs_have_tooltips_tables_and_secondary_encodings(tmp_path):
+    run = validate_run(_fixture(tmp_path))
+    specs = build_chart_specs(run)
+    assert len(specs) == 5
+    for spec in specs:
+        assert spec["description"]
+        assert spec["title"]
+        assert spec["subtitle"]
+        assert spec["figure_note"]
+        assert spec["panels"]
+        assert spec["supporting_table"]
+        assert spec["tooltip_fields"]
+        assert spec["table"]
+        assert len({panel["label"] for panel in spec["panels"]}) == len(spec["panels"])
+        for series in spec["series"]:
+            assert series["style"]["marker"]
+            assert series["style"]["dash"]
+            assert series["style"]["hatch"]
+
+
+def test_dashboard_serializes_untrusted_text_without_executable_markup():
+    payload = _safe_json({"company_name": '</script><script id="injected">alert(1)</script>'})
+    assert '<script id="injected">' not in payload
+    assert "\\u003c/script\\u003e" in payload
