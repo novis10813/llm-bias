@@ -42,3 +42,36 @@ CUDA_VISIBLE_DEVICES=0 uv run synthetic-entity-bias run --constituents data/sp50
 ```
 
 The pinned Neuronpedia lenses were calibrated on Salesforce/WikiText. Treat lens source as an experimental condition; these artifacts are not the local bilingual candidate-selection winner.
+
+## Artifact-only visualization
+
+A completed run can be summarized and visualized without loading the model, tokenizer, or Jacobian lens:
+
+```bash
+uv run synthetic-entity-bias visualize \
+  --run-root artifacts/qwen3.5-4b/synthetic-entity-bias-2020-2025/runs/pretrained-wikitext-20260812
+```
+
+The visualizer accepts only a schema-version-1 run whose manifest and all four stages are complete. Before writing output it verifies the required output references, relative paths, SHA-256 digests, CSV schemas, record counts, immutable template/label hashes, ticker/template/layer coverage, probability normalization, numeric domains, and cross-file entity/baseline identity. It rejects failed or partial runs, stale hashes, mixed artifacts, malformed distributions, and incomplete grids. The source `manifest.json` is never modified.
+
+The default output is `<run-root>/visualization/`; an existing non-empty bundle is refused unless `--replace-existing` is explicit. `--output-dir` may select another destination. The bundle contains:
+
+```text
+visualization/
+├── visualization_metadata.json
+├── dashboard.html
+├── template_summary.csv
+├── familiarity_tier_summary.csv
+├── sector_summary.csv
+├── ticker_template_effects.csv
+├── localization_summary.csv
+├── entity_effect_distribution.{png,svg}
+├── entity_effect_by_tier.{png,svg}
+├── template_relationships.{png,svg}
+├── localization_profiles.{png,svg}
+└── sector_effects.{png,svg}
+```
+
+The metadata records the source run identity, manifest and artifact hashes/counts, validation checks, aggregation definitions, lens condition, output hashes, and the explicit fact that no model loading occurred. Sector summaries explode the pipe-delimited source sector memberships; missing sectors are reported as `Unknown`, and the plot applies a documented minimum group count. Localization plots use normalized layer depth so runs with different layer counts remain visually comparable, but this command is a single-run report: it does not perform a statistical 4B-versus-27B comparison.
+
+All figures are descriptive. `delta_expected_score` is the entity expected score minus its matched no-entity baseline under the restricted nine-label distribution; it is not by itself a standalone causal effect. Localization remains Jacobian-transported representation evidence, not chain-of-thought, and lens calibration remains an experimental condition. No activation, residual, hidden state, or gradient payload is written.

@@ -17,6 +17,7 @@ from llm_bias.lens_cli import build_parser as jacobian_lens_parser
 from llm_bias.prompt_analysis import cli as prompt_cli
 from llm_bias.prompt_analysis.cli import build_parser as prompt_parser
 from llm_bias.prompt_analysis.interactive import STATIC_DIR as PROMPT_STATIC_DIR
+from llm_bias.synthetic_entity_bias.cli import build_parser as synthetic_parser
 
 
 def _llm_bias_imports(package: Path) -> set[str]:
@@ -89,6 +90,7 @@ def test_moved_package_resources_resolve_from_repository_root():
 def test_independent_cli_command_sets():
     patch_choices = patch_parser()._subparsers._group_actions[0].choices
     prompt_choices = prompt_parser()._subparsers._group_actions[0].choices
+    synthetic_choices = synthetic_parser()._subparsers._group_actions[0].choices
 
     assert set(patch_choices) == {
         "prepare-data",
@@ -118,6 +120,13 @@ def test_independent_cli_command_sets():
         "visualize-return-predictions",
         "serve",
     }
+    assert set(synthetic_choices) == {"validate", "run", "visualize"}
+    visualize_defaults = synthetic_parser().parse_args(
+        ["visualize", "--run-root", "completed-run"]
+    )
+    assert visualize_defaults.run_root == "completed-run"
+    assert visualize_defaults.output_dir is None
+    assert visualize_defaults.replace_existing is False
     assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
     readout_defaults = prompt_parser().parse_args(

@@ -90,6 +90,12 @@ parent hash, and per-record coverage; it does not claim a same-dataset or same-r
 Raw activation and gradient artifact types are rejected. Store only compact top-k, rank,
 probability, summary, token, generation, and provenance data.
 
+## Derived visualization bundles
+
+A synthetic entity-bias visualization is a read-only derivative of one completed lifecycle run. `synthetic-entity-bias visualize --run-root <run-root>` validates the source manifest, registered output paths, SHA-256 digests, schemas, counts, and numeric domains before writing `<run-root>/visualization/` (or an explicit output directory). It never loads a model or lens and does not add a visualization stage to, or otherwise modify, the source `manifest.json`.
+
+`visualization_metadata.json` has its own schema and records source run identity, source artifact hashes/counts, validation checks, aggregation definitions, output hashes, and interpretation limits. It is not a replacement for `manifest.json`. A future multi-run comparison must use a separate comparison identity and metadata contract rather than mixing multiple run roots into this single-run bundle. Derived outputs remain compact and may not contain activation, residual, hidden-state, or gradient payloads.
+
 ## Multi-run forward sampling contract
 
 Multi-run price sampling is a separate artifact family, not a `RunManifest` lifecycle run.
