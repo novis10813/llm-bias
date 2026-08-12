@@ -192,6 +192,99 @@ def _install_staged_pair(
         shutil.rmtree(rollback, ignore_errors=True)
 
 
+def _pretrained_metadata(
+    *,
+    identity: Any,
+    entry: PretrainedLensEntry,
+    lens: JacobianLens,
+    lens_path: Path,
+    requested_model: str,
+    artifact_model: str,
+    registry_path: str | Path,
+) -> dict[str, Any]:
+    return complete_lens_metadata(
+        metadata={
+            "model": identity.base_model,
+            "requested_model": artifact_model,
+            "base_model_identity": {
+                "base_model": identity.base_model,
+                "architecture": identity.architecture,
+                "d_model": identity.d_model,
+                "n_layers": identity.n_layers,
+            },
+            "d_model": lens.d_model,
+            "n_layers": identity.n_layers,
+            "source_layers": lens.source_layers,
+            "n_prompts": lens.n_prompts,
+            "calibration_source": entry.calibration_dataset,
+            "selection_basis": "pinned_huggingface_pretrained_artifact",
+            "selection_status": "canonical",
+            "provenance": {
+                "workflow": "install-pretrained-lens",
+                "module": "llm_bias.lens_install.importer",
+                "source": "huggingface",
+                "requested_model": requested_model,
+                "artifact_model": artifact_model,
+                "repo_id": entry.repo_id,
+                "revision": entry.revision,
+                "filename": entry.filename,
+                "config_filename": entry.config_filename,
+                "source_binary_sha256": entry.binary_sha256,
+                "source_config_sha256": entry.config_sha256,
+                "license": entry.license,
+                "registry_path": str(registry_path),
+                "registry_entry_sha256": entry.registry_digest,
+            },
+        },
+        lens_path=lens_path,
+    )
+
+
+def _pretrained_selection(
+    *,
+    identity: Any,
+    entry: PretrainedLensEntry,
+    canonical: Path,
+    metadata: dict[str, Any],
+    artifact_model: str,
+    archive: str | None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "model": identity.base_model,
+        "requested_model": artifact_model,
+        "selection_basis": "pinned_huggingface_pretrained_artifact",
+        "canonical_path": str(canonical),
+        "canonical_sha256": entry.binary_sha256,
+        "source": metadata["provenance"],
+        "archive": archive,
+    }
+
+
+def _write_metadata_and_selection(
+    *,
+    metadata_path: Path,
+    metadata: dict[str, Any],
+    selection_path: Path,
+    selection: dict[str, Any],
+) -> None:
+    previous_metadata = metadata_path.read_bytes() if metadata_path.is_file() else None
+    previous_selection = selection_path.read_bytes() if selection_path.is_file() else None
+    try:
+        atomic_write_json(metadata_path, metadata)
+        atomic_write_json(selection_path, selection)
+    except BaseException:
+        if previous_metadata is None:
+            metadata_path.unlink(missing_ok=True)
+        else:
+            metadata_path.write_bytes(previous_metadata)
+        if previous_selection is None:
+            selection_path.unlink(missing_ok=True)
+        else:
+            selection_path.write_bytes(previous_selection)
+        raise
+
+
 def install_pretrained_lens(
     *,
     model_name: str,
@@ -220,6 +313,68 @@ def install_pretrained_lens(
             "no pinned pretrained Jacobian lens matches the exact model identity; "
             "continue with jacobian-lens fit"
         )
+    artifact_model = artifact_model_name or model_name
+    canonical = canonical_lens_path(artifact_model, artifact_root=artifact_root)
+    metadata_path = lens_metadata_path(canonical)
+    selection_path = lens_selection_path(artifact_model, artifact_root=artifact_root)
+    existing_sha256 = sha256_file(canonical) if canonical.is_file() else None
+    if existing_sha256 == entry.binary_sha256:
+        lens = _validate_downloads(entry, binary_path=canonical, config_path=None)
+        metadata = _pretrained_metadata(
+            identity=identity,
+            entry=entry,
+            lens=lens,
+            lens_path=canonical,
+            requested_model=model_name,
+            artifact_model=artifact_model,
+            registry_path=registry_path,
+        )
+        validate_lens_metadata(metadata=metadata, lens_path=canonical)
+        existing_selection = None
+        if selection_path.is_file():
+            existing_selection = json.loads(selection_path.read_text(encoding="utf-8"))
+            if not isinstance(existing_selection, dict):
+                raise ValueError(f"lens selection must be a JSON object: {selection_path}")
+        archive = existing_selection.get("archive") if existing_selection else None
+        selection = _pretrained_selection(
+            identity=identity,
+            entry=entry,
+            canonical=canonical,
+            metadata=metadata,
+            artifact_model=artifact_model,
+            archive=archive,
+        )
+        existing_metadata = None
+        if metadata_path.is_file():
+            existing_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(existing_metadata, dict):
+                raise ValueError(f"lens metadata must be a JSON object: {metadata_path}")
+        if existing_metadata == metadata and existing_selection == selection:
+            return {
+                "status": "already_installed",
+                "canonical_path": str(canonical),
+                "binary_sha256": existing_sha256,
+                "source_revision": entry.revision,
+            }
+        if not dry_run:
+            _write_metadata_and_selection(
+                metadata_path=metadata_path,
+                metadata=metadata,
+                selection_path=selection_path,
+                selection=selection,
+            )
+        return {
+            "status": "metadata_repaired" if not dry_run else "validated",
+            "canonical_path": str(canonical),
+            "binary_sha256": existing_sha256,
+            "source_revision": entry.revision,
+            "would_repair_metadata": dry_run,
+        }
+    if existing_sha256 is not None and not replace_existing:
+        raise FileExistsError(
+            f"canonical lens already exists with SHA-256 {existing_sha256}; "
+            "pass --replace-existing to archive and replace it"
+        )
     binary, source_config = _download(
         entry,
         cache_dir=cache_dir,
@@ -229,21 +384,6 @@ def install_pretrained_lens(
     lens = _validate_downloads(
         entry, binary_path=binary, config_path=source_config
     )
-    artifact_model = artifact_model_name or model_name
-    canonical = canonical_lens_path(artifact_model, artifact_root=artifact_root)
-    existing_sha256 = sha256_file(canonical) if canonical.is_file() else None
-    if existing_sha256 == entry.binary_sha256:
-        return {
-            "status": "already_installed",
-            "canonical_path": str(canonical),
-            "binary_sha256": existing_sha256,
-            "source_revision": entry.revision,
-        }
-    if existing_sha256 is not None and not replace_existing:
-        raise FileExistsError(
-            f"canonical lens already exists with SHA-256 {existing_sha256}; "
-            "pass --replace-existing to archive and replace it"
-        )
     if dry_run:
         return {
             "status": "validated",
@@ -258,39 +398,14 @@ def install_pretrained_lens(
         staging = Path(directory)
         staged_binary = staging / canonical.name
         shutil.copyfile(binary, staged_binary)
-        metadata = complete_lens_metadata(
-            metadata={
-                "model": identity.base_model,
-                "requested_model": model_name,
-                "base_model_identity": {
-                    "base_model": identity.base_model,
-                    "architecture": identity.architecture,
-                    "d_model": identity.d_model,
-                    "n_layers": identity.n_layers,
-                },
-                "d_model": lens.d_model,
-                "n_layers": identity.n_layers,
-                "source_layers": lens.source_layers,
-                "n_prompts": lens.n_prompts,
-                "calibration_source": entry.calibration_dataset,
-                "selection_basis": "pinned_huggingface_pretrained_artifact",
-                "selection_status": "canonical",
-                "provenance": {
-                    "workflow": "install-pretrained-lens",
-                    "module": "llm_bias.lens_install.importer",
-                    "source": "huggingface",
-                    "repo_id": entry.repo_id,
-                    "revision": entry.revision,
-                    "filename": entry.filename,
-                    "config_filename": entry.config_filename,
-                    "source_binary_sha256": entry.binary_sha256,
-                    "source_config_sha256": entry.config_sha256,
-                    "license": entry.license,
-                    "registry_path": str(registry_path),
-                    "registry_entry_sha256": entry.registry_digest,
-                },
-            },
+        metadata = _pretrained_metadata(
+            identity=identity,
+            entry=entry,
+            lens=lens,
             lens_path=staged_binary,
+            requested_model=model_name,
+            artifact_model=artifact_model,
+            registry_path=registry_path,
         )
         staged_metadata = staging / lens_metadata_path(canonical).name
         staged_metadata.write_text(
@@ -300,7 +415,7 @@ def install_pretrained_lens(
         validate_lens_for_model(
             model=SimpleNamespace(d_model=identity.d_model, n_layers=identity.n_layers),
             lens=lens,
-            model_name=model_name,
+            model_name=artifact_model,
             lens_path=staged_binary,
             require_complete=True,
         )
@@ -320,16 +435,14 @@ def install_pretrained_lens(
             staged_metadata=staged_metadata,
             canonical=canonical,
         )
-    selection = {
-        "schema_version": 1,
-        "model": identity.base_model,
-        "requested_model": model_name,
-        "selection_basis": "pinned_huggingface_pretrained_artifact",
-        "canonical_path": str(canonical),
-        "canonical_sha256": entry.binary_sha256,
-        "source": metadata["provenance"],
-        "archive": str(archive) if archive is not None else None,
-    }
+    selection = _pretrained_selection(
+        identity=identity,
+        entry=entry,
+        canonical=canonical,
+        metadata=metadata,
+        artifact_model=artifact_model,
+        archive=str(archive) if archive is not None else None,
+    )
     atomic_write_json(
         lens_selection_path(artifact_model, artifact_root=artifact_root), selection
     )

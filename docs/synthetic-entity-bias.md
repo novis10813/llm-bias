@@ -1,6 +1,6 @@
 # Synthetic entity-bias pilot contract
 
-`synthetic-entity-bias validate|run` is the reproducible Qwen3.5-4B pilot. It accepts only explicit S&P 500, Russell 1000, and Russell 2000 constituent CSV paths; no combined CSV is implicitly discovered. Input schema is `index_name,year,ticker,company_name,gics_sector` (the index may also be inferred from the explicit filename). Rows are restricted to 2020–2025, deduplicated by complete source-row identity, then aggregated by normalized ticker (`trim`, uppercase, `.` to `-`). The pool preserves `years`, `memberships`, `membership_years`, `sectors`, source row count, highest tier, and anomaly flags. Source files may contain current snapshots copied across years; preserved years are source provenance, not independently verified historical membership evidence. Input SHA-256 and source row counts belong in run provenance.
+`synthetic-entity-bias validate|run` is the reproducible Qwen entity-bias pilot. It accepts only the explicit S&P 500, Russell 1000, and Russell 2000 constituent CSV paths; `all_constituents_2020_2025.csv` is their derived concatenation and must not be supplied as a fourth input. Input schema is `index_name,year,ticker,company_name,gics_sector` (the index may also be inferred from the explicit filename). Rows are restricted to 2020–2025, deduplicated by complete source-row identity, then aggregated by normalized ticker (`trim`, uppercase, `.` to `-`). The current three inputs produce 3,045 entities and 9,138 preflight prompts. The pool preserves `years`, `memberships`, `membership_years`, `sectors`, source row count, highest tier, and anomaly flags. Source files may contain current snapshots copied across years; preserved years are source provenance, not independently verified historical membership evidence. Input SHA-256 and source row counts belong in run provenance.
 
 ## Immutable protocol
 
@@ -27,9 +27,18 @@ Canonical root is `artifacts/qwen3.5-4b/synthetic-entity-bias-2020-2025/runs/<ru
 
 Probabilities must be finite, non-negative, and sum to one; entropy is non-negative and temperature positive. Writers use explicit allowlists and reject tensor/ndarray values and keys containing activation, residual, hidden-state, or gradient. No per-example residual, hidden state, activation, or gradient artifact is permitted. The manifest moves only created→running→complete/failed; all stages and post-count checks must pass before complete, and every exception marks a non-terminal run failed.
 
-Example command (the shell option is intentional):
+Example Qwen3.5-4B command (the shell option is intentional):
 
 ```bash
 set -o pipefail
-uv run synthetic-entity-bias run --constituents data/sp500_constituents_2020_2025.csv --constituents data/russell1000_constituents_2020_2025.csv --constituents data/russell2000_constituents_2020_2025.csv --model .cache/models/qwen3.5-4b --lens artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt --artifact-root artifacts --dataset synthetic-entity-bias-2020-2025 --run-id pilot 2>&1 | tee artifacts/synthetic-entity-bias-pilot.log
+CUDA_VISIBLE_DEVICES=0 uv run synthetic-entity-bias run --constituents data/sp500_constituents_2020_2025.csv --constituents data/russell1000_constituents_2020_2025.csv --constituents data/russell2000_constituents_2020_2025.csv --model .cache/models/qwen3.5-4b --lens artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt --artifact-root artifacts --dataset synthetic-entity-bias-2020-2025 --run-id pretrained-wikitext-4b --batch-size 16 2>&1 | tee artifacts/synthetic-entity-bias-qwen3.5-4b.log
 ```
+
+Qwen3.6-27B follows the same protocol with its model-specific canonical lens. Run the models sequentially. Try one 96 GB GPU first with `--batch-size 1`; if that produces CUDA OOM, use the explicit GPU-only two-device map rather than automatic CPU/disk offload or quantization.
+
+```bash
+set -o pipefail
+CUDA_VISIBLE_DEVICES=0 uv run synthetic-entity-bias run --constituents data/sp500_constituents_2020_2025.csv --constituents data/russell1000_constituents_2020_2025.csv --constituents data/russell2000_constituents_2020_2025.csv --model .cache/models/qwen3.6-27b --lens artifacts/qwen3.6-27b/jacobian-lens/jacobian_lens.pt --artifact-root artifacts --dataset synthetic-entity-bias-2020-2025 --run-id pretrained-wikitext-27b --batch-size 1 2>&1 | tee artifacts/synthetic-entity-bias-qwen3.6-27b.log
+```
+
+The pinned Neuronpedia lenses were calibrated on Salesforce/WikiText. Treat lens source as an experimental condition; these artifacts are not the local bilingual candidate-selection winner.

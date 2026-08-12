@@ -90,6 +90,9 @@ def test_install_pretrained_lens_writes_valid_canonical_and_metadata(tmp_path):
     assert canonical.read_bytes() == binary.read_bytes()
     metadata = json.loads(lens_metadata_path(canonical).read_text())
     assert metadata["model"] == "org/tiny-model"
+    assert metadata["requested_model"] == str(model)
+    assert metadata["provenance"]["requested_model"] == str(model)
+    assert metadata["provenance"]["artifact_model"] == str(model)
     assert metadata["selection_basis"] == "pinned_huggingface_pretrained_artifact"
     assert metadata["provenance"]["source"] == "huggingface"
     assert metadata["provenance"]["revision"] == "a" * 40
@@ -143,6 +146,38 @@ def test_replace_existing_archives_old_canonical(tmp_path):
 
     assert canonical.read_bytes() == binary.read_bytes()
     assert Path(result["archive"]).joinpath("jacobian_lens.pt").read_bytes() == b"old"
+
+
+def test_same_binary_repairs_metadata_without_replacing_binary(tmp_path):
+    model, registry, binary, download = _fixture(tmp_path)
+    artifact_root = tmp_path / "artifacts"
+    canonical = artifact_root / "model" / "jacobian-lens" / "jacobian_lens.pt"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_bytes(binary.read_bytes())
+    metadata_path = lens_metadata_path(canonical)
+    metadata_path.write_text("{}", encoding="utf-8")
+    before = canonical.read_bytes()
+
+    result = install_pretrained_lens(
+        model_name=str(model),
+        registry_path=registry,
+        artifact_root=artifact_root,
+        download_file=download,
+    )
+
+    assert result["status"] == "metadata_repaired"
+    assert canonical.read_bytes() == before
+    metadata = json.loads(metadata_path.read_text())
+    assert metadata["requested_model"] == str(model)
+
+    repeated = install_pretrained_lens(
+        model_name=str(model),
+        registry_path=registry,
+        artifact_root=artifact_root,
+        download_file=download,
+    )
+    assert repeated["status"] == "already_installed"
+    assert canonical.read_bytes() == before
 
 
 def test_nonfinite_download_is_rejected_without_canonical(tmp_path):
