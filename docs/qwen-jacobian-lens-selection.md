@@ -1,13 +1,28 @@
 # Qwen3.5-4B Jacobian-lens calibration 與候選選擇
 
-這份文件記錄 Qwen3.5-4B 的 model-specific Jacobian-lens pipeline：如何建立
-English-only、Simplified-Chinese-only 與 bilingual mixed 三組 calibration，
-如何完成可恢復的逐層 fitting，以及如何使用獨立 bilingual holdout 選擇唯一
-active canonical lens。
+這份文件記錄 Qwen3.5-4B 的兩種 model-specific Jacobian-lens 來源：預設的
+pinned pretrained artifact，以及 English-only、Simplified-Chinese-only 與
+bilingual mixed 三組 calibration 的本地研究替代流程。
 
-這個 pipeline 解決的是「哪個 calibration condition 產生較適合目前雙語
-readout 任務的 lens」。它不直接證明 entity bias、因果作用、chain-of-thought
-或 global workspace。
+## 預設：安裝 pinned pretrained lens
+
+`config/pretrained_lenses.json` pin 住 `neuronpedia/jacobian-lens` 的完整 commit、
+Qwen3.5-4B lens/config 路徑與 SHA-256。`jacobian-lens install` 只在 local
+checkpoint 的 config 能證明 exact base identity `Qwen/Qwen3.5-4B`、architecture、
+residual width、layer count 與完整 L0–L30 coverage 都相符時，才把 artifact 安裝成
+canonical lens。Experiment runtime 只讀取及驗證本地 canonical artifact，不會連網。
+
+這個公開 lens 使用 `Salesforce/wikitext:wikitext-103-raw-v1` calibration；它不是
+下述本地 bilingual candidate selection 的 winner，也沒有 `Qwen3.5-4B-Instruct`
+alias。兩種 provenance 不可在結果中無標示混用；若要比較，lens source 必須成為
+明確的實驗條件。
+
+## 本地研究替代：bilingual candidate selection
+
+以下 pipeline 解決的是「哪個 calibration condition 產生較適合目前雙語
+readout 任務的 lens」。它可在需要 project-specific calibration 時取代 pretrained
+artifact，但不直接證明 entity bias、因果作用、chain-of-thought 或 global
+workspace。
 
 ## Pipeline 概覽
 

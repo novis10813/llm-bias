@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-fit-jacobian-lens = "llm_bias.lens_fitting.cli:main"
+jacobian-lens = "llm_bias.lens_cli:main"
 counterfactual-patching = "llm_bias.counterfactual_patching.cli:main"
 prompt-analysis = "llm_bias.prompt_analysis.cli:main"
 prepare-edgar-8k = "llm_bias.edgar_preparation.cli:main"

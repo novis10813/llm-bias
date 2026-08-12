@@ -78,7 +78,7 @@ for condition in english chinese_simplified mixed; do
         continue
     fi
     echo "Fitting ${condition} candidate at $(date --iso-8601=seconds)"
-    uv run fit-jacobian-lens \
+    uv run jacobian-lens fit \
         --model "${MODEL}" \
         --output "${lens}" \
         --calibration-file "${CALIBRATION_ROOT}/${condition}.jsonl" \

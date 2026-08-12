@@ -68,7 +68,7 @@ fi
 if [[ "${RUN_READOUT}" == "1" ]]; then
     [[ -f "${LENS}" ]] || {
         echo "Missing Jacobian lens: ${LENS}" >&2
-        echo "Fit it first with the fit-jacobian-lens CLI or set LENS." >&2
+        echo "Fit it first with the jacobian-lens fit command or set LENS." >&2
         exit 1
     }
 fi

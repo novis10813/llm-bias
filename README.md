@@ -15,7 +15,7 @@ target entity activation causally changes the answer distribution.
   entity-only counterfactual generation, model-specific rendering, and validation.
 - `prepare-10k-change-data`: auditable, prompt-agnostic `year,cik,item` CSV
   for extracted 10-K metadata-change windows.
-- `fit-jacobian-lens`: standalone Jacobian-lens fitting; experiment workflows
+- `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
 `jlens` readouts are transported representations, not direct decoders of hidden
@@ -70,16 +70,30 @@ uv run hf download unsloth/Llama-3.2-1B-Instruct \
 ```
 
 Qwen3.5-4B uses a model-specific lens because its residual width and layer count
-differ from Llama. Follow the controlled candidate-selection workflow in
+differ from Llama. For checkpoints whose `config.json` proves the exact base
+identity `Qwen/Qwen3.5-4B`, install the pinned Neuronpedia artifact explicitly:
+
+```bash
+uv run jacobian-lens install \
+  --model .cache/models/qwen3.5-4b \
+  --base-model Qwen/Qwen3.5-4B
+```
+
+The command downloads from a pinned Hugging Face revision, verifies the binary,
+source config, model shape, complete layer coverage, and local schema-v2
+metadata, then installs an offline canonical artifact. It never downloads at
+experiment runtime and does not fuzzy-match instruct or differently shaped
+checkpoints. If no exact registry entry exists, use `jacobian-lens fit` or the
+controlled local candidate-selection alternative in
 [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md); do not
-replace its canonical lens with a small smoke fit.
+replace a canonical lens with a small smoke fit.
 
 ## Minimal smoke workflow
 
 ```bash
 uv lock --check
 uv run pytest -q
-uv run fit-jacobian-lens \
+uv run jacobian-lens fit \
   --model .cache/models/llama-3.2-1b-instruct \
   --calibration-prompts 16
 uv run counterfactual-patching prepare-data \

@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import torch
 
-import jlens
 from llm_bias.core.model import DEFAULT_MODEL, load_model
 from llm_bias.counterfactual_patching.data import (
     Pair,
@@ -118,7 +117,15 @@ def run_patch(
     if not pairs:
         raise RuntimeError("No aligned pairs available; run prepare-data first")
 
-    lens = jlens.JacobianLens.load(lens_path) if lens_path and Path(lens_path).exists() else None
+    lens = None
+    if lens_path:
+        from llm_bias.core.lens_loader import load_validated_lens
+
+        lens = load_validated_lens(
+            model=model,
+            model_name=model_name,
+            lens_path=lens_path,
+        ).lens
     layers = list(range(model.n_layers))
     results: list[dict[str, Any]] = []
     for pair_index, pair in enumerate(pairs, start=1):

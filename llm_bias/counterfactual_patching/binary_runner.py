@@ -11,7 +11,7 @@ from typing import Any, Iterable
 import torch
 
 from llm_bias.core.continuation_scoring import continuation_token_ids, score_margin
-from llm_bias.core.lens_artifacts import validate_lens_for_model
+from llm_bias.core.lens_loader import load_validated_lens
 from jlens.hooks import ActivationRecorder
 from llm_bias.counterfactual_patching.binary_association import (
     CANDIDATES,
@@ -399,19 +399,15 @@ def validate_binary_lens(
     lens_path: str | Path,
 ) -> dict[str, Any]:
     """Validate a complete model-specific lens without fitting or reading it."""
-    import jlens
-
-    path = Path(lens_path)
-    if not path.is_file():
-        raise FileNotFoundError(f"Jacobian lens does not exist: {path}")
-    lens = jlens.JacobianLens.load(str(path))
-    metadata = validate_lens_for_model(
+    loaded = load_validated_lens(
         model=model,
-        lens=lens,
         model_name=model_name,
-        lens_path=path,
+        lens_path=lens_path,
         require_complete=True,
     )
+    path = loaded.path
+    lens = loaded.lens
+    metadata = loaded.metadata
     return {
         "compatible": True,
         "model": model_name,

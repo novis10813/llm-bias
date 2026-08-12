@@ -1,7 +1,6 @@
 """CLI for the synthetic entity-bias pilot."""
 from __future__ import annotations
 import argparse, json
-from pathlib import Path
 from .entities import load_entity_pool
 from .spec import TEMPLATES, BASELINE_ENTITY
 from .prompts import render_prompt, validate_token_contract
@@ -22,11 +21,9 @@ def main():
  args=build_parser().parse_args(); pool=load_entity_pool(args.constituents,seed=args.seed)
  model,tokenizer,device=_load(args)
  if args.command=="validate":
-  from jspace_viz.lens import JacobianLens
-  from llm_bias.core.lens_artifacts import validate_lens_for_model
-  lens_path=Path(args.lens)
-  if not lens_path.is_file(): raise FileNotFoundError(lens_path)
-  lens=JacobianLens.load(str(lens_path)); validate_lens_for_model(model=model,lens=lens,model_name=args.model,lens_path=lens_path,require_complete=True)
+  from llm_bias.core.lens_loader import load_validated_lens
+  loaded_lens=load_validated_lens(model=model,model_name=args.model,lens_path=args.lens,require_complete=True)
+  lens_path=loaded_lens.path
   rendered=[render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,max_seq_len=args.max_seq_len) for e in pool for t in TEMPLATES]
   rendered += [render_prompt(tokenizer,t,entity=BASELINE_ENTITY,max_seq_len=args.max_seq_len) for t in TEMPLATES]
   result=validate_token_contract(tokenizer,rendered); result.update(pool_count=len(pool),anomaly_count=sum(bool(e.anomalies) for e in pool),model=args.model,lens=args.lens)

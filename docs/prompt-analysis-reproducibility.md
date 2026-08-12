@@ -6,7 +6,7 @@ Jacobian-lens readout、generation 與 generated-token attribution stages，並�
 
 整體分成三個獨立入口：
 
-- `fit-jacobian-lens`：建立可重用的 lens artifact。
+- `jacobian-lens fit`：建立可重用的 lens artifact。
 - `prompt-analysis`：提供 `readout`、`generate`、`attribute-generated`、validation
   與 visualization commands。
 - `scripts/run_prompt_analysis.sh`：只 orchestration prompt experiment，不會 fitting

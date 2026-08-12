@@ -11,6 +11,7 @@ from typing import Any
 
 LENS_ARTIFACT_TYPE = "jacobian_lens"
 LENS_ARTIFACT_SCHEMA_VERSION = 2
+DEFAULT_ARTIFACT_ROOT = Path("artifacts")
 
 
 def model_slug(model_name: str) -> str:
@@ -27,14 +28,22 @@ def model_slug(model_name: str) -> str:
     return slug
 
 
-def lens_artifact_root(model_name: str) -> Path:
+def lens_artifact_root(
+    model_name: str,
+    *,
+    artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT,
+) -> Path:
     """Return the single model-scoped directory for all lens artifacts."""
-    return Path("artifacts") / model_slug(model_name) / "jacobian-lens"
+    return Path(artifact_root) / model_slug(model_name) / "jacobian-lens"
 
 
-def canonical_lens_path(model_name: str) -> Path:
+def canonical_lens_path(
+    model_name: str,
+    *,
+    artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT,
+) -> Path:
     """Return the one active Jacobian-lens path assigned to a model."""
-    return lens_artifact_root(model_name) / "jacobian_lens.pt"
+    return lens_artifact_root(model_name, artifact_root=artifact_root) / "jacobian_lens.pt"
 
 
 def canonical_lens_checkpoint_path(
@@ -72,14 +81,22 @@ def lens_evaluation_path(model_name: str) -> Path:
     return lens_candidates_root(model_name) / "evaluation.json"
 
 
-def lens_archive_root(model_name: str) -> Path:
+def lens_archive_root(
+    model_name: str,
+    *,
+    artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT,
+) -> Path:
     """Return the model-scoped root for replaced canonical lenses."""
-    return lens_artifact_root(model_name) / "archive"
+    return lens_artifact_root(model_name, artifact_root=artifact_root) / "archive"
 
 
-def lens_selection_path(model_name: str) -> Path:
+def lens_selection_path(
+    model_name: str,
+    *,
+    artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT,
+) -> Path:
     """Return the active lens selection provenance path."""
-    return lens_artifact_root(model_name) / "selection.json"
+    return lens_artifact_root(model_name, artifact_root=artifact_root) / "selection.json"
 
 
 def lens_metadata_path(lens_path: str | Path) -> Path:
@@ -138,6 +155,21 @@ def validate_lens_metadata(
     provenance = metadata.get("provenance")
     if not isinstance(provenance, dict):
         raise ValueError("lens metadata is missing provenance")
+    if provenance.get("source") == "huggingface":
+        required = (
+            "repo_id",
+            "revision",
+            "filename",
+            "source_binary_sha256",
+            "license",
+            "registry_entry_sha256",
+        )
+        missing = [key for key in required if not provenance.get(key)]
+        if missing:
+            raise ValueError(
+                "Hugging Face lens metadata is missing provenance fields: "
+                + ", ".join(missing)
+            )
 
 
 def expected_source_layers(n_layers: int) -> list[int]:
@@ -189,9 +221,15 @@ def validate_lens_for_model(
     if metadata is None:
         raise ValueError(f"lens is missing reproducibility metadata: {lens_path}")
     metadata_model = metadata.get("model")
-    if metadata_model and model_slug(str(metadata_model)) != model_slug(model_name):
+    requested_model = metadata.get("requested_model")
+    recorded_models = [
+        str(value) for value in (metadata_model, requested_model) if value
+    ]
+    if recorded_models and model_slug(model_name) not in {
+        model_slug(value) for value in recorded_models
+    }:
         raise ValueError(
-            f"lens metadata model={metadata_model!r} does not match "
+            f"lens metadata models={recorded_models!r} does not match "
             f"requested model={model_name!r}"
         )
     metadata_layers = metadata.get("source_layers")

@@ -16,13 +16,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
-from llm_bias.core.lens_artifacts import (
-    canonical_lens_path,
-    validate_lens_for_model,
-)
+from llm_bias.core.lens_loader import load_validated_lens
 from llm_bias.core.model import load_model as load_lens_model
 from llm_bias.counterfactual_patching.data import Pair, load_saved_pairs
 from llm_bias.counterfactual_patching.interventions import (
@@ -278,17 +274,15 @@ def build_app(
 ) -> FastAPI:
     """Build a local app while keeping the model resident in memory."""
     _record_dependency_versions()
-    resolved_lens_path = str(lens_path or canonical_lens_path(model_name))
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
-    lens = JacobianLens.load(resolved_lens_path)
-    validate_lens_for_model(
+    loaded_lens = load_validated_lens(
         model=model,
-        lens=lens,
         model_name=model_name,
-        lens_path=resolved_lens_path,
-        require_complete=True,
+        lens_path=lens_path,
     )
+    lens = loaded_lens.lens
+    resolved_lens_path = str(loaded_lens.path)
     pairs = {pair.pair_id: pair for pair in load_saved_pairs(pairs_path)}
     state = VisualizationState(
         model, lens, pairs, model_name, resolved_lens_path

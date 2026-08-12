@@ -17,7 +17,7 @@ target entity activation 是否會改變答案分布。主要 workflow 是：
   staging artifacts。
 - `prepare-counterfactual-data`：從 staged 8-K earnings events 建立 point-in-time
   entity histories、人工審核資料與 entity-only counterfactual pairs。
-- `fit-jacobian-lens`：獨立的 lens fitting 工具；experiment workflow 只消費
+- `jacobian-lens fit`：獨立的 lens fitting 工具；experiment workflow 只消費
   已存在的 lens，不可自行 fitting。
 
 `jlens` 的 Jacobian readout 是 transported representation，不是模型的
@@ -65,9 +65,10 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
   `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt`。partial/stride fitting 與
   checkpoint 放在 `artifacts/archive/<model-slug>/jacobian-lens/checkpoints/`，不要混入
   active model directory。
-- Qwen3.5-4B 使用不同 residual width/layer count 的 model-specific lens，應
-  使用 `docs/qwen-jacobian-lens-selection.md` 所述的候選選擇流程，不要用小型
-  smoke corpus 覆寫 canonical lens。
+- Qwen3.5-4B 使用不同 residual width/layer count 的 model-specific lens。優先
+  使用 pinned pretrained registry 中 exact identity 相符且通過完整驗證的 artifact；
+  `docs/qwen-jacobian-lens-selection.md` 的本地 bilingual 候選選擇是研究替代流程。
+  不要用小型 smoke corpus 覆寫 canonical lens。
 - `prepare-counterfactual-data annotate` 的 optional dependency 是
   `langextract[openai]`，它預期本地 OpenAI-compatible llama.cpp endpoint。
 

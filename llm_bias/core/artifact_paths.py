@@ -15,7 +15,11 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from llm_bias.core.lens_artifacts import model_slug
+from llm_bias.core.lens_artifacts import (
+    canonical_lens_path,
+    lens_artifact_root,
+    model_slug,
+)
 
 DEFAULT_ARTIFACT_ROOT = Path("artifacts")
 
@@ -60,7 +64,7 @@ def jacobian_lens_root(
     model_name: str, *, artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT
 ) -> Path:
     """Return the model's Jacobian-lens directory."""
-    return model_artifact_root(model_name, artifact_root=artifact_root) / "jacobian-lens"
+    return lens_artifact_root(model_name, artifact_root=artifact_root)
 
 
 def jacobian_lens_path(
@@ -72,6 +76,8 @@ def jacobian_lens_path(
     """Return the canonical Jacobian-lens file path for a model."""
     if Path(filename).name != filename or not filename:
         raise ValueError("filename must be a single non-empty file name")
+    if filename == "jacobian_lens.pt":
+        return canonical_lens_path(model_name, artifact_root=artifact_root)
     return jacobian_lens_root(model_name, artifact_root=artifact_root) / filename
 
 

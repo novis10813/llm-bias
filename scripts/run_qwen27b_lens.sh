@@ -33,7 +33,7 @@ for N in 1 8; do
   NAME=$([[ "$N" == 1 ]] && echo one_prompt || echo eight_prompts)
   OUT="$BENCHMARK_ROOT/$NAME/jacobian_lens.pt"; TIMING="$BENCHMARK_ROOT/$NAME/timing.json"; VALIDATION="$BENCHMARK_ROOT/$NAME/resume_validation.json"; mkdir -p "$(dirname "$OUT")"; progress benchmark_$NAME
   if [[ ! -f "$OUT" || ! -f "$TIMING" ]]; then
-    start=$(date +%s); uv run fit-jacobian-lens "${FIT_ARGS[@]}" --calibration-prompts "$N" --output "$OUT"; end=$(date +%s)
+    start=$(date +%s); uv run jacobian-lens fit "${FIT_ARGS[@]}" --calibration-prompts "$N" --output "$OUT"; end=$(date +%s)
     uv run python - "$TIMING" "$N" "$start" "$end" <<'PY'
 import json,sys,os
 p,n,s,e=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]); t=p+'.tmp'; json.dump({'prompts':n,'elapsed_seconds':e-s,'seconds_per_prompt':(e-s)/n},open(t,'w'),indent=2); os.replace(t,p)
@@ -41,7 +41,7 @@ PY
   fi
   if [[ ! -f "$VALIDATION" ]]; then
     before=$(sha256sum "$OUT" | cut -d' ' -f1); before_meta=$(sha256sum "$OUT.metadata.json" | cut -d' ' -f1)
-    uv run fit-jacobian-lens "${FIT_ARGS[@]}" --calibration-prompts "$N" --output "$OUT"
+    uv run jacobian-lens fit "${FIT_ARGS[@]}" --calibration-prompts "$N" --output "$OUT"
     after=$(sha256sum "$OUT" | cut -d' ' -f1); after_meta=$(sha256sum "$OUT.metadata.json" | cut -d' ' -f1)
     uv run python - "$VALIDATION" "$before" "$after" "$before_meta" "$after_meta" <<'PY'
 import json,sys,os
@@ -56,7 +56,7 @@ from llm_bias.lens_fitting.benchmark import estimate_from_benchmark,gate_benchma
 t=json.load(open(sys.argv[2])); q1=json.load(open(sys.argv[3])); q8=json.load(open(sys.argv[4])); r1=json.load(open(sys.argv[5])); r8=json.load(open(sys.argv[6])); probe=json.load(open(sys.argv[7])); finite=all(q1.get(k) and q8.get(k) for k in ('lens_finite','complete_63_layers_d5120','metadata_ok')); resume=all(r.get('resume_command_completed') and r.get('binary_hash_match') for r in (r1,r8)); stable=q1.get('stable_resources') and q8.get('stable_resources') and bool(probe.get('diagnostics',{}).get('parameter_bytes_by_device')); g=gate_benchmark(estimate_from_benchmark(elapsed_seconds=t['elapsed_seconds'],prompts=t['prompts'],evaluation_seconds=3600,promotion_seconds=60,pilot_seconds=3600),finite=finite,resume_ok=resume,stable=stable); json.dump(g,open(sys.argv[1],'w'),indent=2); print(json.dumps(g,indent=2)); raise SystemExit(0 if g['status']=='passed' else 3)
 PY
 CANDIDATE="$CANDIDATE_ROOT/jacobian_lens.pt"
-uv run fit-jacobian-lens "${FIT_ARGS[@]}" --calibration-prompts 128 --checkpoint-every 4 --output "$CANDIDATE"
+uv run jacobian-lens fit "${FIT_ARGS[@]}" --calibration-prompts 128 --checkpoint-every 4 --output "$CANDIDATE"
 EVAL="$CANDIDATE_ROOT/evaluation.json"
 uv run python scripts/evaluate_qwen_lens_single.py --model "$MODEL" --lens "$CANDIDATE" --holdout "data/evaluations/$SLUG/bilingual_intermediate_holdout.jsonl" --output "$EVAL"
 uv run python scripts/promote_qwen_lens_candidate.py --model "$MODEL" --evaluation "$EVAL" --single-candidate "$CANDIDATE"

@@ -14,13 +14,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from jspace_viz.analysis import read_grid
-from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
-from llm_bias.core.lens_artifacts import (
-    canonical_lens_path,
-    validate_lens_for_model,
-)
+from llm_bias.core.lens_loader import load_validated_lens
 from llm_bias.core.model import load_model as load_lens_model
 from llm_bias.core.prompting import format_prompt
 
@@ -202,17 +198,15 @@ def create_app(state: PromptReadoutState) -> FastAPI:
 
 def build_app(model_name: str, lens_path: str | None = None) -> FastAPI:
     """Load the model and lens once, then build the interactive app."""
-    resolved_lens_path = str(lens_path or canonical_lens_path(model_name))
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
-    lens = JacobianLens.load(resolved_lens_path)
-    validate_lens_for_model(
+    loaded_lens = load_validated_lens(
         model=model,
-        lens=lens,
         model_name=model_name,
-        lens_path=resolved_lens_path,
-        require_complete=True,
+        lens_path=lens_path,
     )
+    lens = loaded_lens.lens
+    resolved_lens_path = str(loaded_lens.path)
     return create_app(
         PromptReadoutState(model, lens, model_name, resolved_lens_path)
     )

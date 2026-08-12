@@ -13,7 +13,7 @@ from llm_bias.counterfactual_patching.data import default_spec_path
 from llm_bias.counterfactual_patching.visualization import STATIC_DIR
 from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.lens_fitting.calibration import load_calibration_prompts
-from llm_bias.lens_fitting.cli import build_parser as lens_parser
+from llm_bias.lens_cli import build_parser as jacobian_lens_parser
 from llm_bias.prompt_analysis import cli as prompt_cli
 from llm_bias.prompt_analysis.cli import build_parser as prompt_parser
 from llm_bias.prompt_analysis.interactive import STATIC_DIR as PROMPT_STATIC_DIR
@@ -34,6 +34,35 @@ def _llm_bias_imports(package: Path) -> set[str]:
                     if name.name.startswith("llm_bias.")
                 )
     return imports
+
+
+def test_runtime_packages_do_not_load_jacobian_lenses_directly():
+    root = Path(__file__).resolve().parents[1] / "llm_bias"
+    for package_name in (
+        "counterfactual_patching",
+        "prompt_analysis",
+        "synthetic_entity_bias",
+    ):
+        for path in (root / package_name).glob("*.py"):
+            assert "JacobianLens.load" not in path.read_text(encoding="utf-8"), path
+
+
+def test_pretrained_lens_install_parser_is_explicit_and_offline_capable():
+    parser = jacobian_lens_parser()
+    args = parser.parse_args(
+        [
+            "install",
+            "--model",
+            ".cache/models/qwen3.5-4b",
+            "--base-model",
+            "Qwen/Qwen3.5-4B",
+            "--offline",
+            "--dry-run",
+        ]
+    )
+    assert args.offline is True
+    assert args.dry_run is True
+    assert args.replace_existing is False
 
 
 def test_experiment_packages_do_not_import_each_other():
@@ -232,7 +261,7 @@ def test_independent_cli_command_sets():
     )
     assert uncertainty_plot_args.uncertainty_root == "artifacts/readout"
     assert uncertainty_plot_args.output_dir == "artifacts/uncertainty-figures"
-    lens_args = lens_parser().parse_args([])
+    lens_args = jacobian_lens_parser().parse_args(["fit"])
     assert lens_args.output is None
     assert lens_args.layer_stride == 1
     assert lens_args.checkpoint_every == 4

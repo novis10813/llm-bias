@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -216,13 +217,23 @@ def _patch_deterministic_prompt_run(monkeypatch):
 
     model = _FakePromptModel()
     lens = SimpleNamespace(d_model=4, source_layers=[0], jacobians={})
+    loaded_lens = SimpleNamespace(
+        lens=lens,
+        path=None,
+        metadata={"provenance": {"workflow": "test"}},
+    )
     monkeypatch.setattr(
         readout,
         "load_lens_model",
         lambda _model_name: (SimpleNamespace(_hf_model=object()), model.tokenizer, "cpu"),
     )
     monkeypatch.setattr(readout, "WrappedModel", lambda *_args: model)
-    monkeypatch.setattr(readout.JacobianLens, "load", lambda _path: lens)
+
+    def fake_load_validated_lens(*, lens_path=None, **_kwargs):
+        loaded_lens.path = Path(lens_path) if lens_path is not None else Path("canonical.pt")
+        return loaded_lens
+
+    monkeypatch.setattr(readout, "load_validated_lens", fake_load_validated_lens)
 
     def fake_analyze_column(*, column, **_kwargs):
         return [
@@ -297,14 +308,15 @@ def test_forward_only_readout_writes_readout_uncertainty_without_attribution(
 
 def test_readout_resolves_default_lens_from_model_identity(tmp_path, monkeypatch):
     _patch_deterministic_prompt_run(monkeypatch)
-    input_path, lens_path = _write_prompt_analysis_inputs(tmp_path)
+    input_path, _lens_path = _write_prompt_analysis_inputs(tmp_path)
     resolved_models = []
+    original_loader = readout.load_validated_lens
 
-    def fake_canonical_lens_path(model_name):
-        resolved_models.append(model_name)
-        return lens_path
+    def fake_load_validated_lens(*, model_name, lens_path=None, **kwargs):
+        resolved_models.append((model_name, lens_path))
+        return original_loader(model_name=model_name, lens_path=lens_path, **kwargs)
 
-    monkeypatch.setattr(readout, "canonical_lens_path", fake_canonical_lens_path)
+    monkeypatch.setattr(readout, "load_validated_lens", fake_load_validated_lens)
 
     readout.analyze_prompt_outputs(
         input_path=str(input_path),
@@ -313,7 +325,7 @@ def test_readout_resolves_default_lens_from_model_identity(tmp_path, monkeypatch
         top_k=1,
     )
 
-    assert resolved_models == ["org/fake-model"]
+    assert resolved_models == [("org/fake-model", None)]
 
 
 def test_backprop_readout_calls_attribution_and_records_provenance(tmp_path, monkeypatch):

@@ -13,7 +13,7 @@
   attribution validation 與結果視覺化。
 
 兩個 experiment package 不可互相 import。共同能力必須先確認確實與研究語意
-無關，才可放進 `core/`。三個 CLI 入口分別是 `fit-jacobian-lens`、
+無關，才可放進 `core/`。三個 CLI 入口分別是 `jacobian-lens fit`、
 `counterfactual-patching` 與 `prompt-analysis`；experiment CLI 不可自行 fitting
 lens。
 

@@ -74,12 +74,13 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
  else:
   device=_resolve_device(model,device)
  if tokenizer is None: raise ValueError("tokenizer is required")
- if lens is None and lens_path:
-  from jspace_viz.lens import JacobianLens
-  lens=JacobianLens.load(str(lens_path))
  if not hasattr(model,"n_layers") or not hasattr(model,"d_model"): raise ValueError("loaded model lacks jlens layer metadata")
- from llm_bias.core.lens_artifacts import validate_lens_for_model
- validate_lens_for_model(model=model,lens=lens,model_name=model_path,lens_path=lens_path,require_complete=True)
+ if lens is None:
+  from llm_bias.core.lens_loader import load_validated_lens
+  lens=load_validated_lens(model=model,model_name=model_path,lens_path=lens_path,require_complete=True).lens
+ else:
+  from llm_bias.core.lens_artifacts import validate_lens_for_model
+  validate_lens_for_model(model=model,lens=lens,model_name=model_path,lens_path=lens_path,require_complete=True)
  layers=list(range(int(getattr(model,"n_layers",1)))); final=layers[-1]
  rendered=[]
  for e in pool:

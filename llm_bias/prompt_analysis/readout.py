@@ -16,7 +16,7 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.lens import JacobianLens
 from jspace_viz.model import WrappedModel
 
-from llm_bias.core.lens_artifacts import canonical_lens_path
+from llm_bias.core.lens_loader import load_validated_lens
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompting import decode_token, format_messages, format_prompt
 from llm_bias.core.readout import last_unmasked_positions
@@ -757,9 +757,6 @@ def analyze_prompt_outputs(
     source = Path(input_path)
     if not source.is_file():
         raise FileNotFoundError(source)
-    lens_source = Path(lens_path) if lens_path is not None else canonical_lens_path(model_name)
-    if not lens_source.is_file():
-        raise FileNotFoundError(lens_source)
     table = load_prompt_table(
         source, prompt_columns, max_rows, dataset_format=dataset_format
     )
@@ -768,25 +765,16 @@ def analyze_prompt_outputs(
 
     lens_model, tokenizer, _device = load_lens_model(model_name)
     model = WrappedModel(lens_model._hf_model, tokenizer)
-    lens = JacobianLens.load(str(lens_source))
-    if lens.d_model != model.d_model:
-        raise ValueError(
-            f"lens d_model={lens.d_model} does not match model d_model={model.d_model}"
-        )
+    loaded_lens = load_validated_lens(
+        model=model,
+        model_name=model_name,
+        lens_path=lens_path,
+        require_complete=True,
+    )
+    lens = loaded_lens.lens
+    lens_source = loaded_lens.path
     final_layer = model.n_layers - 1
-    invalid_layers = [
-        layer for layer in lens.source_layers if not 0 <= layer < final_layer
-    ]
-    if invalid_layers:
-        raise ValueError(f"lens contains invalid non-output layers: {invalid_layers}")
     layers = sorted(set(lens.source_layers) | {final_layer})
-    missing_layers = sorted(set(range(model.n_layers)) - set(layers))
-    if missing_layers:
-        print(
-            "Warning: the lens does not cover every intermediate layer; "
-            f"missing {missing_layers}. Use a stride-1 lens for all layers.",
-            flush=True,
-        )
     if top_k > model._lm_head.weight.shape[0]:
         raise ValueError("top_k exceeds the model vocabulary size")
 
@@ -898,7 +886,7 @@ def analyze_prompt_outputs(
         "dataset_format": dataset_format,
         "prompt_columns": [column.name for column in columns],
         "layers": layers,
-        "missing_layers": missing_layers,
+        "missing_layers": [],
         "output_position": "last_non_padding_prompt_token",
         "use_chat_template": use_chat_template,
         "enable_thinking": enable_thinking,
