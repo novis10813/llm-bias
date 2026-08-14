@@ -95,6 +95,10 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
 import；共同功能應先確認不含研究語意後才放入 `core/`。`lens_fitting` 也不得由
 experiment CLI 隱式啟動。
 
+## Shared experiment workflow contract
+
+The shared experiment workflow is `prepare → forward → analyze → finalize`. Reuse the four core subpackages—`llm_bias/core/prompt_input`, `llm_bias/core/inference`, `llm_bias/core/analysis`, and `llm_bias/core/artifacts`—for cross-experiment workflow mechanics whenever those packages exist. Experiment packages must not sink shared prompt preparation, model forward execution, common analysis, artifact serialization, manifest/provenance, or lifecycle finalization into local copies; keep research-specific semantics and presentation in the owning experiment package. Compatibility rules are mandatory: preserve existing public CLI/API behavior and artifact schemas unless a canonical workflow document explicitly versions a change; `counterfactual_patching` and `prompt_analysis` must not import each other, and shared infrastructure must not import either experiment. Experiment workflows consume an existing validated canonical lens and must not fit, mutate, or replace one implicitly. Never persist raw activations, residuals, hidden states, or gradients; emit only compact derived outputs with provenance. These rules apply even before one or more of the four core subpackages has been created.
+
 ## 研究語意與資料保存約束
 
 - `Pair` 必須保留 entity token start/end 與完整 token-id span，並支援舊

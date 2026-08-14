@@ -27,6 +27,10 @@ auxiliary preflight，只評估 synthetic task-local J-space-candidate evidence�
 global workspace 結論、不 gate entity-bias milestones，也不取代每個模型自己的
 entity-only causal protocol。
 
+## Shared experiment workflow contract
+
+The shared experiment workflow is `prepare → forward → analyze → finalize`. Reuse the four core subpackages—`llm_bias/core/prompt_input`, `llm_bias/core/inference`, `llm_bias/core/analysis`, and `llm_bias/core/artifacts`—for cross-experiment workflow mechanics whenever those packages exist. Experiment packages must not sink shared prompt preparation, model forward execution, common analysis, artifact serialization, manifest/provenance, or lifecycle finalization into local copies; keep research-specific semantics and presentation in the owning experiment package. Compatibility rules are mandatory: preserve existing public CLI/API behavior and artifact schemas unless a canonical workflow document explicitly versions a change; `counterfactual_patching` and `prompt_analysis` must not import each other, and shared infrastructure must not import either experiment. Experiment workflows consume an existing validated canonical lens and must not fit, mutate, or replace one implicitly. Never persist raw activations, residuals, hidden states, or gradients; emit only compact derived outputs with provenance. These rules apply even before one or more of the four core subpackages has been created.
+
 ## Research semantic boundaries
 
 - `Pair` 必須保留 entity token start/end 與完整 token-id span，並支援舊 single-token pair。
