@@ -51,11 +51,12 @@ model-specific rendering are both part of the dataset-construction window.
 
 | Workstream | Code/protocol status | Validated evidence status |
 |---|---|---|
-| Model-specific Jacobian lenses | Fitting, metadata, validation, and Llama/Qwen workflows exist | Cross-model conclusions are not established |
+| Model-specific Jacobian lenses | Fitting, metadata, validation, and Llama/Qwen workflows exist; archived/candidate alternatives are available | Cross-model conclusions and alternative-lens sensitivity/robustness are not established |
 | Residual span patching | Core mapping and hooks exist; variable-length support is under integration validation | Full model smoke coverage and all acceptance artifacts remain pending |
 | Entity-only counterfactual data | Annotation, review bundle, promotion, four families, five pairing strategies, rendering, and validation code exist | Draft rows still require review/promotion; no unpromoted draft is research-ready |
+| External entity covariates | Market capitalisation, media/corpus exposure, and other continuous attributes are part of the research design | No date-aligned, provenance-complete continuous covariate linkage or coverage/missingness validation exists; current synthetic evidence uses only coarse tier/sector groupings |
 | Representation readout | Compact transported readouts and outcome margins exist | Formal residual-distance/divergence evidence is pending |
-| Causal controls/statistics | Basic non-entity control and exploratory summaries exist | Bidirectional controls, independent sampling, paired tests, and correction are pending |
+| Causal controls/statistics | Basic non-entity control and exploratory summaries exist; the entity-only patching protocol and code paths are available | Reviewed/promoted pairs, full entity-only patching runs, bidirectional and unrelated/random controls, independent sampling, paired uncertainty, and correction are pending |
 | Selective intervention | Research design only | Not implemented or evaluated |
 | Cross-model/task evaluation | Model loaders and model-specific lens paths exist | No standardised cross-model/task result exists |
 | Optional J-space-candidate preflight | Proposed non-runnable design exists | `jspace_eval` package and CLI are not implemented |
@@ -161,6 +162,9 @@ calibration, full dose-response curves, and side-effect analysis.
 - Complete one non-financial entity-sensitive task only after the financial
   protocol is stable.
 - Report common mechanisms separately from model-specific results.
+- Repeat the synthetic localization protocol with at least one justified alternative
+  lens condition and report peak-depth, sign, and metric-agreement sensitivity before
+  treating a localization pattern as lens-robust.
 
 **Exit evidence:** a shared protocol, model-specific manifests, and complete
 data→patch→statistics results for the selected model/task set.

@@ -77,7 +77,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
    acts={k:v for k,v in acts.items()}; temp=float(temp[0])
    baselines[t]=score_distribution(logits,label_ids,effective_temperature_value=temp); baseline_vectors[t]=acts
   base_rows=[{"template":t,"entity":BASELINE_ENTITY,"probabilities":_flat(baselines[t]["probabilities"]),"expected_score":baselines[t]["expected_score"],"entropy_nats":baselines[t]["entropy_nats"],"effective_temperature":baselines[t]["effective_temperature"]} for t in TEMPLATES]
-  write_csv(root/"no_entity_baselines.csv",base_rows,BASE_FIELDS); m.start_stage("baseline"); m.finish_stage("baseline",record_count=3); m.save()
+  write_csv(root/"no_entity_baselines.csv",base_rows,BASE_FIELDS); m.start_stage("baseline"); m.finish_stage("baseline",record_count=len(TEMPLATES)); m.save()
   rows=[]
   metric_items=[(e,t,render_prompt(tokenizer,t,entity=e.company_name,ticker=e.ticker,use_chat_template=use_chat_template,max_seq_len=max_seq_len)) for e in pool for t in TEMPLATES]
   pad=getattr(tokenizer,"pad_token_id",None) or getattr(tokenizer,"eos_token_id",0)
@@ -123,7 +123,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
   if lens_path: m.register_artifact(lens_path,artifact_type="jacobian_lens",stage="preflight",role="lens")
   m.register_artifact(root/"config.json",artifact_type="config",stage="preflight")
   m.register_artifact(root/"tokenization_validation.json",artifact_type="tokenization_validation",stage="preflight")
-  m.register_artifact(root/"entity_pool.csv",artifact_type="entity_pool",stage="preflight",record_count=len(pool)); m.register_artifact(root/"raw_entity_template_results.csv",artifact_type="raw_entity_template_results",stage="metric",record_count=len(rows)); m.register_artifact(root/"no_entity_baselines.csv",artifact_type="no_entity_baselines",stage="baseline",record_count=3); m.register_artifact(root/"layer_template_localization.csv",artifact_type="layer_template_localization",stage="localization",record_count=len(loc)); m.register_artifact(root/"README.md",artifact_type="run_readme",stage="localization")
-  complete_manifest(m,required_stages={"preflight","baseline","metric","localization"},postcheck=len(rows)==len(pool)*3 and len(base_rows)==3 and len(loc)==len(layers)*3); return root
+  m.register_artifact(root/"entity_pool.csv",artifact_type="entity_pool",stage="preflight",record_count=len(pool)); m.register_artifact(root/"raw_entity_template_results.csv",artifact_type="raw_entity_template_results",stage="metric",record_count=len(rows)); m.register_artifact(root/"no_entity_baselines.csv",artifact_type="no_entity_baselines",stage="baseline",record_count=len(TEMPLATES)); m.register_artifact(root/"layer_template_localization.csv",artifact_type="layer_template_localization",stage="localization",record_count=len(loc)); m.register_artifact(root/"README.md",artifact_type="run_readme",stage="localization")
+  complete_manifest(m,required_stages={"preflight","baseline","metric","localization"},postcheck=len(rows)==len(pool)*len(TEMPLATES) and len(base_rows)==len(TEMPLATES) and len(loc)==len(layers)*len(TEMPLATES)); return root
  except Exception as exc:
   fail_manifest(m,exc); raise

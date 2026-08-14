@@ -103,6 +103,14 @@ parent hash, and per-record coverage; it does not claim a same-dataset or same-r
 Raw activation and gradient artifact types are rejected. Store only compact top-k, rank,
 probability, summary, token, generation, and provenance data.
 
+## Derived visualization bundles
+
+A synthetic entity-bias visualization is a read-only derivative of one completed lifecycle run. `synthetic-entity-bias visualize --run-root <run-root>` validates the source manifest, registered output paths, SHA-256 digests, schemas, counts, and numeric domains before writing `<run-root>/visualization/` (or an explicit output directory). It never loads a model or lens and does not add a visualization stage to, or otherwise modify, the source `manifest.json`.
+
+`synthetic-entity-bias analyze --run-root <run-root>` applies the same completed-run validation and writes experiment-specific statistical CSVs under `<run-root>/analysis/` (or an explicit output directory). These tables contain descriptive statistics, bootstrap intervals, effect sizes, statistical tests, baseline movement, distribution-tail diagnostics, a post-hoc baseline-centred probability-temperature null, layer-transition diagnostics, and explicit statuses for quantities that cannot be computed. The command is another read-only derivative: it does not load a model or lens, does not create a lifecycle stage, and does not modify `manifest.json`. Its columns are documented by the synthetic experiment workflow rather than defined as a cross-experiment analysis schema.
+
+`visualization_metadata.json` has its own schema and records source run identity, source artifact hashes/counts, validation checks, aggregation definitions, output hashes, palette identity/validation, paper figure and caption linkage, chart-spec table counts, and interpretation limits. It is not a replacement for `manifest.json`. The canonical paper-first bundle places PNG/SVG/PDF figures, supporting CSV tables, and deterministic publication captions in separate subdirectories. Its diagnostic figures include entity-effect tails, matched baseline-to-entity movement, and the probability-temperature null alongside the tier, context, sector, and localization views. Every static figure includes a publication title, metric definition, sample size, panel labels, reference annotations, and a figure note. The optional self-contained dashboard may embed only compact summary/chart-spec data and remains an auxiliary exploration interface. A future multi-run comparison must use a separate comparison identity and metadata contract rather than mixing multiple run roots into this single-run bundle. Derived outputs remain compact and may not contain activation, residual, hidden-state, or gradient payloads.
+
 ## Multi-run forward sampling contract
 
 Multi-run price sampling is a separate artifact family, not a `RunManifest` lifecycle run.
