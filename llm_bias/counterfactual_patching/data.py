@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from llm_bias.core.prompt_input import input_ids, token_span as _token_span
+
 
 @dataclass(frozen=True)
 class Pair:
@@ -77,33 +79,14 @@ def default_spec_path() -> Path:
 
 
 def token_span(tokenizer: Any, text: str, start: int, end: int) -> tuple[int, int] | None:
-    encoded = tokenizer(
-        text,
-        add_special_tokens=True,
-        return_offsets_mapping=True,
-        return_special_tokens_mask=True,
-    )
-    offsets = encoded["offset_mapping"]
-    specials = encoded["special_tokens_mask"]
-    spans = [
-        index
-        for index, ((token_start, token_end), special) in enumerate(
-            zip(offsets, specials, strict=True)
-        )
-        if not special
-        and token_end > token_start
-        and token_start < end
-        and token_end > start
-    ]
-    if not spans:
-        return None
-    return min(spans), max(spans) + 1
+    """Legacy facade for the shared character-to-token span contract."""
+    return _token_span(tokenizer, text, start, end)
 
 
 def _single_token_id(tokenizer: Any, word: str) -> int | None:
     # Answers occur immediately after a prompt ending in a word, so the
     # generated token normally includes its leading space.
-    token_ids = tokenizer(" " + word, add_special_tokens=False).input_ids
+    token_ids = input_ids(tokenizer, " " + word, add_special_tokens=False)
     if len(token_ids) != 1:
         return None
     return int(token_ids[0])

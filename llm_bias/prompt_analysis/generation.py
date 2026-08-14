@@ -18,7 +18,7 @@ import torch
 
 from llm_bias.core.artifact_paths import atomic_write_json, model_slug, stable_record_id
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
-from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
+from llm_bias.core.prompt_input import find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.input_data import PromptTable, load_prompt_table
 from jspace_viz.model import WrappedModel
 
