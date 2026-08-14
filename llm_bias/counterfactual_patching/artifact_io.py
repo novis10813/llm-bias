@@ -1,13 +1,4 @@
-"""JSONL artifact I/O for counterfactual-patching workflows."""
+"""Backward-compatible JSONL facade for counterfactual workflows."""
+from llm_bias.core.artifacts.io import read_jsonl, write_jsonl, sha256_file
 
-from __future__ import annotations
-
-import json
-from pathlib import Path
-from typing import Any
-
-
-def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
-    """Load JSON object rows from a JSONL artifact."""
-    with Path(path).open(encoding="utf-8") as handle:
-        return [json.loads(line) for line in handle if line.strip()]
+__all__ = ["read_jsonl", "write_jsonl", "sha256_file"]

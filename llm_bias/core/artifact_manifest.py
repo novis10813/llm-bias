@@ -117,6 +117,9 @@ class RunManifest:
     ) -> "RunManifest":
         """Build and atomically persist a new manifest."""
         manifest = cls.new(model, dataset, run_id, artifact_root=artifact_root)
+        if manifest.run_directory.exists() or manifest.manifest_path.exists():
+            raise FileExistsError(f"refusing to overwrite existing run: {manifest.run_directory}")
+        manifest.run_directory.mkdir(parents=True, exist_ok=False)
         manifest.save()
         return manifest
 
