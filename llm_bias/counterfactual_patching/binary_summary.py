@@ -6,25 +6,14 @@ from collections import defaultdict
 from typing import Any, Iterable
 
 import torch
+from llm_bias.core.analysis.statistics import bootstrap_mean_ci, paired_bootstrap_ci, sign_flip_pvalue
 
 
 def _mean_ci(values: list[float], *, seed: int, n_resamples: int) -> dict[str, Any]:
     if not values:
         return {"count": 0, "mean": None, "bootstrap_95_ci": [None, None]}
-    tensor = torch.tensor(values, dtype=torch.float64)
-    generator = torch.Generator().manual_seed(seed)
-    indices = torch.randint(
-        len(values), (n_resamples, len(values)), generator=generator
-    )
-    bootstrap = tensor[indices].mean(dim=1)
-    lower, upper = torch.quantile(
-        bootstrap, torch.tensor([0.025, 0.975], dtype=torch.float64)
-    )
-    return {
-        "count": len(values),
-        "mean": float(tensor.mean()),
-        "bootstrap_95_ci": [float(lower), float(upper)],
-    }
+    result = bootstrap_mean_ci(values, seed=seed, n_resamples=n_resamples)
+    return {"count": result["count"], "mean": result["mean"], "bootstrap_95_ci": result["bootstrap_ci"]}
 
 
 def _paired_summary(
@@ -43,20 +32,9 @@ def _paired_summary(
     dad = torch.tensor([item[0] for item in ordered], dtype=torch.float64)
     mom = torch.tensor([item[1] for item in ordered], dtype=torch.float64)
     differences = mom - dad
-    generator = torch.Generator().manual_seed(seed)
-    indices = torch.randint(
-        len(ordered), (n_resamples, len(ordered)), generator=generator
-    )
-    bootstrap = differences[indices].mean(dim=1)
-    lower, upper = torch.quantile(
-        bootstrap, torch.tensor([0.025, 0.975], dtype=torch.float64)
-    )
-    signs = torch.randint(
-        0, 2, (n_resamples, len(ordered)), generator=generator
-    ).mul(2).sub(1)
-    null_means = (differences * signs).mean(dim=1)
+    ci = paired_bootstrap_ci(differences.tolist(), seed=seed, n_resamples=n_resamples)
     observed = differences.mean()
-    p_value = (int((null_means.abs() >= abs(observed)).sum()) + 1) / (n_resamples + 1)
+    p_value = sign_flip_pvalue(differences.tolist(), seed=seed, n_resamples=n_resamples)
     nonzero = (dad != 0) & (mom != 0)
     same_sign = ((dad[nonzero] > 0) == (mom[nonzero] > 0)).float()
     correlation = None
@@ -65,7 +43,7 @@ def _paired_summary(
     return {
         "pair_count": len(ordered),
         "order_effect_mom_minus_dad": float(observed),
-        "paired_bootstrap_95_ci": [float(lower), float(upper)],
+        "paired_bootstrap_95_ci": ci,
         "sign_flip_two_sided_p": p_value,
         "same_sign_ratio": float(same_sign.mean()) if len(same_sign) else None,
         "margin_correlation": correlation,

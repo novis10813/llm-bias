@@ -18,7 +18,7 @@ from jspace_viz.model import WrappedModel
 
 from llm_bias.core.lens_loader import load_validated_lens
 from llm_bias.core.model import load_model as load_lens_model
-from llm_bias.core.prompting import format_prompt
+from llm_bias.core.prompt_input import format_prompt
 
 LOGGER = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"

@@ -200,22 +200,26 @@ def atomic_write_json(
 def atomic_write_jsonl(
     path: str | Path, records: Iterable[Any]
 ) -> int:
-    """Atomically write JSONL records and return the number of records written."""
-    lines: list[str] = []
-    for record in records:
-        if not isinstance(record, Mapping):
-            raise TypeError("JSONL records must be mappings")
-        lines.append(
-            json.dumps(
-                dict(record),
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-                allow_nan=False,
-            )
-        )
-    _atomic_replace(Path(path), ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8"))
-    return len(lines)
+    """Atomically stream JSONL records and return the number written."""
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent)
+    temporary = Path(temporary_name)
+    count = 0
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            for record in records:
+                if not isinstance(record, Mapping):
+                    raise TypeError("JSONL records must be mappings")
+                stream.write(json.dumps(dict(record), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n")
+                count += 1
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(destination)
+        return count
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 # Explicit verb aliases are useful at call sites and preserve one implementation.

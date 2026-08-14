@@ -1,11 +1,18 @@
 # `llm_bias/` scope
 
 這份文件說明主實驗 Python package 的責任邊界；上層規則見 repository root
-的 `AGENTS.md`。
+的 `AGENTS.md` 與 `CLAUDE.md`，其中完全相同的 **Shared experiment workflow contract**
+定義 canonical `prepare → forward → analyze → finalize` 流程與跨 package 規則。
+本 scope 文件只補充 `llm_bias/` 內的 package ownership，不重複 canonical workflow
+commands 或取代各 workflow 文件。
 
 ## Package 邊界
 
-- `core/`：只放 model loading、prompt formatting 等模型無關的共用基礎設施。
+- `core/prompt_input/`、`core/inference/`、`core/analysis/`、`core/artifacts/`：承接
+  shared experiment workflow 的 prepare、forward、analyze、finalize mechanics；目前
+  尚未落地的子目錄不得被測試或文件假設為已存在。現有 `core/` 其他模組仍只放
+  model loading、prompt formatting、token alignment 與 lens artifact metadata/validation
+  等模型無關的共用基礎設施。
 - `lens_fitting/`：獨立 fitting Jacobian lens；不可 import 任一 experiment。
 - `counterfactual_patching/`：擁有 `Pair`、residual patch、transfer analysis
   與 interactive counterfactual visualization。

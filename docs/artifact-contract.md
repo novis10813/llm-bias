@@ -6,6 +6,19 @@ runner. Producers use the helpers in `llm_bias.core.artifact_paths` and
 an additional normative artifact contract in [synthetic-entity-bias.md](synthetic-entity-bias.md);
 its compact schemas, no-raw rules, and lifecycle postchecks apply to synthetic runs.
 
+## Shared workflow boundary
+
+The artifact contract is the `finalize` stage of the shared `prepare → forward → analyze → finalize`
+workflow. When available, producers must reuse `llm_bias/core/artifacts` for artifact paths,
+serialization, hashes, manifests, provenance, and lifecycle postchecks; prompt preparation,
+model execution, and common statistical analysis belong to `core/prompt_input`,
+`core/inference`, and `core/analysis` respectively. Experiment packages retain only
+research-specific semantics and presentation. This contract preserves existing artifact
+schemas and compatibility unless a canonical workflow document versions a change. Artifacts
+must remain compact and must never contain raw activations, residuals, hidden states, or
+gradients; lens references identify an existing validated canonical lens and do not trigger
+fitting or replacement.
+
 ## Canonical layout
 
 For a model identity, dataset identity, and run ID, artifacts use:

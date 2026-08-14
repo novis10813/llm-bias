@@ -9,6 +9,8 @@ from typing import Any
 import torch
 
 from jlens.hooks import ActivationRecorder
+from llm_bias.core.inference.forward import record_residuals as _core_record_residuals
+from llm_bias.core.inference.logits import next_logits as _core_next_logits
 
 
 def normalized_span_mapping(source_length: int, target_length: int) -> list[int]:
@@ -132,13 +134,8 @@ def _add_tensor_spans(
 
 
 def record_residuals(model: Any, input_ids: torch.Tensor, layers: Iterable[int]) -> dict[int, torch.Tensor]:
-    requested = sorted(set(layers))
-    with torch.no_grad(), ActivationRecorder(model.layers, at=requested) as recorder:
-        model.forward(input_ids)
-        return {
-            layer: recorder.activations[layer].detach().clone()
-            for layer in requested
-        }
+    """Compatibility wrapper for the shared residual recorder."""
+    return _core_record_residuals(model, input_ids, layers)
 
 
 def _replace_first(output: Any, replacement: torch.Tensor) -> Any:
@@ -300,8 +297,5 @@ def patched_residuals(
 
 
 def next_logits(model: Any, input_ids: torch.Tensor) -> torch.Tensor:
-    final_layer = model.n_layers - 1
-    with torch.no_grad(), ActivationRecorder(model.layers, at=[final_layer]) as recorder:
-        model.forward(input_ids)
-        final = recorder.activations[final_layer][:, -1, :].detach()
-    return model.unembed(final).float().cpu()[0]
+    """Compatibility wrapper for neutral final-position logits extraction."""
+    return _core_next_logits(model, input_ids)

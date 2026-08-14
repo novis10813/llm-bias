@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Any
 import torch
-from llm_bias.core.readout import distribution_stats, restricted_softmax
+from llm_bias.core.analysis.distributions import distribution_stats, restricted_softmax, effective_temperature
 from .spec import SCORES
 
 def score_distribution(logits: torch.Tensor, label_token_ids: list[int]|dict[str,int], *, effective_temperature_value: float|None=None, residual: torch.Tensor|None=None, final_norm: Any|None=None) -> dict[str,Any]:
@@ -14,7 +14,6 @@ def score_distribution(logits: torch.Tensor, label_token_ids: list[int]|dict[str
   stats["effective_temperature"]=float(effective_temperature_value)
  else:
   if residual is None: raise ValueError("effective temperature requires explicit value or transported answer residual")
-  from llm_bias.core.readout import effective_temperature
   temp=effective_temperature(residual.reshape(1,-1),final_norm=final_norm)
   stats["effective_temperature"]=float(temp.reshape(-1)[0])
  if not torch.isfinite(torch.tensor(list(stats.values()),dtype=torch.float32)).all(): raise ValueError("non-finite restricted readout statistic")

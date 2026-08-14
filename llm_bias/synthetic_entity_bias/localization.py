@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 import torch
 from llm_bias.core.directions import OnlineDirection, quantile_bounds, cosine_and_statistics, direction_hash
+from llm_bias.core.analysis.transport import transport_residual_delta
 
 def answer_residual(activation: torch.Tensor, position: int) -> torch.Tensor:
  if activation.ndim==3: return activation[:,position,:].float()
@@ -10,20 +11,8 @@ def answer_residual(activation: torch.Tensor, position: int) -> torch.Tensor:
  raise ValueError("activation must be [batch, sequence, d_model] or [sequence, d_model]")
 
 def transported_delta(entity: torch.Tensor, baseline: torch.Tensor, *, layer: int, final_layer: int, lens: Any|None=None, jacobian_cache: dict[int,torch.Tensor]|None=None) -> torch.Tensor:
- entity=entity.float(); baseline=baseline.float()
- if entity.ndim not in (1,2) or baseline.shape[-1]!=entity.shape[-1]: raise ValueError("residuals must be [d] or [batch,d] with matching width")
- delta=entity-baseline
- if not torch.isfinite(delta).all(): raise ValueError("residual delta must be finite")
- if layer != final_layer:
-  if lens is None and jacobian_cache is None: raise ValueError("non-final localization requires canonical lens or cached Jacobian")
-  if jacobian_cache is not None:
-   if layer not in jacobian_cache: raise ValueError(f"missing cached Jacobian for layer {layer}")
-   J=jacobian_cache[layer].to(device=delta.device,dtype=torch.float32)
-   delta=delta @ J.T
-  else:
-   delta=lens.transport(delta,layer)
-  if not torch.isfinite(delta).all() or delta.shape!=entity.shape: raise ValueError("lens transport returned invalid residual batch")
- return delta.float()
+ """Compatibility wrapper; method identity is ``jacobian_transport``."""
+ return transport_residual_delta(entity, baseline, layer=layer, final_layer=final_layer, lens=lens, jacobian_cache=jacobian_cache)
 
 def fit_layer_direction(vectors: Iterable[torch.Tensor], targets: Iterable[float], *, ids: Iterable[str]|None=None, splits: Iterable[str]|None=None, seed: int|None=None) -> tuple[torch.Tensor,dict[str,Any]]:
  vectors=list(vectors); targets=list(targets)

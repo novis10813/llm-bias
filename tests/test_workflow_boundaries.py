@@ -20,21 +20,74 @@ from llm_bias.prompt_analysis.interactive import STATIC_DIR as PROMPT_STATIC_DIR
 from llm_bias.synthetic_entity_bias.cli import build_parser as synthetic_parser
 
 
+def _python_files(package: Path) -> list[Path]:
+    return sorted(package.rglob("*.py")) if package.is_dir() else []
+
+
 def _llm_bias_imports(package: Path) -> set[str]:
+    """Collect absolute llm_bias imports, including nested modules and relatives."""
     imports: set[str] = set()
-    for path in package.glob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+    for path in _python_files(package):
+        relative_parent = path.parent.relative_to(package)
+        package_parts = ["llm_bias", package.name, *relative_parent.parts]
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module:
-                if node.module.startswith("llm_bias."):
-                    imports.add(node.module)
-            elif isinstance(node, ast.Import):
+            if isinstance(node, ast.Import):
                 imports.update(
-                    name.name
-                    for name in node.names
-                    if name.name.startswith("llm_bias.")
+                    alias.name
+                    for alias in node.names
+                    if alias.name == "llm_bias" or alias.name.startswith("llm_bias.")
                 )
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    base = package_parts[: len(package_parts) - node.level + 1]
+                    if not base:
+                        continue
+                    imported = ".".join(base + ([node.module] if node.module else []))
+                    imports.add(imported)
+                    if imported == "llm_bias":
+                        imports.update(f"{imported}.{alias.name}" for alias in node.names)
+                elif node.module and (
+                    node.module == "llm_bias" or node.module.startswith("llm_bias.")
+                ):
+                    imports.add(node.module)
+                    if node.module == "llm_bias":
+                        imports.update(f"{node.module}.{alias.name}" for alias in node.names)
     return imports
+
+
+_SHARED_CONTRACT = """## Shared experiment workflow contract
+
+The shared experiment workflow is `prepare → forward → analyze → finalize`. Reuse the four core subpackages—`llm_bias/core/prompt_input`, `llm_bias/core/inference`, `llm_bias/core/analysis`, and `llm_bias/core/artifacts`—for cross-experiment workflow mechanics whenever those packages exist. Experiment packages must not sink shared prompt preparation, model forward execution, common analysis, artifact serialization, manifest/provenance, or lifecycle finalization into local copies; keep research-specific semantics and presentation in the owning experiment package. Compatibility rules are mandatory: preserve existing public CLI/API behavior and artifact schemas unless a canonical workflow document explicitly versions a change; `counterfactual_patching` and `prompt_analysis` must not import each other, and shared infrastructure must not import either experiment. Experiment workflows consume an existing validated canonical lens and must not fit, mutate, or replace one implicitly. Never persist raw activations, residuals, hidden states, or gradients; emit only compact derived outputs with provenance. These rules apply even before one or more of the four core subpackages has been created."""
+
+
+def test_root_guidance_shares_exact_workflow_contract():
+    root = Path(__file__).resolve().parents[1]
+    documents = [(root / "AGENTS.md").read_text(encoding="utf-8"), (root / "CLAUDE.md").read_text(encoding="utf-8")]
+    assert all(_SHARED_CONTRACT in document for document in documents)
+    assert documents[0].count(_SHARED_CONTRACT) == documents[1].count(_SHARED_CONTRACT) == 1
+
+
+def test_shared_core_boundaries_are_conditional_until_packages_exist():
+    root = Path(__file__).resolve().parents[1] / "llm_bias"
+    for name in ("prompt_input", "inference", "analysis", "artifacts"):
+        package = root / "core" / name
+        if package.exists():
+            assert package.is_dir()
+            assert _python_files(package), package
+
+
+def test_shared_infrastructure_does_not_import_experiments():
+    root = Path(__file__).resolve().parents[1] / "llm_bias"
+    for package_name in ("core", "lens_fitting"):
+        imports = _llm_bias_imports(root / package_name)
+        assert not any(
+            name == "llm_bias.counterfactual_patching"
+            or name.startswith("llm_bias.counterfactual_patching.")
+            or name == "llm_bias.prompt_analysis"
+            or name.startswith("llm_bias.prompt_analysis.")
+            for name in imports
+        )
 
 
 def test_runtime_packages_do_not_load_jacobian_lenses_directly():
