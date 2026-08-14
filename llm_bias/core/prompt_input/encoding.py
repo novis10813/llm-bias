@@ -1,29 +1,10 @@
-"""Shared prompt rendering and tokenizer contract.
-
-This module contains only model/tokenizer-neutral mechanics. Experiment packages
-own the meaning of prompts, entities, answers, and spans; they consume these
-helpers and retain compatibility facades where their public APIs predate this
-contract.
-"""
+"""Tokenizer and prompt rendering mechanics shared by experiments."""
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from typing import Any, Iterable
+from typing import Any
 
-
-@dataclass(frozen=True)
-class TokenSpan:
-    """A character occurrence and its contiguous token representation."""
-
-    char_start: int
-    char_end: int
-    token_start: int
-    token_end: int
-    token_ids: list[int]
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+from .contracts import TokenSpan
 
 
 def _field(encoded: Any, name: str, default: Any = None) -> Any:
