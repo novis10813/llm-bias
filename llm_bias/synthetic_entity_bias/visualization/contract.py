@@ -26,7 +26,9 @@ LOCALIZATION_FIELDS = (
     "statistic_flag",
 )
 
-TEMPLATE_ORDER = ("negative", "positive", "neutral")
+from llm_bias.synthetic_entity_bias.spec import TEMPLATES
+
+TEMPLATE_ORDER = tuple(TEMPLATES.keys())
 TIER_ORDER = ("S&P 500", "Russell 1000", "Russell 2000")
 REQUIRED_STAGES = ("preflight", "baseline", "metric", "localization")
 REQUIRED_OUTPUTS = {

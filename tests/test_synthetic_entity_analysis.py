@@ -42,13 +42,14 @@ def test_analyze_run_writes_statistical_and_diagnostic_tables(tmp_path):
         "localization_transition_diagnostics.csv",
     }
     template = _rows(output / "template_statistics.csv")
-    assert [row["template"] for row in template] == ["negative", "positive", "neutral"]
+    from llm_bias.synthetic_entity_bias.visualization.contract import TEMPLATE_ORDER
+    assert [row["template"] for row in template] == list(TEMPLATE_ORDER)
     assert all(row["n"] == "2" for row in template)
     assert all(float(row["mean"]) == pytest.approx(0.5) for row in template)
     assert all(float(row["median"]) == pytest.approx(0.5) for row in template)
 
     paired = _rows(output / "template_pairwise_tests.csv")
-    assert len(paired) == 3
+    assert len(paired) == len(TEMPLATE_ORDER) * (len(TEMPLATE_ORDER) - 1) // 2
     assert all(row["n_paired"] == "2" for row in paired)
     assert all(float(row["mean_paired_difference"]) == pytest.approx(0.0) for row in paired)
 
@@ -58,13 +59,13 @@ def test_analyze_run_writes_statistical_and_diagnostic_tables(tmp_path):
     assert all(row["t_p_value"] == "" for row in sectors)
 
     localization = _rows(output / "localization_statistics.csv")
-    assert len(localization) == 12
+    assert len(localization) == 4 * len(TEMPLATE_ORDER)
     assert {row["metric"] for row in localization} == {
         "mean_cosine", "pearson_r", "spearman_r", "linear_r2"
     }
 
     baselines = _rows(output / "baseline_statistics.csv")
-    assert len(baselines) == 3
+    assert len(baselines) == len(TEMPLATE_ORDER)
     assert all(float(row["mean_movement_from_baseline"]) == pytest.approx(0.5) for row in baselines)
 
     diagnostics = _rows(output / "entity_distribution_diagnostics.csv")
@@ -72,12 +73,12 @@ def test_analyze_run_writes_statistical_and_diagnostic_tables(tmp_path):
     assert all(row["positive_tail_count_ge_0_5"] == "1" for row in diagnostics)
 
     null = _rows(output / "temperature_null_diagnostics.csv")
-    assert len(null) == 3
+    assert len(null) == len(TEMPLATE_ORDER)
     assert all(row["fit_status"] == "ok" for row in null)
     assert all(float(row["temperature_bounds_lower"]) == 0.25 for row in null)
 
     transitions = _rows(output / "localization_transition_diagnostics.csv")
-    assert len(transitions) == 12
+    assert len(transitions) == 4 * len(TEMPLATE_ORDER)
     cosine = next(row for row in transitions if row["template"] == "negative" and row["metric"] == "mean_cosine")
     assert cosine["sign_change_count"] == "0"
     assert float(cosine["maximum_jump_delta"]) == pytest.approx(1.0)

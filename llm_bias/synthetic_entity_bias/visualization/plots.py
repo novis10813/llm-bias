@@ -102,10 +102,17 @@ def plot_effect_distribution(run: Any, output_dir: Path) -> dict[str, Path]:
     return _save(fig, output_dir, "entity_effect_distribution")
 
 
+import math
+
 def plot_tail_diagnostics(run: Any, output_dir: Path) -> dict[str, Path]:
     summaries = {row["template"]: row for row in entity_distribution_diagnostics(run)}
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4), facecolor="#fcfcfb")
-    for index, (ax, template) in enumerate(zip(axes, TEMPLATE_ORDER, strict=True)):
+    n_templates = len(TEMPLATE_ORDER)
+    ncols = min(3, n_templates)
+    nrows = math.ceil(n_templates / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 3.8 * nrows), facecolor="#fcfcfb", squeeze=False)
+    axes_flat = axes.flatten()
+    for index, template in enumerate(TEMPLATE_ORDER):
+        ax = axes_flat[index]
         values = np.asarray([float(row["delta_expected_score"]) for row in run.results if row["template"] == template])
         summary = summaries[template]
         ax.hist(values, bins=40, color=LIGHT_COLORS[template], alpha=0.18, edgecolor=LIGHT_COLORS[template], linewidth=1.2, hatch=HATCHES[template], label=f"{template.title()} ΔE")
@@ -134,6 +141,8 @@ def plot_tail_diagnostics(run: Any, output_dir: Path) -> dict[str, Path]:
             color="#52514e",
             bbox={"facecolor": "#fcfcfb", "edgecolor": "none", "alpha": 0.88, "pad": 1.5},
         )
+    for ax in axes_flat[n_templates:]:
+        ax.set_visible(False)
     _paper_header(fig, "Entity-effect distributions contain asymmetric and heavy tails", f"Each panel contains n = {len(run.entity_pool):,} entity-level ΔE values; shaded spans show the 5th–95th percentiles.", "Symlog counts keep sparse tails visible. Skewness and kurtosis describe distribution shape; a histogram alone does not establish bimodality or a latent mixture.")
     fig.tight_layout(rect=(0, 0.07, 1, 0.90))
     return _save(fig, output_dir, "entity_effect_tail_diagnostics")
@@ -141,8 +150,13 @@ def plot_tail_diagnostics(run: Any, output_dir: Path) -> dict[str, Path]:
 
 def plot_baseline_movement(run: Any, output_dir: Path) -> dict[str, Path]:
     rows = baseline_statistics(run)
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4), sharey=True, facecolor="#fcfcfb")
-    for index, (ax, row) in enumerate(zip(axes, rows, strict=True)):
+    n_templates = len(rows)
+    ncols = min(3, n_templates)
+    nrows = math.ceil(n_templates / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 3.8 * nrows), sharey=True, facecolor="#fcfcfb", squeeze=False)
+    axes_flat = axes.flatten()
+    for index, row in enumerate(rows):
+        ax = axes_flat[index]
         template = row["template"]
         baseline = row["baseline_expected_score"]
         mean = row["entity_expected_score_mean"]
@@ -166,6 +180,8 @@ def plot_baseline_movement(run: Any, output_dir: Path) -> dict[str, Path]:
             color="#52514e",
             bbox={"facecolor": "#fcfcfb", "edgecolor": "none", "alpha": 0.88, "pad": 1.5},
         )
+    for ax in axes_flat[n_templates:]:
+        ax.set_visible(False)
     _paper_header(fig, "Named entities move expected scores away from matched generic baselines", "Points compare each prompt context’s single ‘The company’ baseline with the entity-level mean, median, and 5th–95th percentile.", "Scores use only the restricted labels mapped to −4…+4. Movement is a matched prompt contrast and is not, by itself, a standalone causal entity effect.")
     fig.tight_layout(rect=(0, 0.07, 1, 0.90))
     return _save(fig, output_dir, "baseline_entity_movement")
@@ -174,15 +190,20 @@ def plot_baseline_movement(run: Any, output_dir: Path) -> dict[str, Path]:
 def plot_temperature_null(run: Any, output_dir: Path) -> dict[str, Path]:
     entity_rows = temperature_null_entity_rows(run)
     summaries = {row["template"]: row for row in temperature_null_diagnostics(run)}
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4), facecolor="#fcfcfb")
-    for index, (ax, template) in enumerate(zip(axes, TEMPLATE_ORDER, strict=True)):
+    n_templates = len(TEMPLATE_ORDER)
+    ncols = min(3, n_templates)
+    nrows = math.ceil(n_templates / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 3.8 * nrows), facecolor="#fcfcfb", squeeze=False)
+    axes_flat = axes.flatten()
+    for index, template in enumerate(TEMPLATE_ORDER):
+        ax = axes_flat[index]
         rows = [row for row in entity_rows if row["template"] == template and row["fit_status"] == "ok"]
         observed = np.asarray([row["observed_delta_expected_score"] for row in rows])
         predicted = np.asarray([row["null_delta_expected_score"] for row in rows])
         summary = summaries[template]
         ax.scatter(predicted, observed, s=MARKER_SIZE ** 2, alpha=0.25, color=LIGHT_COLORS[template], marker=MARKERS[template], edgecolors="#fcfcfb", linewidths=1, label=f"{template.title()} entities")
-        lower = min(float(np.min(predicted)), float(np.min(observed)))
-        upper = max(float(np.max(predicted)), float(np.max(observed)))
+        lower = min(float(np.min(predicted)), float(np.min(observed))) if len(predicted) else 0.0
+        upper = max(float(np.max(predicted)), float(np.max(observed))) if len(predicted) else 1.0
         ax.plot([lower, upper], [lower, upper], color="#898781", linewidth=1, linestyle="--", label="Observed = null")
         ax.axhline(0, color="#c3c2b7", linewidth=1)
         ax.axvline(0, color="#c3c2b7", linewidth=1)
@@ -192,14 +213,21 @@ def plot_temperature_null(run: Any, output_dir: Path) -> dict[str, Path]:
         ax.set_title(f"{template.title()} context\nR²={summary['expected_score_null_r2']:.3f}; mean difference={summary['expected_score_difference_from_null_mean']:+.3f}", loc="left", fontweight="bold", fontsize=9.5)
         _panel_label(ax, f"({chr(97 + index)})")
         ax.spines[["top", "right"]].set_visible(False)
+    for ax in axes_flat[n_templates:]:
+        ax.set_visible(False)
     _paper_header(fig, "A one-dimensional temperature null does not explain every entity effect", f"Each point is one entity; n = {len(run.entity_pool):,} per context. The null fits pᵢ(T) ∝ p₀ᵢ^(1/T) to the persisted nine-point probabilities.", "The null allows only sharpening or flattening of the matched baseline shape. Fitted probability temperature is not the artifact effective-temperature field, is not a recovered model logit temperature, and does not constitute a new model experiment.")
     fig.tight_layout(rect=(0, 0.07, 1, 0.90))
     return _save(fig, output_dir, "temperature_null_diagnostics")
 
 
 def plot_tier(run: Any, output_dir: Path) -> dict[str, Path]:
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4), sharey=True, facecolor="#fcfcfb")
-    for ax, template in zip(axes, TEMPLATE_ORDER, strict=True):
+    n_templates = len(TEMPLATE_ORDER)
+    ncols = min(3, n_templates)
+    nrows = math.ceil(n_templates / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.5 * ncols, 3.8 * nrows), sharey=True, facecolor="#fcfcfb", squeeze=False)
+    axes_flat = axes.flatten()
+    for index, template in enumerate(TEMPLATE_ORDER):
+        ax = axes_flat[index]
         groups = [[float(row["delta_expected_score"]) for row in run.results if row["template"] == template and row["familiarity_tier"] == tier] for tier in TIER_ORDER]
         box = ax.boxplot(groups, tick_labels=TIER_ORDER, showfliers=False, patch_artist=True, widths=0.5)
         for patch in box["boxes"]:
@@ -212,11 +240,13 @@ def plot_tier(run: Any, output_dir: Path) -> dict[str, Path]:
         ax.tick_params(axis="x", rotation=25)
         ax.legend(frameon=False)
         _style(ax, f"{template.title()} context")
-        _panel_label(ax, f"({chr(97 + TEMPLATE_ORDER.index(template))})")
+        _panel_label(ax, f"({chr(97 + index)})")
         _zero_label(ax, vertical=False)
         ymax = ax.get_ylim()[1]
         for position, (tier, group) in enumerate(zip(TIER_ORDER, groups, strict=True), start=1):
             ax.text(position, ymax, f"n={len(group):,}", ha="center", va="bottom", fontsize=7, color="#52514e")
+    for ax in axes_flat[n_templates:]:
+        ax.set_visible(False)
     _paper_header(fig, "Entity effects vary by familiarity tier and prompt context", "Boxes show entity-level ΔE distributions; labels report the number of entities in each tier.", "The train/eval field is a deterministic analysis split, not an independently repeated sample.")
     fig.tight_layout(rect=(0, 0.07, 1, 0.90))
     return _save(fig, output_dir, "entity_effect_by_tier")
@@ -246,17 +276,17 @@ def plot_template_relationships(run: Any, output_dir: Path) -> dict[str, Path]:
 
 def plot_localization_profiles(run: Any, output_dir: Path) -> dict[str, Path]:
     metrics = (("mean_cosine", "Mean cosine"), ("pearson_r", "Pearson r"), ("spearman_r", "Spearman rho"), ("linear_r2", "Linear R²"))
-    transitions = {(row["template"], row["metric"]): row for row in localization_transition_diagnostics(run)}
-    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharex=True, facecolor="#fcfcfb")
+    summaries = {(row["template"], row["metric"]): row for row in localization_transition_diagnostics(run)}
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), sharex=True, facecolor="#fcfcfb")
     max_layer = max(int(row["layer"]) for row in run.localization)
     first = run.localization[0]
-    for panel_index, (ax, (metric, label)) in enumerate(zip(axes.flat, metrics, strict=True)):
+    for panel_index, (ax, (metric, label)) in enumerate(zip(axes.flatten(), metrics, strict=True)):
         for template in TEMPLATE_ORDER:
             rows = sorted((row for row in run.localization if row["template"] == template), key=lambda row: int(row["layer"]))
             x = [int(row["layer"]) / max_layer if max_layer else 0 for row in rows]
             y = [float(row[metric]) for row in rows]
-            ax.plot(x, y, **_line_kwargs(template, markers=True))
-            diagnostic = transitions[(template, metric)]
+            ax.plot(x, y, color=LIGHT_COLORS[template], linewidth=LINE_WIDTH, linestyle=DASHES[template], marker=MARKERS[template], markersize=MARKER_SIZE, label=template.title())
+            diagnostic = summaries[(template, metric)]
             peak_layer = diagnostic["absolute_peak_layer"]
             peak_index = next(index for index, row in enumerate(rows) if int(row["layer"]) == peak_layer)
             ax.scatter([x[peak_index]], [y[peak_index]], s=(MARKER_SIZE + 2) ** 2, facecolor="#fcfcfb", edgecolor=LIGHT_COLORS[template], marker=MARKERS[template], linewidth=2, zorder=4)
@@ -266,12 +296,12 @@ def plot_localization_profiles(run: Any, output_dir: Path) -> dict[str, Path]:
         ax.axhline(0, color="#c3c2b7", linewidth=1)
         _style(ax, label, label)
         ax.set_xlabel("Normalized layer depth")
-        ax.legend(frameon=False, ncols=3, fontsize=8)
+        ax.legend(frameon=False, ncols=min(4, len(TEMPLATE_ORDER)), fontsize=7)
         _panel_label(ax, f"({chr(97 + panel_index)})")
         ax.axvline(1.0, color="#898781", linewidth=1)
         if metric == "mean_cosine":
-            counts = ", ".join(f"{template.title()} {transitions[(template, metric)]['sign_change_count']}" for template in TEMPLATE_ORDER)
-            ax.text(0.02, 0.03, f"Sign changes: {counts}", transform=ax.transAxes, fontsize=7, color="#52514e")
+            counts = ", ".join(f"{template.title()} {summaries[(template, metric)]['sign_change_count']}" for template in TEMPLATE_ORDER)
+            ax.text(0.02, 0.03, f"Sign changes: {counts}", transform=ax.transAxes, fontsize=6.5, color="#52514e")
     _paper_header(fig, "Entity-sensitive localization changes across model depth", f"Depth is layer/final layer; train n = {int(first['n_train']):,}, eval n = {int(first['n_eval']):,} entities per context.", "Localization is Jacobian-transported representation evidence, not chain-of-thought or a standalone causal proof.")
     fig.tight_layout(rect=(0, 0.07, 1, 0.90))
     return _save(fig, output_dir, "localization_profiles")
@@ -282,12 +312,13 @@ def plot_sector_effects(run: Any, output_dir: Path, *, minimum_count: int = 20) 
     rows = [row for row in summary if row["count"] >= minimum_count]
     excluded = len(summary) - len(rows)
     sectors = sorted({row["sector"] for row in rows})
-    fig, ax = plt.subplots(figsize=(10, max(4, len(sectors) * 0.5)), facecolor="#fcfcfb")
-    width = 0.22
+    fig, ax = plt.subplots(figsize=(11, max(4.5, len(sectors) * 0.6)), facecolor="#fcfcfb")
+    width = min(0.22, 0.8 / max(1, len(TEMPLATE_ORDER)))
     positions = np.arange(len(sectors))
     for index, template in enumerate(TEMPLATE_ORDER):
-        values = {row["sector"]: row["mean_delta_expected_score"] for row in rows if row["template"] == template}
-        ax.barh(positions + (index - 1) * (width + 0.04), [values.get(sector, 0) for sector in sectors], height=width, color=LIGHT_COLORS[template], hatch=HATCHES[template], edgecolor="#fcfcfb", linewidth=2, label=template.title())
+        values = [next((row["mean"] for row in rows if row["sector"] == sector and row["template"] == template), 0.0) for sector in sectors]
+        offset = (index - (len(TEMPLATE_ORDER) - 1) / 2) * width
+        ax.barh(positions + offset, values, height=width * 0.9, color=LIGHT_COLORS[template], alpha=0.25, edgecolor=LIGHT_COLORS[template], linewidth=1.2, hatch=HATCHES[template], label=f"{template.title()} ΔE")
     ax.axvline(0, color="#898781", linewidth=1)
     ax.set_yticks(positions, sectors)
     ax.set_xlabel("Mean delta expected score")

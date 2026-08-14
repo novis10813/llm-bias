@@ -69,11 +69,15 @@ def _fixture(tmp_path: Path) -> Path:
         "split": "stable", "template_hash": TEMPLATE_HASH, "label_hash": LABEL_HASH,
     }
     (root / "config.json").write_text(json.dumps(config), encoding="utf-8")
-    tokenization = {"label_token_ids": config["label_token_ids"], "decoded": config["label_decoded"], "n_prompts": 9, "anomalies": []}
+    tokenization = {"label_token_ids": config["label_token_ids"], "decoded": config["label_decoded"], "n_prompts": len(entities) * len(TEMPLATES) + len(TEMPLATES), "anomalies": []}
     (root / "tokenization_validation.json").write_text(json.dumps(tokenization), encoding="utf-8")
     _write_csv(root / "entity_pool.csv", ENTITY_POOL_FIELDS, entities)
     baselines, results = [], []
-    template_labels = {"negative": 3, "positive": 5, "neutral": 4}
+    from llm_bias.synthetic_entity_bias.spec import TEMPLATE_SENTIMENTS
+    template_labels = {
+        template: 3 if TEMPLATE_SENTIMENTS.get(template) == "negative" else 5 if TEMPLATE_SENTIMENTS.get(template) == "positive" else 4
+        for template in TEMPLATES
+    }
     for template, label in template_labels.items():
         probabilities = _probability(label)
         expected = label - 4
@@ -105,15 +109,15 @@ def _fixture(tmp_path: Path) -> Path:
                 "direction_sha256": "2" * 64, "statistic_flag": "ok",
             })
     _write_csv(root / "layer_template_localization.csv", LOCALIZATION_FIELDS, localization)
-    for stage, count in (("preflight", 9), ("baseline", 3), ("metric", 6), ("localization", 6)):
+    for stage, count in (("preflight", len(entities) * len(TEMPLATES) + len(TEMPLATES)), ("baseline", len(TEMPLATES)), ("metric", len(entities) * len(TEMPLATES)), ("localization", 2 * len(TEMPLATES))):
         manifest.start_stage(stage).finish_stage(stage, record_count=count)
     for artifact_type, filename, stage, count in (
         ("config", "config.json", "preflight", None),
         ("tokenization_validation", "tokenization_validation.json", "preflight", None),
         ("entity_pool", "entity_pool.csv", "preflight", 2),
-        ("no_entity_baselines", "no_entity_baselines.csv", "baseline", 3),
-        ("raw_entity_template_results", "raw_entity_template_results.csv", "metric", 6),
-        ("layer_template_localization", "layer_template_localization.csv", "localization", 6),
+        ("no_entity_baselines", "no_entity_baselines.csv", "baseline", len(TEMPLATES)),
+        ("raw_entity_template_results", "raw_entity_template_results.csv", "metric", len(entities) * len(TEMPLATES)),
+        ("layer_template_localization", "layer_template_localization.csv", "localization", 2 * len(TEMPLATES)),
     ):
         manifest.register_artifact(root / filename, artifact_type=artifact_type, stage=stage, record_count=count)
     manifest.complete().save()
@@ -123,7 +127,7 @@ def _fixture(tmp_path: Path) -> Path:
 def test_visualize_run_writes_auditable_bundle(tmp_path):
     root = _fixture(tmp_path)
     run = validate_run(root)
-    assert len(run.results) == 6
+    assert len(run.results) == 2 * len(TEMPLATES)
     output = visualize_run(root)
     assert not (output / "dashboard.html").exists()
     assert len(list((output / "figures").glob("*.png"))) == 8
@@ -135,7 +139,7 @@ def test_visualize_run_writes_auditable_bundle(tmp_path):
         assert path.read_bytes().startswith(b"%PDF")
     metadata = json.loads((output / "visualization_metadata.json").read_text())
     assert metadata["validation"]["model_loading_performed"] is False
-    assert metadata["records"]["entity_template_results"] == 6
+    assert metadata["records"]["entity_template_results"] == 2 * len(TEMPLATES)
     assert metadata["schema_version"] == 4
     assert metadata["render_profile"] == "paper_first"
     assert metadata["paper_exports"]["formats"] == ["png", "svg", "pdf"]
@@ -192,16 +196,12 @@ def test_validate_run_rejects_non_complete_manifest(tmp_path):
 
 
 def test_theme_identity_is_fixed_and_unknown_templates_fail():
-    assert LIGHT_COLORS == {
-        "negative": "#2a78d6",
-        "positive": "#eb6834",
-        "neutral": "#1baf7a",
-    }
-    assert DARK_COLORS == {
-        "negative": "#3987e5",
-        "positive": "#d95926",
-        "neutral": "#199e70",
-    }
+    from llm_bias.synthetic_entity_bias.visualization.contract import TEMPLATE_ORDER
+    assert set(LIGHT_COLORS.keys()) == set(TEMPLATE_ORDER)
+    assert set(DARK_COLORS.keys()) == set(TEMPLATE_ORDER)
+    assert LIGHT_COLORS["negative"] == "#2a78d6"
+    assert LIGHT_COLORS["positive"] == "#eb6834"
+    assert LIGHT_COLORS["neutral"] == "#1baf7a"
     assert template_style("positive")["marker"] == "s"
     with pytest.raises(ValueError, match="unknown template"):
         template_style("other")
