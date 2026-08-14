@@ -20,6 +20,7 @@ from llm_bias.core.lens_loader import load_validated_lens
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompt_input import decode_token, format_messages, format_prompt
 from llm_bias.core.readout import last_unmasked_positions
+from llm_bias.core.analysis.records import top_k_token_records as _core_top_k_token_records
 from llm_bias.prompt_analysis.input_data import PromptColumn, load_prompt_table
 
 DEFAULT_INPUT = "sp500_r1k_r2k_entityBiasPrompt.csv"
@@ -41,24 +42,8 @@ def topk_token_records(
     top_k: int,
     tokenizer: Any,
 ) -> list[dict[str, Any]]:
-    """Turn one full-vocabulary probability vector into JSON-ready top-k."""
-    if probabilities.ndim != 1:
-        raise ValueError("probabilities must be a one-dimensional vocabulary vector")
-    if not 1 <= top_k <= probabilities.numel():
-        raise ValueError(f"top_k must be between 1 and {probabilities.numel()}")
-    top = probabilities.topk(top_k)
-    return [
-        {
-            "rank": rank,
-            "token_id": int(token_id),
-            "token": _decode_token(tokenizer, int(token_id)),
-            "probability": float(probability),
-        }
-        for rank, (token_id, probability) in enumerate(
-            zip(top.indices.tolist(), top.values.tolist(), strict=True),
-            start=1,
-        )
-    ]
+    """Backward-compatible alias for the shared compact token contract."""
+    return _core_top_k_token_records(probabilities, top_k=top_k, tokenizer=tokenizer)
 
 
 _last_unmasked_positions = last_unmasked_positions
@@ -551,7 +536,8 @@ def _attribute_column(
                 "output_token_id": output_token["token_id"],
                 "output_token": output_token["token"],
                 "output_mean_probability": output_token["probability"],
-                "method": "absolute_gradient_x_input_embedding_of_log_probability",
+                "method": "gradient_attribution",
+                "operation": "absolute_gradient_x_input_embedding_of_log_probability",
                 "normalization": "sum_to_one_over_input_positions_per_prompt",
                 "top_input_tokens": _top_input_token_records(
                     by_token_id[output_index],
@@ -907,7 +893,8 @@ def analyze_prompt_outputs(
             "top_k": input_top_k,
             "output_top_k": attribution_output_top_k or top_k,
             "max_rows": attribution_max_rows,
-            "method": "absolute_gradient_x_input_embedding_of_log_probability",
+            "method": "gradient_attribution",
+            "operation": "absolute_gradient_x_input_embedding_of_log_probability",
             "normalization": "sum_to_one_over_input_positions_per_prompt",
             "position_alignment": "right_aligned_to_final_prompt_token",
             "position_zero": "final_non_padding_prompt_token",
