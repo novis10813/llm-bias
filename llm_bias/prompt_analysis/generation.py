@@ -19,6 +19,11 @@ import torch
 from llm_bias.core.artifact_paths import atomic_write_json, model_slug, stable_record_id
 from llm_bias.core.model import DEFAULT_MODEL, load_model as load_lens_model
 from llm_bias.core.prompt_input import find_token_subsequence, format_messages, format_prompt
+from llm_bias.core.inference.generation import (
+    GenerationConfig,
+    finish_reason as _core_finish_reason,
+    generate_tokens as _core_generate_tokens,
+)
 from llm_bias.prompt_analysis.input_data import PromptTable, load_prompt_table
 from jspace_viz.model import WrappedModel
 
@@ -90,7 +95,6 @@ def _generation_kwargs(
     return kwargs
 
 
-@torch.no_grad()
 def generate_tokens(
     model: WrappedModel,
     prompt_ids: torch.Tensor,
@@ -100,37 +104,18 @@ def generate_tokens(
     top_p: float,
     top_k: int,
 ) -> torch.Tensor:
-    """Generate one sequence without constructing a gradient graph.
-
-    The returned tensor is the model's complete sequence (prompt followed by
-    generated tokens), matching the contract of ``PreTrainedModel.generate``.
-    ``GenerateDecoderOnlyOutput`` and plain tensor return values are both
-    accepted to keep deterministic fake models useful in tests.
-    """
-    result = model.hf_model.generate(
+    """Compatibility wrapper for the shared generation primitive."""
+    return _core_generate_tokens(
+        model,
         prompt_ids,
-        **_generation_kwargs(
-            model,
+        GenerationConfig(
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            pad_token_id=model.tokenizer.eos_token_id,
         ),
     )
-    sequences = getattr(result, "sequences", result)
-    if isinstance(sequences, (tuple, list)):
-        if not sequences:
-            raise ValueError("model.generate returned no sequences")
-        sequences = sequences[0]
-    if not isinstance(sequences, torch.Tensor):
-        raise TypeError("model.generate must return a tensor or an output with sequences")
-    if sequences.ndim == 1:
-        sequences = sequences.unsqueeze(0)
-    if sequences.ndim != 2 or sequences.shape[0] != 1:
-        raise ValueError(
-            "generation-only artifact currently requires exactly one generated sequence"
-        )
-    return sequences
 
 
 def _generated_part(sequence: torch.Tensor, prompt_ids: torch.Tensor, max_new_tokens: int) -> torch.Tensor:
@@ -517,7 +502,7 @@ def generate_prompt_outputs(
                             skip_special_tokens=False,
                         ),
                         "generation_config": run_config,
-                        "finish_reason": _finish_reason(
+                        "finish_reason": _core_finish_reason(
                             generated_token_ids,
                             eos_token_id=tokenizer.eos_token_id,
                             max_new_tokens=max_new_tokens,
