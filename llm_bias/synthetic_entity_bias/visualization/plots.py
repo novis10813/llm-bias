@@ -20,7 +20,153 @@ from llm_bias.synthetic_entity_bias.analysis.diagnostics import (
 )
 
 from .contract import TEMPLATE_ORDER, TIER_ORDER
-from .summaries import summarize_sector, summarize_ticker
+from .summaries import (
+    summarize_layer_sentiment_ribbon,
+    summarize_sector,
+    summarize_ticker,
+    summarize_ticker_halo,
+    summarize_tier_sector_sentiment,
+)
+
+
+def plot_entity_halo_vs_sensitivity(run: Any, output_dir: Path) -> dict[str, Path]:
+    rows = summarize_ticker_halo(run)
+    fig, ax = plt.subplots(figsize=(8.5, 6.5), facecolor="#fcfcfb")
+    tier_styles = {
+        "S&P 500": {"color": "#2a78d6", "marker": "o", "alpha": 0.55, "size": 36},
+        "Russell 1000": {"color": "#1baf7a", "marker": "s", "alpha": 0.45, "size": 30},
+        "Russell 2000": {"color": "#eb6834", "marker": "^", "alpha": 0.45, "size": 30},
+    }
+    x_all = [r["halo_mean"] for r in rows]
+    y_all = [r["sentiment_sensitivity"] for r in rows]
+    x_med = float(np.median(x_all)) if x_all else 0.0
+    y_med = float(np.median(y_all)) if y_all else 0.0
+
+    for tier in TIER_ORDER:
+        tier_rows = [r for r in rows if r["familiarity_tier"] == tier]
+        if not tier_rows:
+            continue
+        x = [r["halo_mean"] for r in tier_rows]
+        y = [r["sentiment_sensitivity"] for r in tier_rows]
+        style = tier_styles.get(tier, {"color": "#52514e", "marker": "o", "alpha": 0.4, "size": 28})
+        ax.scatter(x, y, s=style["size"], color=style["color"], marker=style["marker"], alpha=style["alpha"], edgecolors="#fcfcfb", linewidths=0.5, label=f"{tier} (n={len(tier_rows):,})")
+
+    ax.axvline(0, color="#898781", linewidth=1, linestyle="-")
+    ax.axhline(0, color="#898781", linewidth=1, linestyle="-")
+    ax.axvline(x_med, color="#c3c2b7", linewidth=1, linestyle=":", label=f"Median Halo ({x_med:+.3f})")
+    ax.axhline(y_med, color="#c3c2b7", linewidth=1, linestyle=":", label=f"Median Sensitivity ({y_med:+.3f})")
+
+    _style(ax, "Intrinsic Entity Halo Effect (Mean ΔE across 12 Prompts)", "Sentiment Sensitivity (Pos ΔE − Neg ΔE)")
+    ax.set_title("Entity Prior vs. Asymmetric News Response", loc="left", fontweight="bold", fontsize=10.5)
+    _panel_label(ax, "(a)")
+    ax.legend(frameon=False, loc="upper right", fontsize=7.5)
+
+    _paper_header(fig, "Entity Halo Effect vs. Sentiment Sensitivity Across Market Tiers", f"Each point represents one entity (n = {len(rows):,} total). Halo Effect is mean ΔE across all 12 templates; Sentiment Sensitivity is (Pos − Neg).", "Scores use restricted 9-label mappings. Non-zero halo indicates an unconditional entity baseline shift; sensitivity measures news amplification.")
+    fig.tight_layout(rect=(0, 0.07, 1, 0.90))
+    return _save(fig, output_dir, "entity_halo_vs_sensitivity")
+
+
+def plot_tier_sector_sentiment_spread(run: Any, output_dir: Path, *, minimum_count: int = 10) -> dict[str, Path]:
+    rows = summarize_tier_sector_sentiment(run)
+    sectors = sorted({r["sector"] for r in rows if r["sector"] != "Unclassified"})
+    if not sectors:
+        sectors = sorted({r["sector"] for r in rows})
+    fig, ax = plt.subplots(figsize=(10, max(5.5, len(sectors) * 0.55)), facecolor="#fcfcfb")
+    positions = np.arange(len(sectors))
+    sentiment_colors = {"negative": "#2a78d6", "neutral": "#1baf7a", "positive": "#eb6834"}
+
+    for index, sector in enumerate(sectors):
+        for tier, offset, linestyle, marker in (("S&P 500", -0.15, "-", "o"), ("Russell 2000", 0.15, "--", "^")):
+            tier_rows = {r["sentiment"]: r for r in rows if r["sector"] == sector and r["familiarity_tier"] == tier}
+            if not tier_rows:
+                continue
+            y_pos = positions[index] + offset
+            pts = []
+            for sentiment in ("negative", "neutral", "positive"):
+                if sentiment in tier_rows:
+                    m = tier_rows[sentiment]["mean_delta_expected_score"]
+                    sem = tier_rows[sentiment]["sem_delta_expected_score"]
+                    pts.append((m, sem, sentiment))
+            if len(pts) >= 2:
+                xs = [p[0] for p in pts]
+                ax.plot(xs, [y_pos] * len(xs), color="#898781", linestyle=linestyle, linewidth=1.2, zorder=1)
+            for m, sem, sentiment in pts:
+                color = sentiment_colors.get(sentiment, "#52514e")
+                ax.errorbar(m, y_pos, xerr=sem * 1.96, color=color, fmt=marker, markersize=MARKER_SIZE, capsize=3, linewidth=1.5, zorder=3)
+
+    for sentiment, color in sentiment_colors.items():
+        ax.plot([], [], color=color, marker="o", linestyle="None", label=f"{sentiment.title()} (95% CI)")
+    ax.plot([], [], color="#52514e", linestyle="-", label="S&P 500 span")
+    ax.plot([], [], color="#52514e", linestyle="--", label="Russell 2000 span")
+
+    ax.axvline(0, color="#898781", linewidth=1)
+    ax.set_yticks(positions, sectors)
+    ax.set_xlabel("Mean ΔE score offset from baseline")
+    _style(ax, "GICS Sector", "Mean ΔE")
+    _panel_label(ax, "(a)")
+    ax.legend(frameon=False, loc="lower right", fontsize=7.5)
+    _paper_header(fig, "Sector-Level Sentiment Spans Stratified by Familiarity Tier", "Horizontal dumbbells show the range from Negative (blue) through Neutral (teal) to Positive (orange) sentiment for S&P 500 vs. Russell 2000.", "Error bars show 95% confidence intervals across multi-prompt measurements. Differences in span width reflect sector-specific sentiment sensitivity.")
+    fig.tight_layout(rect=(0, 0.07, 1, 0.90))
+    return _save(fig, output_dir, "tier_sector_sentiment_spread")
+
+
+def plot_layer_localization_ribbon(run: Any, output_dir: Path) -> dict[str, Path]:
+    rows = summarize_layer_sentiment_ribbon(run)
+    metrics = (
+        ("mean_cosine", "Mean cosine similarity"),
+        ("pearson_r", "Pearson r correlation"),
+        ("spearman_r", "Spearman rank correlation"),
+        ("linear_r2", "Linear R² fit"),
+    )
+    sentiment_colors = {"negative": "#2a78d6", "neutral": "#1baf7a", "positive": "#eb6834"}
+    sentiment_dashes = {"negative": "-", "neutral": "-.", "positive": "--"}
+    sentiment_markers = {"negative": "o", "neutral": "^", "positive": "s"}
+
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), sharex=True, facecolor="#fcfcfb")
+    for panel_index, (ax, (metric, label)) in enumerate(zip(axes.flatten(), metrics, strict=True)):
+        for sentiment in ("negative", "neutral", "positive"):
+            s_rows = sorted([r for r in rows if r["sentiment"] == sentiment], key=lambda r: int(r["layer"]))
+            if not s_rows:
+                continue
+            x = [r["normalized_depth"] for r in s_rows]
+            y = np.asarray([r[f"{metric}_mean"] for r in s_rows])
+            sem = np.asarray([r[f"{metric}_sem"] for r in s_rows])
+            color = sentiment_colors[sentiment]
+            dash = sentiment_dashes[sentiment]
+            marker = sentiment_markers[sentiment]
+
+            ax.plot(x, y, color=color, linestyle=dash, marker=marker, markersize=5, linewidth=1.8, label=f"{sentiment.title()} (mean)")
+            ax.fill_between(x, y - sem, y + sem, color=color, alpha=0.18, label=f"{sentiment.title()} ±1 SEM")
+
+        ax.axhline(0, color="#c3c2b7", linewidth=1)
+        ax.axvline(1.0, color="#898781", linewidth=1)
+        _style(ax, label, label)
+        ax.set_xlabel("Normalized layer depth")
+        ax.legend(frameon=False, ncols=3, fontsize=7)
+        _panel_label(ax, f"({chr(97 + panel_index)})")
+
+    _paper_header(fig, "Multi-Prompt Aggregated Layer Localization Profiles", "Lines show mean Jacobian Lens readout metrics grouped by sentiment polarity; shaded bands represent ±1 SEM across the 4 prompt templates.", "Multi-template aggregation reduces single-prompt lexical noise, isolating depth-dependent sentiment separation.")
+    fig.tight_layout(rect=(0, 0.07, 1, 0.90))
+    return _save(fig, output_dir, "layer_localization_ribbon")
+
+
+def make_plots(run: Any, output_dir: str | Path) -> tuple[dict[str, dict[str, Path]], dict[str, Any]]:
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    sector_paths, excluded = plot_sector_effects(run, directory)
+    return {
+        "entity_effect_distribution": plot_effect_distribution(run, directory),
+        "entity_effect_tail_diagnostics": plot_tail_diagnostics(run, directory),
+        "baseline_entity_movement": plot_baseline_movement(run, directory),
+        "temperature_null_diagnostics": plot_temperature_null(run, directory),
+        "entity_effect_by_tier": plot_tier(run, directory),
+        "template_relationships": plot_template_relationships(run, directory),
+        "localization_profiles": plot_localization_profiles(run, directory),
+        "sector_effects": sector_paths,
+        "entity_halo_vs_sensitivity": plot_entity_halo_vs_sensitivity(run, directory),
+        "tier_sector_sentiment_spread": plot_tier_sector_sentiment_spread(run, directory),
+        "layer_localization_ribbon": plot_layer_localization_ribbon(run, directory),
+    }, {"sector_minimum_count": 20, "excluded_sector_template_groups": excluded}
 from .theme import (
     DASHES,
     HATCHES,
@@ -345,4 +491,7 @@ def make_plots(run: Any, output_dir: str | Path) -> tuple[dict[str, dict[str, Pa
         "template_relationships": plot_template_relationships(run, directory),
         "localization_profiles": plot_localization_profiles(run, directory),
         "sector_effects": sector_paths,
+        "entity_halo_vs_sensitivity": plot_entity_halo_vs_sensitivity(run, directory),
+        "tier_sector_sentiment_spread": plot_tier_sector_sentiment_spread(run, directory),
+        "layer_localization_ribbon": plot_layer_localization_ribbon(run, directory),
     }, {"sector_minimum_count": 20, "excluded_sector_template_groups": excluded}

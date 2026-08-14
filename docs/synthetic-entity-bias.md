@@ -67,7 +67,10 @@ visualization/
 │   ├── entity_effect_by_tier.{png,svg,pdf}
 │   ├── template_relationships.{png,svg,pdf}
 │   ├── localization_profiles.{png,svg,pdf}
-│   └── sector_effects.{png,svg,pdf}
+│   ├── sector_effects.{png,svg,pdf}
+│   ├── entity_halo_vs_sensitivity.{png,svg,pdf}
+│   ├── tier_sector_sentiment_spread.{png,svg,pdf}
+│   └── layer_localization_ribbon.{png,svg,pdf}
 ├── captions/
 │   └── <one publication caption per figure>.md
 └── tables/
@@ -79,7 +82,10 @@ visualization/
     ├── familiarity_tier_summary.csv
     ├── sector_summary.csv
     ├── ticker_template_effects.csv
-    └── localization_summary.csv
+    ├── localization_summary.csv
+    ├── ticker_halo_sensitivity.csv
+    ├── tier_sector_sentiment_summary.csv
+    └── layer_sentiment_ribbon.csv
 ```
 
 Each static figure is designed to remain interpretable outside the repository: it includes a publication title, metric definition, sample size, panel labels, reference annotations, complete legend, and concise figure note. PNG is a high-resolution raster export, while SVG and PDF preserve vector marks and text. Each deterministic Markdown caption identifies its figure stem and supporting table and includes the relevant interpretation limits.

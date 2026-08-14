@@ -130,11 +130,12 @@ def test_visualize_run_writes_auditable_bundle(tmp_path):
     assert len(run.results) == 2 * len(TEMPLATES)
     output = visualize_run(root)
     assert not (output / "dashboard.html").exists()
-    assert len(list((output / "figures").glob("*.png"))) == 8
-    assert len(list((output / "figures").glob("*.svg"))) == 8
-    assert len(list((output / "figures").glob("*.pdf"))) == 8
-    assert len(list((output / "captions").glob("*.md"))) == 8
-    assert len(list((output / "tables").glob("*.csv"))) == 9
+    from llm_bias.synthetic_entity_bias.visualization.contract import FIGURE_IDS, SUMMARY_FILES
+    assert len(list((output / "figures").glob("*.png"))) == len(FIGURE_IDS)
+    assert len(list((output / "figures").glob("*.svg"))) == len(FIGURE_IDS)
+    assert len(list((output / "figures").glob("*.pdf"))) == len(FIGURE_IDS)
+    assert len(list((output / "captions").glob("*.md"))) == len(FIGURE_IDS)
+    assert len(list((output / "tables").glob("*.csv"))) == len(SUMMARY_FILES)
     for path in (output / "figures").glob("*.pdf"):
         assert path.read_bytes().startswith(b"%PDF")
     metadata = json.loads((output / "visualization_metadata.json").read_text())
@@ -145,7 +146,7 @@ def test_visualize_run_writes_auditable_bundle(tmp_path):
     assert metadata["paper_exports"]["formats"] == ["png", "svg", "pdf"]
     assert metadata["dashboard"]["requested"] is False
     assert metadata["accessibility"]["self_explained_static_figures"] is True
-    assert metadata["chart_specs"]["count"] == 8
+    assert metadata["chart_specs"]["count"] == len(FIGURE_IDS)
     assert {row["path"] for row in metadata["outputs"]} >= {
         "tables/template_summary.csv",
         "figures/entity_effect_distribution.pdf",
@@ -158,10 +159,11 @@ def test_visualize_run_writes_auditable_bundle(tmp_path):
 
 
 def test_visualize_optionally_writes_interactive_dashboard(tmp_path):
+    from llm_bias.synthetic_entity_bias.visualization.contract import FIGURE_IDS
     output = visualize_run(_fixture(tmp_path), with_dashboard=True)
     dashboard = (output / "dashboard.html").read_text()
     assert "https://" not in dashboard
-    assert dashboard.count('class="chart"') == 8
+    assert dashboard.count('class="chart"') == len(FIGURE_IDS)
     assert 'href="figures/entity_effect_distribution.pdf"' in dashboard
     assert "forced-colors:active" in dashboard
     assert "theme-toggle" in dashboard
@@ -208,9 +210,10 @@ def test_theme_identity_is_fixed_and_unknown_templates_fail():
 
 
 def test_chart_specs_have_tooltips_tables_and_secondary_encodings(tmp_path):
+    from llm_bias.synthetic_entity_bias.visualization.contract import FIGURE_IDS
     run = validate_run(_fixture(tmp_path))
     specs = build_chart_specs(run)
-    assert len(specs) == 8
+    assert len(specs) == len(FIGURE_IDS)
     for spec in specs:
         assert spec["description"]
         assert spec["title"]

@@ -148,6 +148,117 @@ def summarize_localization(run: Any) -> list[dict[str, Any]]:
     return sorted(output, key=lambda row: (TEMPLATE_ORDER.index(row["template"]), row["layer"]))
 
 
+def summarize_ticker_halo(run: Any) -> list[dict[str, Any]]:
+    from llm_bias.synthetic_entity_bias.spec import TEMPLATE_SENTIMENTS
+    pool = {row["ticker"]: row for row in run.entity_pool}
+    grouped = defaultdict(lambda: defaultdict(list))
+    for row in run.results:
+        sentiment = TEMPLATE_SENTIMENTS.get(row["template"], "neutral")
+        grouped[row["ticker"]][sentiment].append(_number(row["delta_expected_score"]))
+
+    output = []
+    for ticker, entity in sorted(pool.items()):
+        scores_by_sentiment = grouped[ticker]
+        all_scores = [score for scores in scores_by_sentiment.values() for score in scores]
+        if not all_scores:
+            continue
+        pos_scores = scores_by_sentiment.get("positive", [0.0])
+        neu_scores = scores_by_sentiment.get("neutral", [0.0])
+        neg_scores = scores_by_sentiment.get("negative", [0.0])
+
+        pos_mean = sum(pos_scores) / len(pos_scores)
+        neu_mean = sum(neu_scores) / len(neu_scores)
+        neg_mean = sum(neg_scores) / len(neg_scores)
+        halo_mean = sum(all_scores) / len(all_scores)
+
+        pos_var = sum((s - pos_mean) ** 2 for s in pos_scores) / len(pos_scores)
+        neg_var = sum((s - neg_mean) ** 2 for s in neg_scores) / len(neg_scores)
+
+        output.append({
+            "ticker": ticker,
+            "company_name": entity["company_name"],
+            "familiarity_tier": entity["familiarity_tier"],
+            "sector": entity.get("sectors", "").split("|")[0] if entity.get("sectors") else "",
+            "split": entity["split"],
+            "halo_mean": halo_mean,
+            "sentiment_sensitivity": pos_mean - neg_mean,
+            "pos_mean": pos_mean,
+            "neu_mean": neu_mean,
+            "neg_mean": neg_mean,
+            "pos_std": math.sqrt(pos_var),
+            "neg_std": math.sqrt(neg_var),
+        })
+    return output
+
+
+def summarize_tier_sector_sentiment(run: Any) -> list[dict[str, Any]]:
+    from llm_bias.synthetic_entity_bias.spec import TEMPLATE_SENTIMENTS
+    pool = {row["ticker"]: row for row in run.entity_pool}
+    grouped = defaultdict(list)
+    for row in run.results:
+        ticker = row["ticker"]
+        entity = pool.get(ticker, {})
+        sector = entity.get("sectors", "").split("|")[0] if entity.get("sectors") else ""
+        if not sector:
+            sector = "Unclassified"
+        tier = row["familiarity_tier"]
+        sentiment = TEMPLATE_SENTIMENTS.get(row["template"], "neutral")
+        grouped[(sector, tier, sentiment)].append(_number(row["delta_expected_score"]))
+
+    output = []
+    for (sector, tier, sentiment), scores in sorted(grouped.items()):
+        n = len(scores)
+        mean = sum(scores) / n
+        var = sum((s - mean) ** 2 for s in scores) / n
+        std = math.sqrt(var)
+        sem = std / math.sqrt(n) if n > 0 else 0.0
+        output.append({
+            "sector": sector,
+            "familiarity_tier": tier,
+            "sentiment": sentiment,
+            "count": n,
+            "mean_delta_expected_score": mean,
+            "std_delta_expected_score": std,
+            "sem_delta_expected_score": sem,
+            "ci95_lower": mean - 1.96 * sem,
+            "ci95_upper": mean + 1.96 * sem,
+        })
+    return output
+
+
+def summarize_layer_sentiment_ribbon(run: Any) -> list[dict[str, Any]]:
+    from llm_bias.synthetic_entity_bias.spec import TEMPLATE_SENTIMENTS
+    max_layer = max(int(row["layer"]) for row in run.localization)
+    grouped = defaultdict(lambda: defaultdict(list))
+    for row in run.localization:
+        layer = int(row["layer"])
+        sentiment = TEMPLATE_SENTIMENTS.get(row["template"], "neutral")
+        for metric in ("mean_cosine", "pearson_r", "spearman_r", "linear_r2"):
+            grouped[(layer, sentiment)][metric].append(_number(row[metric]))
+
+    output = []
+    for (layer, sentiment), metrics in sorted(grouped.items()):
+        row_dict = {
+            "layer": layer,
+            "normalized_depth": layer / max_layer if max_layer else 0.0,
+            "sentiment": sentiment,
+        }
+        for metric, values in metrics.items():
+            n = len(values)
+            m = sum(values) / n
+            var = sum((v - m) ** 2 for v in values) / n
+            std = math.sqrt(var)
+            sem = std / math.sqrt(n) if n > 0 else 0.0
+            row_dict[f"{metric}_mean"] = m
+            row_dict[f"{metric}_sem"] = sem
+            row_dict[f"{metric}_min"] = min(values)
+            row_dict[f"{metric}_max"] = max(values)
+            row_dict[f"{metric}_ci95_lower"] = m - 1.96 * sem
+            row_dict[f"{metric}_ci95_upper"] = m + 1.96 * sem
+        output.append(row_dict)
+    return output
+
+
 def summarize_all(run: Any) -> dict[str, list[dict[str, Any]]]:
     from llm_bias.synthetic_entity_bias.analysis.diagnostics import (
         baseline_statistics,
@@ -166,4 +277,7 @@ def summarize_all(run: Any) -> dict[str, list[dict[str, Any]]]:
         "baseline_movement": baseline_statistics(run),
         "temperature_null": temperature_null_diagnostics(run),
         "localization_transitions": localization_transition_diagnostics(run),
+        "ticker_halo": summarize_ticker_halo(run),
+        "tier_sector_sentiment": summarize_tier_sector_sentiment(run),
+        "layer_sentiment_ribbon": summarize_layer_sentiment_ribbon(run),
     }

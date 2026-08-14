@@ -9,6 +9,8 @@ echo "========================================================"
 echo "=== [$(date)] Starting Synthetic Entity Bias: Qwen 3.5-4B ==="
 echo "========================================================"
 
+rm -rf artifacts/qwen3.5-4b/synthetic-entity-bias-2020-2025/runs/expanded-12templates-4b
+
 CUDA_VISIBLE_DEVICES=0 uv run synthetic-entity-bias run \
   --constituents data/sp500_constituents_2020_2025.csv \
   --constituents data/russell1000_constituents_2020_2025.csv \
@@ -34,6 +36,8 @@ uv run synthetic-entity-bias visualize \
 echo "========================================================"
 echo "=== [$(date)] Starting Synthetic Entity Bias: Qwen 3.6-27B ==="
 echo "========================================================"
+
+rm -rf artifacts/qwen3.6-27b/synthetic-entity-bias-2020-2025/runs/expanded-12templates-27b
 
 CUDA_VISIBLE_DEVICES=0 uv run synthetic-entity-bias run \
   --constituents data/sp500_constituents_2020_2025.csv \

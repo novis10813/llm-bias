@@ -219,9 +219,89 @@ def _sector(summaries: dict[str, list[dict[str, Any]]], minimum_count: int) -> d
     )
 
 
+def _entity_halo_vs_sensitivity(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    rows = summaries["ticker_halo"]
+    table = rows
+    tier_colors = {"S&P 500": "#2a78d6", "Russell 1000": "#1baf7a", "Russell 2000": "#eb6834"}
+    tier_markers = {"S&P 500": "o", "Russell 1000": "s", "Russell 2000": "^"}
+    series = []
+    for tier in TIER_ORDER:
+        tier_rows = [r for r in rows if r["familiarity_tier"] == tier]
+        pts = [{"x": r["halo_mean"], "y": r["sentiment_sensitivity"], "ticker": r["ticker"], "company_name": r["company_name"], "pos_mean": r["pos_mean"], "neg_mean": r["neg_mean"]} for r in tier_rows]
+        series.append({
+            "key": tier,
+            "label": f"{tier} (n={len(tier_rows):,})",
+            "style": {"light": tier_colors.get(tier, "#52514e"), "dark": tier_colors.get(tier, "#52514e"), "marker": tier_markers.get(tier, "o"), "svg_marker": "circle", "dash": "solid", "hatch": "///"},
+            "points": pts,
+        })
+    return _spec(
+        "entity_halo_vs_sensitivity",
+        "Entity Halo Effect vs. Sentiment Sensitivity Across Market Tiers",
+        f"Each point represents one entity (n = {len(rows):,} total). Halo Effect is mean ΔE across all 12 templates; Sentiment Sensitivity is (Pos − Neg).",
+        "Scores use restricted 9-label mappings. Non-zero halo indicates an unconditional entity baseline shift; sensitivity measures news amplification.",
+        "scatter", series, table,
+        [{"label": "(a)", "title": "Entity Prior vs. Asymmetric News Response", "sample_size": len(rows), "reference": "ΔE = 0: no entity prior"}],
+        "ticker_halo_sensitivity.csv",
+    )
+
+
+def _tier_sector_sentiment_spread(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    rows = summaries["tier_sector_sentiment"]
+    table = rows
+    sentiment_colors = {"negative": "#2a78d6", "neutral": "#1baf7a", "positive": "#eb6834"}
+    series = []
+    for sentiment in ("negative", "neutral", "positive"):
+        pts = [{"x": r["mean_delta_expected_score"], "y": r["sector"], "tier": r["familiarity_tier"], "sem": r["sem_delta_expected_score"], "count": r["count"]} for r in rows if r["sentiment"] == sentiment]
+        series.append({
+            "key": sentiment,
+            "label": f"{sentiment.title()} sentiment",
+            "style": {"light": sentiment_colors[sentiment], "dark": sentiment_colors[sentiment], "marker": "o", "svg_marker": "circle", "dash": "solid", "hatch": "///"},
+            "points": pts,
+        })
+    return _spec(
+        "tier_sector_sentiment_spread",
+        "Sector-Level Sentiment Spans Stratified by Familiarity Tier",
+        "Horizontal dumbbells show the range from Negative through Neutral to Positive sentiment for S&P 500 vs. Russell 2000.",
+        "Error bars show 95% confidence intervals across multi-prompt measurements. Differences in span width reflect sector-specific sentiment sensitivity.",
+        "range", series, table,
+        [{"label": "(a)", "title": "GICS Sector Sentiment Spread", "sample_size": sum(r["count"] for r in rows), "reference": "ΔE = 0: no entity effect"}],
+        "tier_sector_sentiment_summary.csv",
+    )
+
+
+def _layer_localization_ribbon(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    rows = summaries["layer_sentiment_ribbon"]
+    table = rows
+    sentiment_colors = {"negative": "#2a78d6", "neutral": "#1baf7a", "positive": "#eb6834"}
+    series = []
+    for sentiment in ("negative", "neutral", "positive"):
+        s_rows = sorted([r for r in rows if r["sentiment"] == sentiment], key=lambda r: int(r["layer"]))
+        pts = [{"x": r["normalized_depth"], "y": r["mean_cosine_mean"], "sem": r["mean_cosine_sem"], "layer": r["layer"]} for r in s_rows]
+        series.append({
+            "key": sentiment,
+            "label": f"{sentiment.title()} (mean ± SEM)",
+            "style": {"light": sentiment_colors[sentiment], "dark": sentiment_colors[sentiment], "marker": "o", "svg_marker": "circle", "dash": "solid", "hatch": "///"},
+            "points": pts,
+        })
+    return _spec(
+        "layer_localization_ribbon",
+        "Multi-Prompt Aggregated Layer Localization Profiles",
+        "Lines show mean Jacobian Lens readout metrics grouped by sentiment polarity; shaded bands represent ±1 SEM across the 4 prompt templates.",
+        "Multi-template aggregation reduces single-prompt lexical noise, isolating depth-dependent sentiment separation.",
+        "ribbon", series, table,
+        [
+            {"label": "(a)", "title": "Mean cosine similarity", "sample_size": "all layers", "reference": "y = 0: orthogonal transport"},
+            {"label": "(b)", "title": "Pearson r correlation", "sample_size": "all layers", "reference": "y = 0: no correlation"},
+            {"label": "(c)", "title": "Spearman rank correlation", "sample_size": "all layers", "reference": "y = 0: no rank correlation"},
+            {"label": "(d)", "title": "Linear R² fit", "sample_size": "all layers", "reference": "y = 0: zero variance explained"},
+        ],
+        "layer_sentiment_ribbon.csv",
+    )
+
+
 def validate_chart_specs(specs: list[dict[str, Any]]) -> None:
     if tuple(spec["id"] for spec in specs) != FIGURE_IDS:
-        raise ValueError("chart specifications are incomplete or out of order")
+        raise ValueError(f"chart specifications are incomplete or out of order: {[s['id'] for s in specs]} != {FIGURE_IDS}")
     for spec in specs:
         if not all(spec.get(key) for key in ("title", "subtitle", "figure_note", "description", "table", "tooltip_fields", "panels", "supporting_table")):
             raise ValueError(f"chart specification lacks a paper or accessible data path: {spec['id']}")
@@ -248,6 +328,9 @@ def build_chart_specs(run: Any, *, sector_minimum_count: int = 20) -> list[dict[
         _relationships(summaries),
         _localization(summaries),
         _sector(summaries, sector_minimum_count),
+        _entity_halo_vs_sensitivity(summaries),
+        _tier_sector_sentiment_spread(summaries),
+        _layer_localization_ribbon(summaries),
     ]
     validate_chart_specs(specs)
     return specs

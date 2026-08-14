@@ -53,6 +53,9 @@ FIGURE_IDS = (
     "template_relationships",
     "localization_profiles",
     "sector_effects",
+    "entity_halo_vs_sensitivity",
+    "tier_sector_sentiment_spread",
+    "layer_localization_ribbon",
 )
 FIGURE_FORMATS = ("png", "svg", "pdf")
 SUMMARY_FILES = {
@@ -65,4 +68,7 @@ SUMMARY_FILES = {
     "baseline_movement": "baseline_entity_movement.csv",
     "temperature_null": "temperature_null_diagnostics.csv",
     "localization_transitions": "localization_transition_diagnostics.csv",
+    "ticker_halo": "ticker_halo_sensitivity.csv",
+    "tier_sector_sentiment": "tier_sector_sentiment_summary.csv",
+    "layer_sentiment_ribbon": "layer_sentiment_ribbon.csv",
 }
