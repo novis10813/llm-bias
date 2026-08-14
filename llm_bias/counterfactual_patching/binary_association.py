@@ -15,6 +15,13 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from llm_bias.core.continuation_scoring import continuation_token_ids
+from llm_bias.core.prompt_input import (
+    TokenSpan as SpanRecord,
+    all_occurrences,
+    format_messages,
+    input_ids,
+    span_record,
+)
 from llm_bias.counterfactual_patching.interventions import normalized_span_mapping
 
 DATASET_NAME = "easy-bias-zh-tw-binary-v1"
@@ -31,18 +38,6 @@ class EasyBiasTemplates:
     system_mom_first: str
     user_mom_first: str
     source_files: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class SpanRecord:
-    char_start: int
-    char_end: int
-    token_start: int
-    token_end: int
-    token_ids: list[int]
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -176,76 +171,38 @@ def career_split(career: str, *, seed: int = 0) -> str:
 
 
 def _format_prompt(tokenizer: Any, system_prompt: str, user_prompt: str) -> str:
+    """Legacy facade for the shared system/user rendering contract."""
     if hasattr(tokenizer, "apply_chat_template"):
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-        formatted = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
+        if not getattr(tokenizer, "chat_template", None):
+            rendered = tokenizer.apply_chat_template(
+                [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            if not isinstance(rendered, str):
+                raise TypeError("tokenizer chat template must return text when tokenize=False")
+            return rendered
+        return format_messages(
+            tokenizer,
+            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            use_chat_template=True,
         )
-        if not isinstance(formatted, str):
-            raise TypeError("tokenizer chat template must return text when tokenize=False")
-        return formatted
     return f"{system_prompt}\n{user_prompt}\n"
 
 
 def _input_ids(tokenizer: Any, text: str) -> list[int]:
-    encoded = tokenizer(text, add_special_tokens=True)
-    values = encoded.input_ids if hasattr(encoded, "input_ids") else encoded["input_ids"]
-    if values and isinstance(values[0], list):
-        values = values[0]
-    return [int(value) for value in values]
+    """Legacy facade for :func:`core.prompt_input.input_ids`."""
+    return input_ids(tokenizer, text)
 
 
 def _all_occurrences(text: str, value: str) -> list[tuple[int, int]]:
-    occurrences: list[tuple[int, int]] = []
-    offset = 0
-    while True:
-        start = text.find(value, offset)
-        if start < 0:
-            return occurrences
-        occurrences.append((start, start + len(value)))
-        offset = start + len(value)
+    """Legacy facade for :func:`core.prompt_input.all_occurrences`."""
+    return all_occurrences(text, value)
 
 
 def _span_records(tokenizer: Any, text: str, occurrences: Iterable[tuple[int, int]]) -> list[SpanRecord]:
-    encoded = tokenizer(
-        text,
-        add_special_tokens=True,
-        return_offsets_mapping=True,
-        return_special_tokens_mask=True,
-    )
-    offsets = encoded["offset_mapping"]
-    specials = encoded.get("special_tokens_mask", [False] * len(offsets))
-    input_ids = _input_ids(tokenizer, text)
-    records: list[SpanRecord] = []
-    for char_start, char_end in occurrences:
-        token_indices = [
-            index
-            for index, ((token_start, token_end), special) in enumerate(
-                zip(offsets, specials, strict=True)
-            )
-            if not special
-            and token_end > token_start
-            and token_start < char_end
-            and token_end > char_start
-        ]
-        if not token_indices:
-            raise ValueError(f"could not map character span {(char_start, char_end)}")
-        token_start, token_end = min(token_indices), max(token_indices) + 1
-        records.append(
-            SpanRecord(
-                char_start=char_start,
-                char_end=char_end,
-                token_start=token_start,
-                token_end=token_end,
-                token_ids=input_ids[token_start:token_end],
-            )
-        )
-    return records
+    """Legacy facade for :func:`core.prompt_input.span_record`."""
+    return [span_record(tokenizer, text, occurrence) for occurrence in occurrences]
 
 
 def render_prompt(

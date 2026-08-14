@@ -15,7 +15,7 @@ from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.model import WrappedModel
 
 from llm_bias.core.model import DEFAULT_MODEL, load_model
-from llm_bias.core.prompting import find_token_subsequence, format_messages, format_prompt
+from llm_bias.core.prompt_input import find_token_subsequence, format_messages, format_prompt
 from llm_bias.prompt_analysis.artifact_io import read_jsonl, sha256_file
 
 BACKWARD_ARTIFACT_TYPES = {"generated_token_attribution"}

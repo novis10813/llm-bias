@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
-from llm_bias.core.prompting import format_prompt
+from llm_bias.core.prompt_input import format_prompt, input_ids
 from .spec import BASELINE_ENTITY, LABELS, SCORING_INSTRUCTION, TEMPLATES
 
 @dataclass(frozen=True)
@@ -15,10 +15,8 @@ def raw_prompt(template: str, entity: str) -> str:
  return TEMPLATES[template].replace("[ENTITY]", entity) + "\n\n" + SCORING_INSTRUCTION
 
 def _ids(tokenizer: Any, text: str) -> list[int]:
- value=tokenizer(text, add_special_tokens=False)
- value=value.input_ids if hasattr(value,"input_ids") else value["input_ids"]
- if value and isinstance(value[0],list): value=value[0]
- return [int(x) for x in value]
+ """Legacy facade for the shared tokenizer contract."""
+ return input_ids(tokenizer, text, add_special_tokens=False)
 
 def render_prompt(tokenizer: Any, template: str, *, entity: str, ticker: str="", use_chat_template: bool=True, max_seq_len: int|None=None) -> RenderedPrompt:
  raw=raw_prompt(template,entity)

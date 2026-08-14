@@ -9,7 +9,7 @@ import torch
 from jspace_viz.hooks import ActivationRecorder
 from jspace_viz.model import WrappedModel
 
-from llm_bias.core.prompting import decode_token
+from llm_bias.core.prompt_input import decode_token
 
 RETURN_LABELS = {"very bullish", "bullish", "neutral", "bearish", "very bearish"}
 
