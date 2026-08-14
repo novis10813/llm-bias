@@ -4,6 +4,7 @@ import csv, hashlib, json
 from pathlib import Path
 from typing import Any
 import torch
+from llm_bias.core.inference.forward import forward_batch
 from .spec import *
 from .entities import load_entity_pool, EntityRecord
 from .prompts import render_prompt, validate_token_contract
@@ -17,39 +18,8 @@ BASE_FIELDS=["template","entity","probabilities","expected_score","entropy_nats"
 LOC_FIELDS=["layer","template","mean_cosine","pearson_r","spearman_r","linear_r2","n_train","n_eval","q25","q75","n_high","n_low","high_ids_sha256","low_ids_sha256","fit_split","direction_sha256","statistic_flag"]
 
 def _forward_batch(model, ids: list[list[int]], layers: list[int], device: Any, *, pad_token_id: int = 0, final_norm: Any|None = None, keep_activations_device: bool = False):
- if not ids: raise ValueError("empty batch")
- width=max(map(len,ids)); x=torch.full((len(ids),width),pad_token_id,dtype=torch.long,device=device); mask=torch.zeros_like(x)
- for i,row in enumerate(ids):
-  if not row: raise ValueError("all-padding row")
-  x[i,:len(row)]=torch.as_tensor(row,dtype=torch.long,device=device); mask[i,:len(row)]=1
- positions=mask.sum(-1)-1
- if (positions<0).any(): raise ValueError("all-padding batch row")
- if hasattr(model,"layers"):
-  from jlens.hooks import ActivationRecorder
-  with torch.no_grad(), ActivationRecorder(model.layers,at=layers) as rec:
-   try: out=model.forward(x,attention_mask=mask)
-   except TypeError: out=model.forward(x)
-   answer={int(k):v[torch.arange(len(ids),device=v.device),positions.to(v.device)].float() for k,v in rec.activations.items()}
-  if hasattr(out,"logits"): logits=out.logits[torch.arange(len(ids),device=device),positions].float()
-  elif isinstance(out,dict) and "logits" in out: logits=out["logits"][torch.arange(len(ids),device=device),positions].float()
-  elif hasattr(model,"unembed"): logits=model.unembed(answer[max(layers)]).float()
-  else: raise ValueError("model output has no logits")
-  final_residual=answer[max(layers)]
-  if final_norm is not None:
-   params=list(final_norm.parameters())
-   norm_device=params[0].device if params else final_residual.device
-   normalized=final_norm(final_residual.to(norm_device))
-  else: normalized=final_residual
-  temperatures=normalized.float().norm(dim=-1).reciprocal()
-  if not torch.isfinite(temperatures).all() or (temperatures<=0).any(): raise ValueError("non-finite effective temperature")
-  stored={k:v.detach() if keep_activations_device else v.detach().cpu() for k,v in answer.items()}
-  return logits.detach().cpu(),stored,temperatures.detach().cpu()
- with torch.no_grad():
-  out=model(x,attention_mask=mask)
- logits=out.logits if hasattr(out,"logits") else out["logits"]
- selected=logits[torch.arange(len(ids),device=device),positions].float().detach().cpu()
- temperatures=torch.ones(len(ids))
- return selected,{},temperatures
+ """Compatibility wrapper for the shared core inference contract."""
+ return forward_batch(model, ids, layers, device, pad_token_id=pad_token_id, final_norm=final_norm, keep_activations_device=keep_activations_device)
 
 def _forward(model, ids: list[int], layers: list[int], device: Any):
  logits,acts,temps=_forward_batch(model,[ids],layers,device,final_norm=getattr(model,"_final_norm",None))
