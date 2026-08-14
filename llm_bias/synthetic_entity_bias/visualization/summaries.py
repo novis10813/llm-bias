@@ -149,10 +149,21 @@ def summarize_localization(run: Any) -> list[dict[str, Any]]:
 
 
 def summarize_all(run: Any) -> dict[str, list[dict[str, Any]]]:
+    from llm_bias.synthetic_entity_bias.analysis.diagnostics import (
+        baseline_statistics,
+        entity_distribution_diagnostics,
+        localization_transition_diagnostics,
+        temperature_null_diagnostics,
+    )
+
     return {
         "template": summarize_template(run),
         "tier": summarize_tier(run),
         "sector": summarize_sector(run),
         "ticker": summarize_ticker(run),
         "localization": summarize_localization(run),
+        "tail_diagnostics": entity_distribution_diagnostics(run),
+        "baseline_movement": baseline_statistics(run),
+        "temperature_null": temperature_null_diagnostics(run),
+        "localization_transitions": localization_transition_diagnostics(run),
     }

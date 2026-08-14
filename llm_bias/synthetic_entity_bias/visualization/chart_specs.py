@@ -63,6 +63,72 @@ def _distribution(run: Any) -> dict[str, Any]:
     )
 
 
+def _tail_diagnostics(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    series, table, panels = [], [], []
+    for index, template in enumerate(TEMPLATE_ORDER):
+        row = next(item for item in summaries["tail_diagnostics"] if item["template"] == template)
+        points = [
+            {"x": row["q05"], "y": 0, "statistic": "q05"},
+            {"x": row["median"], "y": 1, "statistic": "median"},
+            {"x": row["mean"], "y": 2, "statistic": "mean"},
+            {"x": row["q95"], "y": 3, "statistic": "q95"},
+        ]
+        series.append(_series(template, points))
+        table.append(row)
+        shape = (
+            f"skew={row['skewness']:.2f}; excess kurtosis={row['excess_kurtosis']:.2f}"
+            if row["skewness"] is not None
+            else f"shape unavailable ({row['shape_reason']})"
+        )
+        panels.append({"label": f"({chr(97 + index)})", "title": f"{template.title()} context", "sample_size": row["n"], "statistic": shape, "reference": "ΔE = 0: no entity effect"})
+    return _spec(
+        "entity_effect_tail_diagnostics",
+        "Entity-effect distributions contain asymmetric and heavy tails",
+        "Mean, median, central quantiles, skewness, kurtosis, and sparse tails are reported for each context.",
+        "Shape diagnostics are descriptive. Histogram peaks alone do not establish bimodality or a latent mixture.",
+        "scatter", series, table, panels, "entity_effect_tail_diagnostics.csv",
+    )
+
+
+def _baseline_movement(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    series, table, panels = [], [], []
+    for index, template in enumerate(TEMPLATE_ORDER):
+        row = next(item for item in summaries["baseline_movement"] if item["template"] == template)
+        points = [
+            {"x": 0, "y": row["baseline_expected_score"], "stage": "baseline"},
+            {"x": 1, "y": row["entity_expected_score_mean"], "stage": "entity_mean"},
+        ]
+        series.append(_series(template, points)); table.append(row)
+        panels.append({"label": f"({chr(97 + index)})", "title": f"{template.title()} context", "sample_size": row["n"], "statistic": f"mean movement={row['mean_movement_from_baseline']:+.3f}", "reference": "Score 0 is the midpoint of the restricted −4…+4 mapping"})
+    return _spec(
+        "baseline_entity_movement",
+        "Named entities move expected scores away from matched generic baselines",
+        "Each context compares its ‘The company’ baseline with the entity-level score distribution.",
+        "Movement is a matched prompt contrast under the restricted label distribution, not a standalone causal effect.",
+        "line", series, table, panels, "baseline_entity_movement.csv",
+    )
+
+
+def _temperature_null(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    series, table, panels = [], [], []
+    for index, template in enumerate(TEMPLATE_ORDER):
+        row = next(item for item in summaries["temperature_null"] if item["template"] == template)
+        points = [
+            {"x": row["null_delta_expected_score_mean"], "y": row["observed_delta_expected_score_mean"], "comparison": "template_mean"},
+        ]
+        series.append(_series(template, points)); table.append(row)
+        r2 = row["expected_score_null_r2"]
+        statistic = f"R²={r2:.3f}; mean difference={row['expected_score_difference_from_null_mean']:+.3f}" if r2 is not None else "R² undefined"
+        panels.append({"label": f"({chr(97 + index)})", "title": f"{template.title()} context", "sample_size": row["n_valid"], "statistic": statistic, "reference": "Observed = null indicates a temperature-only fit"})
+    return _spec(
+        "temperature_null_diagnostics",
+        "A one-dimensional temperature null does not explain every entity effect",
+        "The null fits pᵢ(T) ∝ p₀ᵢ^(1/T) to persisted nine-point probabilities and compares predicted with observed ΔE.",
+        "The fitted probability temperature is not the artifact effective temperature, is not recovered model-logit temperature, and is not a new model experiment.",
+        "scatter", series, table, panels, "temperature_null_diagnostics.csv",
+    )
+
+
 def _tier(summaries: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     series, table, panels = [], [], []
     for index, template in enumerate(TEMPLATE_ORDER):
@@ -173,6 +239,15 @@ def validate_chart_specs(specs: list[dict[str, Any]]) -> None:
 
 def build_chart_specs(run: Any, *, sector_minimum_count: int = 20) -> list[dict[str, Any]]:
     summaries = summarize_all(run)
-    specs = [_distribution(run), _tier(summaries), _relationships(summaries), _localization(summaries), _sector(summaries, sector_minimum_count)]
+    specs = [
+        _distribution(run),
+        _tail_diagnostics(summaries),
+        _baseline_movement(summaries),
+        _temperature_null(summaries),
+        _tier(summaries),
+        _relationships(summaries),
+        _localization(summaries),
+        _sector(summaries, sector_minimum_count),
+    ]
     validate_chart_specs(specs)
     return specs

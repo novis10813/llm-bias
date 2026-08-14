@@ -41,9 +41,12 @@ REQUIRED_OUTPUTS = {
         "layer_template_localization.csv", "localization", LOCALIZATION_FIELDS
     ),
 }
-VISUALIZATION_SCHEMA_VERSION = 3
+VISUALIZATION_SCHEMA_VERSION = 4
 FIGURE_IDS = (
     "entity_effect_distribution",
+    "entity_effect_tail_diagnostics",
+    "baseline_entity_movement",
+    "temperature_null_diagnostics",
     "entity_effect_by_tier",
     "template_relationships",
     "localization_profiles",
@@ -56,4 +59,8 @@ SUMMARY_FILES = {
     "sector": "sector_summary.csv",
     "ticker": "ticker_template_effects.csv",
     "localization": "localization_summary.csv",
+    "tail_diagnostics": "entity_effect_tail_diagnostics.csv",
+    "baseline_movement": "baseline_entity_movement.csv",
+    "temperature_null": "temperature_null_diagnostics.csv",
+    "localization_transitions": "localization_transition_diagnostics.csv",
 }

@@ -120,7 +120,13 @@ def test_independent_cli_command_sets():
         "visualize-return-predictions",
         "serve",
     }
-    assert set(synthetic_choices) == {"validate", "run", "visualize"}
+    assert set(synthetic_choices) == {"validate", "run", "visualize", "analyze"}
+    analyze_defaults = synthetic_parser().parse_args(
+        ["analyze", "--run-root", "completed-run"]
+    )
+    assert analyze_defaults.run_root == "completed-run"
+    assert analyze_defaults.output_dir is None
+    assert analyze_defaults.replace_existing is False
     visualize_defaults = synthetic_parser().parse_args(
         ["visualize", "--run-root", "completed-run"]
     )

@@ -126,22 +126,22 @@ def test_visualize_run_writes_auditable_bundle(tmp_path):
     assert len(run.results) == 6
     output = visualize_run(root)
     assert not (output / "dashboard.html").exists()
-    assert len(list((output / "figures").glob("*.png"))) == 5
-    assert len(list((output / "figures").glob("*.svg"))) == 5
-    assert len(list((output / "figures").glob("*.pdf"))) == 5
-    assert len(list((output / "captions").glob("*.md"))) == 5
-    assert len(list((output / "tables").glob("*.csv"))) == 5
+    assert len(list((output / "figures").glob("*.png"))) == 8
+    assert len(list((output / "figures").glob("*.svg"))) == 8
+    assert len(list((output / "figures").glob("*.pdf"))) == 8
+    assert len(list((output / "captions").glob("*.md"))) == 8
+    assert len(list((output / "tables").glob("*.csv"))) == 9
     for path in (output / "figures").glob("*.pdf"):
         assert path.read_bytes().startswith(b"%PDF")
     metadata = json.loads((output / "visualization_metadata.json").read_text())
     assert metadata["validation"]["model_loading_performed"] is False
     assert metadata["records"]["entity_template_results"] == 6
-    assert metadata["schema_version"] == 3
+    assert metadata["schema_version"] == 4
     assert metadata["render_profile"] == "paper_first"
     assert metadata["paper_exports"]["formats"] == ["png", "svg", "pdf"]
     assert metadata["dashboard"]["requested"] is False
     assert metadata["accessibility"]["self_explained_static_figures"] is True
-    assert metadata["chart_specs"]["count"] == 5
+    assert metadata["chart_specs"]["count"] == 8
     assert {row["path"] for row in metadata["outputs"]} >= {
         "tables/template_summary.csv",
         "figures/entity_effect_distribution.pdf",
@@ -157,7 +157,7 @@ def test_visualize_optionally_writes_interactive_dashboard(tmp_path):
     output = visualize_run(_fixture(tmp_path), with_dashboard=True)
     dashboard = (output / "dashboard.html").read_text()
     assert "https://" not in dashboard
-    assert dashboard.count('class="chart"') == 5
+    assert dashboard.count('class="chart"') == 8
     assert 'href="figures/entity_effect_distribution.pdf"' in dashboard
     assert "forced-colors:active" in dashboard
     assert "theme-toggle" in dashboard
@@ -210,7 +210,7 @@ def test_theme_identity_is_fixed_and_unknown_templates_fail():
 def test_chart_specs_have_tooltips_tables_and_secondary_encodings(tmp_path):
     run = validate_run(_fixture(tmp_path))
     specs = build_chart_specs(run)
-    assert len(specs) == 5
+    assert len(specs) == 8
     for spec in specs:
         assert spec["description"]
         assert spec["title"]

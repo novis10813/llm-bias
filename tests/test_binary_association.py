@@ -52,13 +52,15 @@ def _templates(tmp_path: Path):
     return load_templates(inference, order)
 
 
-def test_real_easy_bias_templates_and_careers_are_read_without_importing_runtime():
-    root = Path(__file__).resolve().parents[2] / "easy-bias"
-    templates = load_templates(root / "inference.py", root / "compare_option_order.py")
-    careers = load_careers(root / "expanded_careers.json")
-    assert len(careers) >= 400
+def test_load_templates_and_careers_from_files(tmp_path: Path):
+    templates = _templates(tmp_path)
     assert "{career}" in templates.user_dad_first
     assert "{career}" in templates.user_mom_first
+
+    career_file = tmp_path / "careers.json"
+    career_file.write_text(json.dumps(["護理師", "工程師", "老師"]), encoding="utf-8")
+    careers = load_careers(career_file)
+    assert careers == ["護理師", "工程師", "老師"]
 
 
 def test_career_split_is_deterministic_and_complete():

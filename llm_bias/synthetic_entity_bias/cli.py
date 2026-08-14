@@ -33,6 +33,11 @@ def build_parser() -> argparse.ArgumentParser:
     visualize.add_argument("--output-dir")
     visualize.add_argument("--replace-existing", action="store_true")
     visualize.add_argument("--with-dashboard", action="store_true")
+
+    analyze = subparsers.add_parser("analyze")
+    analyze.add_argument("--run-root", required=True)
+    analyze.add_argument("--output-dir")
+    analyze.add_argument("--replace-existing", action="store_true")
     return parser
 
 
@@ -52,6 +57,16 @@ def main() -> None:
             output_dir=args.output_dir,
             replace_existing=args.replace_existing,
             with_dashboard=args.with_dashboard,
+        )
+        print(output)
+        return
+    if args.command == "analyze":
+        from .analysis import analyze_run
+
+        output = analyze_run(
+            args.run_root,
+            output_dir=args.output_dir,
+            replace_existing=args.replace_existing,
         )
         print(output)
         return
