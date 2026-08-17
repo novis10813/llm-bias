@@ -462,7 +462,7 @@ def plot_sector_effects(run: Any, output_dir: Path, *, minimum_count: int = 20) 
     width = min(0.22, 0.8 / max(1, len(TEMPLATE_ORDER)))
     positions = np.arange(len(sectors))
     for index, template in enumerate(TEMPLATE_ORDER):
-        values = [next((row["mean"] for row in rows if row["sector"] == sector and row["template"] == template), 0.0) for sector in sectors]
+        values = [next((row["mean_delta_expected_score"] for row in rows if row["sector"] == sector and row["template"] == template), 0.0) for sector in sectors]
         offset = (index - (len(TEMPLATE_ORDER) - 1) / 2) * width
         ax.barh(positions + offset, values, height=width * 0.9, color=LIGHT_COLORS[template], alpha=0.25, edgecolor=LIGHT_COLORS[template], linewidth=1.2, hatch=HATCHES[template], label=f"{template.title()} ΔE")
     ax.axvline(0, color="#898781", linewidth=1)

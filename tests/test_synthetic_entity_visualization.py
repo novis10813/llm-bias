@@ -41,13 +41,15 @@ def _probability(label: int) -> list[float]:
     return values
 
 
-def _fixture(tmp_path: Path) -> Path:
+def _fixture(tmp_path: Path, entity_specs=None) -> Path:
     manifest = RunManifest.new("org/model", "dataset", "run", artifact_root=tmp_path)
     root = manifest.run_directory
     root.mkdir(parents=True)
     manifest.start()
+    if entity_specs is None:
+        entity_specs = (("AAA", "train", "S&P 500"), ("BBB", "eval", "Russell 2000"))
     entities = []
-    for ticker, split, tier in (("AAA", "train", "S&P 500"), ("BBB", "eval", "Russell 2000")):
+    for index, (ticker, split, tier) in enumerate(entity_specs):
         entities.append({
             "ticker": ticker, "company_name": f"{ticker} Corp", "latest_year": "2025",
             "years": "2024|2025", "memberships": tier, "membership_years": f"{tier}:2025",
@@ -63,9 +65,10 @@ def _fixture(tmp_path: Path) -> Path:
         "label_token_ids": {str(i): i for i in range(9)},
         "label_decoded": {str(i): str(i) for i in range(9)},
         "score_mapping": {str(i): i - 4 for i in range(9)}, "templates": TEMPLATES,
-        "scoring_instruction": "fixed", "pool_count": 2,
-        "tier_counts": {"S&P 500": 1, "Russell 2000": 1},
-        "split_counts": {"train": 1, "eval": 1}, "anomaly_count": 0, "seed": 0,
+        "scoring_instruction": "fixed", "pool_count": len(entity_specs),
+        "tier_counts": {tier: sum(1 for _, _, item in entity_specs if item == tier) for tier in {item for _, _, item in entity_specs}},
+        "split_counts": {split: sum(1 for _, item, _ in entity_specs if item == split) for split in {item for _, item, _ in entity_specs}},
+        "anomaly_count": 0, "seed": 0,
         "split": "stable", "template_hash": TEMPLATE_HASH, "label_hash": LABEL_HASH,
     }
     (root / "config.json").write_text(json.dumps(config), encoding="utf-8")
@@ -97,13 +100,15 @@ def _fixture(tmp_path: Path) -> Path:
             })
     _write_csv(root / "no_entity_baselines.csv", BASELINE_FIELDS, baselines)
     _write_csv(root / "raw_entity_template_results.csv", RESULT_FIELDS, results)
+    n_train = sum(1 for _, split, _ in entity_specs if split == "train")
+    n_eval = sum(1 for _, split, _ in entity_specs if split == "eval")
     localization = []
     for layer in range(2):
         for template in template_labels:
             localization.append({
                 "layer": layer, "template": template, "mean_cosine": 0.1 + layer,
                 "pearson_r": 0.2, "spearman_r": 0.3, "linear_r2": 0.4,
-                "n_train": 1, "n_eval": 1, "q25": -0.1, "q75": 0.1,
+                "n_train": n_train, "n_eval": n_eval, "q25": -0.1, "q75": 0.1,
                 "n_high": 1, "n_low": 1, "high_ids_sha256": "f" * 64,
                 "low_ids_sha256": "1" * 64, "fit_split": "train",
                 "direction_sha256": "2" * 64, "statistic_flag": "ok",
@@ -114,7 +119,7 @@ def _fixture(tmp_path: Path) -> Path:
     for artifact_type, filename, stage, count in (
         ("config", "config.json", "preflight", None),
         ("tokenization_validation", "tokenization_validation.json", "preflight", None),
-        ("entity_pool", "entity_pool.csv", "preflight", 2),
+        ("entity_pool", "entity_pool.csv", "preflight", len(entities)),
         ("no_entity_baselines", "no_entity_baselines.csv", "baseline", len(TEMPLATES)),
         ("raw_entity_template_results", "raw_entity_template_results.csv", "metric", len(entities) * len(TEMPLATES)),
         ("layer_template_localization", "layer_template_localization.csv", "localization", 2 * len(TEMPLATES)),
@@ -122,6 +127,19 @@ def _fixture(tmp_path: Path) -> Path:
         manifest.register_artifact(root / filename, artifact_type=artifact_type, stage=stage, record_count=count)
     manifest.complete().save()
     return root
+
+
+def test_visualize_run_renders_sector_plot_with_large_groups(tmp_path):
+    # Regression: plot_sector_effects read a "mean" key that summarize_sector
+    # never produces; the bug was unreachable with the default 2-entity fixture
+    # because sector groups below minimum_count=20 are excluded before the lookup.
+    entity_specs = tuple(
+        (f"T{index:02d}", "train" if index % 2 == 0 else "eval", "S&P 500" if index % 3 == 0 else "Russell 2000")
+        for index in range(20)
+    )
+    root = _fixture(tmp_path, entity_specs=entity_specs)
+    output = visualize_run(root)
+    assert len(list((output / "figures").glob("sector_effects.*"))) == 3
 
 
 def test_visualize_run_writes_auditable_bundle(tmp_path):
