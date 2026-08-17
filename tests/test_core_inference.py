@@ -19,6 +19,16 @@ def test_extract_logits_accepts_hf_output_shapes():
     assert torch.equal(extract_logits({"logits": logits}), logits)
 
 
+def test_extract_logits_falls_back_to_unembed_for_logitless_mapping():
+    # Multimodal wrappers expose a bare text decoder whose dict-like output
+    # carries last_hidden_state but no logits; unembed must handle it.
+    residual = torch.randn(2, 5)
+    unembedded = residual * 2
+    model = SimpleNamespace(unembed=lambda value: unembedded)
+    output = {"last_hidden_state": residual}
+    assert torch.equal(extract_logits(output, model=model, residual=residual), unembedded)
+
+
 def test_generation_config_only_adds_sampling_controls_when_sampling():
     assert GenerationConfig(pad_token_id=0).as_kwargs() == {
         "max_new_tokens": 64,

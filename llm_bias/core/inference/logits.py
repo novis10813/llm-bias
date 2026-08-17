@@ -12,9 +12,8 @@ def extract_logits(output: Any, *, model: Any | None = None, residual: torch.Ten
     if hasattr(value, "logits"):
         value = value.logits
     elif isinstance(value, dict):
-        if "logits" not in value:
-            raise ValueError("model output mapping has no logits field")
-        value = value["logits"]
+        if "logits" in value:
+            value = value["logits"]
     elif isinstance(value, (tuple, list)):
         if not value:
             raise ValueError("model output tuple is empty")
