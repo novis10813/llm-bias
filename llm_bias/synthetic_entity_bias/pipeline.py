@@ -75,7 +75,7 @@ def run_pipeline(*, constituents, model_path, lens_path, artifact_root="artifact
    p=render_prompt(tokenizer,t,entity=BASELINE_ENTITY,use_chat_template=use_chat_template,max_seq_len=max_seq_len)
    logits,acts,temp=_forward_batch(model,[list(p.input_ids)],layers,device,final_norm=getattr(model,"_final_norm",None),keep_activations_device=True)
    acts={k:v for k,v in acts.items()}; temp=float(temp[0])
-   baselines[t]=score_distribution(logits,label_ids,effective_temperature_value=temp); baseline_vectors[t]=acts
+   baselines[t]=score_distribution(logits[0],label_ids,effective_temperature_value=temp); baseline_vectors[t]=acts
   base_rows=[{"template":t,"entity":BASELINE_ENTITY,"probabilities":_flat(baselines[t]["probabilities"]),"expected_score":baselines[t]["expected_score"],"entropy_nats":baselines[t]["entropy_nats"],"effective_temperature":baselines[t]["effective_temperature"]} for t in TEMPLATES]
   write_csv(root/"no_entity_baselines.csv",base_rows,BASE_FIELDS); m.start_stage("baseline"); m.finish_stage("baseline",record_count=len(TEMPLATES)); m.save()
   rows=[]
