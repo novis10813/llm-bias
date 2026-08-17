@@ -13,6 +13,8 @@ def _experiment_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-seq-len", type=int, default=2048)
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--device-map", choices=("qwen27b_two_gpu",), default=None)
+    parser.add_argument("--max-memory-json")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,7 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
 def _load(args):
     from llm_bias.core.model import load_model
 
-    return load_model(args.model)
+    return load_model(
+        args.model,
+        device_map=args.device_map,
+        max_memory=json.loads(args.max_memory_json) if args.max_memory_json else None,
+    )
 
 
 def main() -> None:
