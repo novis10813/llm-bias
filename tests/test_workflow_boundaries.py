@@ -8,16 +8,12 @@ from types import ModuleType
 
 import pytest
 
-from llm_bias.counterfactual_patching.cli import build_parser as patch_parser
-from llm_bias.counterfactual_patching.data import default_spec_path
-from llm_bias.counterfactual_patching.visualization import STATIC_DIR
 from llm_bias.core.lens_artifacts import canonical_lens_path
 from llm_bias.lens_fitting.calibration import load_calibration_prompts
 from llm_bias.lens_cli import build_parser as jacobian_lens_parser
 from llm_bias.prompt_analysis import cli as prompt_cli
 from llm_bias.prompt_analysis.cli import build_parser as prompt_parser
 from llm_bias.prompt_analysis.interactive import STATIC_DIR as PROMPT_STATIC_DIR
-from llm_bias.synthetic_entity_bias.cli import build_parser as synthetic_parser
 
 
 def _python_files(package: Path) -> list[Path]:
@@ -93,9 +89,8 @@ def test_shared_infrastructure_does_not_import_experiments():
 def test_runtime_packages_do_not_load_jacobian_lenses_directly():
     root = Path(__file__).resolve().parents[1] / "llm_bias"
     for package_name in (
-        "counterfactual_patching",
         "prompt_analysis",
-        "synthetic_entity_bias",
+        "baseline_trial",
     ):
         for path in (root / package_name).glob("*.py"):
             assert "JacobianLens.load" not in path.read_text(encoding="utf-8"), path
@@ -119,47 +114,13 @@ def test_pretrained_lens_install_parser_is_explicit_and_offline_capable():
     assert args.replace_existing is False
 
 
-def test_experiment_packages_do_not_import_each_other():
-    root = Path(__file__).resolve().parents[1] / "llm_bias"
-    counterfactual_imports = _llm_bias_imports(root / "counterfactual_patching")
-    prompt_imports = _llm_bias_imports(root / "prompt_analysis")
-
-    assert not any(
-        name.startswith("llm_bias.prompt_analysis")
-        for name in counterfactual_imports
-    )
-    assert not any(
-        name.startswith("llm_bias.counterfactual_patching")
-        for name in prompt_imports
-    )
-
-
 def test_moved_package_resources_resolve_from_repository_root():
-    assert default_spec_path().is_file()
-    assert (STATIC_DIR / "counterfactual.html").is_file()
     assert (PROMPT_STATIC_DIR / "prompt_readout.html").is_file()
 
 
 def test_independent_cli_command_sets():
-    patch_choices = patch_parser()._subparsers._group_actions[0].choices
     prompt_choices = prompt_parser()._subparsers._group_actions[0].choices
-    synthetic_choices = synthetic_parser()._subparsers._group_actions[0].choices
 
-    assert set(patch_choices) == {
-        "prepare-data",
-        "run",
-        "prepare-binary-association",
-        "baseline-binary-association",
-        "run-binary-patch",
-        "fit-binary-direction",
-        "run-binary-steering",
-        "summarize-binary-association",
-        "finalize-binary-manifest",
-        "validate-binary-lens",
-        "summarize",
-        "visualize",
-        "serve",
-    }
     assert set(prompt_choices) == {
         "readout",
         "generate",
@@ -173,21 +134,6 @@ def test_independent_cli_command_sets():
         "visualize-return-predictions",
         "serve",
     }
-    assert set(synthetic_choices) == {"validate", "run", "visualize", "analyze"}
-    analyze_defaults = synthetic_parser().parse_args(
-        ["analyze", "--run-root", "completed-run"]
-    )
-    assert analyze_defaults.run_root == "completed-run"
-    assert analyze_defaults.output_dir is None
-    assert analyze_defaults.replace_existing is False
-    visualize_defaults = synthetic_parser().parse_args(
-        ["visualize", "--run-root", "completed-run"]
-    )
-    assert visualize_defaults.run_root == "completed-run"
-    assert visualize_defaults.output_dir is None
-    assert visualize_defaults.replace_existing is False
-    assert visualize_defaults.with_dashboard is False
-    assert "fit-lens" not in patch_choices
     assert "fit-lens" not in prompt_choices
     readout_defaults = prompt_parser().parse_args(
         [

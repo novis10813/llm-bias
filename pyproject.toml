@@ -22,12 +22,8 @@ dependencies = [
 
 [project.scripts]
 jacobian-lens = "llm_bias.lens_cli:main"
-counterfactual-patching = "llm_bias.counterfactual_patching.cli:main"
 prompt-analysis = "llm_bias.prompt_analysis.cli:main"
-prepare-edgar-8k = "llm_bias.edgar_preparation.cli:main"
-prepare-counterfactual-data = "llm_bias.counterfactual_data.cli:main"
-synthetic-entity-bias = "llm_bias.synthetic_entity_bias.cli:main"
-prepare-10k-change-data = "llm_bias.ten_k_change_data.cli:main"
+baseline-trial = "llm_bias.baseline_trial.cli:main"
 
 [project.optional-dependencies]
 extraction = [
@@ -59,3 +55,7 @@ explicit = true
 jlens = { workspace = true, editable = true }
 torch = { index = "pytorch" }
 jspace-viz = { workspace = true, editable = true }
+
+[tool.pytest.ini_options]
+# Archived tests live outside tests/ and must not be collected.
+testpaths = ["tests"]

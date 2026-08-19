@@ -15,9 +15,9 @@ results; those remain in the implementation and reproducibility documents under
 The proposal documents point to these canonical operational sources rather than
 copying their commands or schemas:
 
-- [Counterfactual patching](../counterfactual-patching.md)
-- [8-K counterfactual entity dataset](../counterfactual-dataset-generation.md)
-- [EDGAR 8-K preparation](../edgar-8k-preparation.md)
+- [Counterfactual patching](../archive/counterfactual-patching.md) (archived)
+- [8-K counterfactual entity dataset](../archive/counterfactual-dataset-generation.md) (archived)
+- [EDGAR 8-K preparation](../archive/edgar-8k-preparation.md) (archived)
 - [Qwen Jacobian-lens selection](../qwen-jacobian-lens-selection.md)
 - [Prompt-analysis reproducibility](../prompt-analysis-reproducibility.md)
 - [Interactive prompt-lens dashboard](../interactive-prompt-lens-dashboard.md)

@@ -6,17 +6,17 @@ target entity activation causally changes the answer distribution.
 
 ## Workflows
 
-- `counterfactual-patching`: residual activation patching for factual smoke pairs
-  and reviewed entity-only entity-bias pairs.
+- `baseline-trial`: run the `data/baseline/` trial-plan prompts through the
+  prompt-analysis stages, with a lens-forward per-layer readout stage.
 - `prompt-analysis`: per-layer prompt readout, uncertainty, generated-token
   attribution, validation, and result visualization.
-- `prepare-edgar-8k`: auditable staging-data preparation for extracted 8-K filings.
-- `prepare-counterfactual-data`: point-in-time entity histories, reviewed
-  entity-only counterfactual generation, model-specific rendering, and validation.
-- `prepare-10k-change-data`: auditable, prompt-agnostic `year,cik,item` CSV
-  for extracted 10-K metadata-change windows.
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
+
+Archived workflows (`counterfactual-patching`, `prepare-edgar-8k`,
+`prepare-counterfactual-data`, `synthetic-entity-bias`,
+`prepare-10k-change-data`) live in [`archive/`](archive/README.md); they are
+not installed entry points.
 
 `jlens` readouts are transported representations, not direct decoders of hidden
 chain-of-thought or discrete reasoning paths.
@@ -35,14 +35,12 @@ chain-of-thought or discrete reasoning paths.
 
 ### Workflow operations
 
-- [Counterfactual patching](docs/counterfactual-patching.md)
-- [8-K counterfactual entity dataset](docs/counterfactual-dataset-generation.md)
-- [EDGAR 8-K preparation](docs/edgar-8k-preparation.md)
-- [10-K metadata-change LLM dataset](docs/ten-k-change-dataset.md)
+- [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
 - [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
 - [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
-- [Synthetic entity-bias pilot](docs/synthetic-entity-bias.md)
+- [Archived workflow operations](docs/archive/) — counterfactual patching,
+  8-K/10-K dataset preparation, synthetic entity-bias pilot
 
 ## Setup
 
@@ -96,18 +94,14 @@ uv run pytest -q
 uv run jacobian-lens fit \
   --model .cache/models/llama-3.2-1b-instruct \
   --calibration-prompts 16
-uv run counterfactual-patching prepare-data \
-  --model .cache/models/llama-3.2-1b-instruct \
-  --max-pairs 4
-uv run counterfactual-patching run \
-  --model .cache/models/llama-3.2-1b-instruct \
-  --lens artifacts/llama-3.2-1b-instruct/jacobian-lens/jacobian_lens.pt \
-  --max-pairs 4
+uv run baseline-trial inspect \
+  --input data/baseline/qwen36-27b-50stocks/trial_plan_prompts.csv
 ```
 
-For the complete patching sequence, including model-scoped pair paths,
-metrics, artifacts, and dashboard behavior, use
-[Counterfactual patching](docs/counterfactual-patching.md).
+For the complete baseline-trial stage sequence, see
+[Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md). The
+archived counterfactual-patching quickstart remains in
+[docs/archive/counterfactual-patching.md](docs/archive/counterfactual-patching.md).
 
 ## Data and artifact boundaries
 
@@ -126,10 +120,9 @@ metrics, artifacts, and dashboard behavior, use
   8-K return-pairs full-generation instead covers every unique pair and writes both
   `original` and `counterfactual` records; it is not the legacy 32 sample.
 - No workflow writes complete raw activations to tracked artifacts.
-- The 8-K counterfactual workflow requires manual review and promotion before a
-  row is considered validated. See the [dataset protocol](docs/counterfactual-dataset-generation.md).
-- This prompt-analysis layout does not claim that counterfactual-patching has
-  completed a repository-wide artifact migration.
+- The archived 8-K counterfactual workflow required manual review and
+  promotion before a row was considered validated. See the [dataset
+  protocol](docs/archive/counterfactual-dataset-generation.md).
 - Jacobian-lens attribution is a local transported-readout or sensitivity
   diagnostic; it is not by itself a causal claim.
 
@@ -140,5 +133,5 @@ uv lock --check
 uv run pytest -q
 uv run python -m compileall -q llm_bias
 uv build
-node --check llm_bias/static/counterfactual.js
+node --check llm_bias/static/prompt_readout.js
 ```

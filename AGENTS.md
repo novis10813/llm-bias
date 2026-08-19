@@ -11,15 +11,17 @@
 本 repo 實驗 entity-level bias 如何在 decoder LLM 的 residual stream 中形成，以及把
 source entity 的 activation 替換成 target entity 後，是否會改變最終答案分布。
 
-主要 workflow 的完整操作文件如下：
+目前的實驗圍繞 `data/baseline/` baseline 資料集展開。主要 workflow 的完整操作
+文件如下：
 
-- [Counterfactual patching](docs/counterfactual-patching.md)
-- [8-K counterfactual entity dataset](docs/counterfactual-dataset-generation.md)
-- [EDGAR 8-K preparation](docs/edgar-8k-preparation.md)
+- [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
 - [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
 - [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
+
+Counterfactual、synthetic 與 10-K 線的實驗程式已移至 [`archive/`](archive/README.md)
+（frozen、可還原）；其操作文件在 `docs/archive/`。
 
 J-space evaluation 位於 [`docs/j-space-evaluation.md`](docs/j-space-evaluation.md)。它是
 從 Jacobian-lens working-space literature 延伸出的 optional、proposed、non-runnable
@@ -33,15 +35,11 @@ The shared experiment workflow is `prepare → forward → analyze → finalize`
 
 ## Research semantic boundaries
 
-- `Pair` 必須保留 entity token start/end 與完整 token-id span，並支援舊 single-token pair。
-- 不同長度 span 使用 normalized span-internal token centers 的 nearest mapping；不得插入/刪除 sequence token，也不得合成 activation。
-- source/target prompt 可有不同 token 長度；batch answer logits 讀各自 final position，control patch 使用各自最後一個非-entity position。
-- batch 結果必須保留 source span、target span、position mapping 與 mapping strategy。
 - 不保存完整 raw activations；只輸出 compact top-k、rank、統計量、token IDs/text、probabilities 與 provenance。
-- bias-specific pairs 必須共用相同 headline/context 與 expected outcome，分開報告 `real_vs_real`、`real_vs_anonymous`、`real_vs_synthetic`、`synthetic_vs_synthetic`，使用固定 outcome options 的 logit margin，而不是 factual answer-transfer 公式。
 - 不要把不同 token 的 top-1 probability 差直接當成 causal effect；使用固定答案 token probability、logit margin 或明確定義的 normalized transfer。
 - prompt readout 的 aggregate 必須先平均每個 condition 的完整 vocabulary softmax，再選 top-k。Attribution 是 local first-order sensitivity，不是 attention map 或 standalone causal claim。
 - Jacobian lens 是 transported representation readout，不是 chain-of-thought、離散 reasoning path 或 standalone causal evidence。
+- Counterfactual 線的 Pair/span-mapping/control-patch/bias-specific pair 研究語義隨程式一併移至 [`archive/README.md`](archive/README.md)。
 
 ## 依賴與外部 checkout
 
@@ -58,7 +56,7 @@ uv lock --check
 uv run pytest -q
 uv run python -m compileall -q llm_bias
 uv build
-node --check llm_bias/static/counterfactual.js
+node --check llm_bias/static/prompt_readout.js
 ```
 
 測試應優先使用 deterministic unit tests、fake model、monkeypatch 與 temporary directories；不要為一般 unit test 載入大型 checkpoint。模型/GPU inference 應明確視為 smoke 或 integration test。
