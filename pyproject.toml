@@ -18,6 +18,7 @@ dependencies = [
     "uvicorn>=0.34.0",
     "scipy>=1.18.0",
     "accelerate>=1.10.1",
+    "pyarrow>=25.0.0",
 ]
 
 [project.scripts]
