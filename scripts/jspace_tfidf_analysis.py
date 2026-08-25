@@ -30,6 +30,9 @@ import re
 import unicodedata
 from collections import Counter
 from pathlib import Path
+from typing import Callable
+
+import numpy as np
 
 from llm_bias.core.artifacts.io import write_json, write_jsonl, write_metadata
 
@@ -45,6 +48,58 @@ def normalize_token(text: str) -> str | None:
     return token
 
 
+class ConceptNormalizer:
+    """Conservative raw-token to readable-concept mapping.
+
+    Prompt vocabulary terms are retained as observed domain language. Other
+    alphabetic tokens must pass an English word-frequency threshold. Simplemma
+    consolidates inflectional variants before any counts are accumulated.
+    """
+
+    def __init__(self, prompt_vocab: set[str], *, min_zipf: float = 2.0):
+        from simplemma import lemmatize
+        from wordfreq import zipf_frequency
+
+        self.prompt_vocab = prompt_vocab
+        self.min_zipf = min_zipf
+        self._lemmatize = lemmatize
+        self._zipf_frequency = zipf_frequency
+        self.mapping: dict[str, tuple[str | None, str]] = {}
+
+    def __call__(self, token: str) -> str | None:
+        cached = self.mapping.get(token)
+        if cached is not None:
+            return cached[0]
+        if re.fullmatch(r"<[^>]+>", token) or re.fullmatch(r"<\|[^|]+\|>", token):
+            result = (None, "filtered_special_token")
+        else:
+            surface = re.sub(r"^[^a-z]+|[^a-z]+$", "", token)
+            if not re.fullmatch(r"[a-z]+", surface):
+                result = (None, "filtered_non_alphabetic")
+            else:
+                concept = self._lemmatize(surface, lang="en").lower()
+                if len(concept) < 2:
+                    result = (None, "filtered_short")
+                elif (
+                    surface in self.prompt_vocab
+                    or concept in self.prompt_vocab
+                    or self._zipf_frequency(concept, "en") >= self.min_zipf
+                ):
+                    if concept != surface:
+                        reason = "lemmatized"
+                    elif surface != token:
+                        reason = "punctuation_stripped"
+                    elif surface in self.prompt_vocab:
+                        reason = "prompt_vocabulary"
+                    else:
+                        reason = "english_lexicon"
+                    result = (concept, reason)
+                else:
+                    result = (None, "filtered_low_frequency")
+        self.mapping[token] = result
+        return result[0]
+
+
 def accumulate_layers(
     positions: list[dict],
     *,
@@ -52,6 +107,8 @@ def accumulate_layers(
     motor_layer: int,
     counter: Counter,
     motor_counter: Counter,
+    token_transform: Callable[[str], str | None] | None = None,
+    raw_token_weights: Counter | None = None,
 ) -> tuple[float, float]:
     """Fold one record's readout into token counters; returns (band, motor) mass."""
     band_mass = 0.0
@@ -70,6 +127,12 @@ def accumulate_layers(
                 if token is None:
                     continue
                 probability = entry["probability"]
+                if raw_token_weights is not None:
+                    raw_token_weights[token] += probability
+                if token_transform is not None:
+                    token = token_transform(token)
+                    if token is None:
+                        continue
                 target[token] += probability
                 if is_band:
                     band_mass += probability
@@ -175,6 +238,16 @@ def main() -> None:
     parser.add_argument("--logodds-alpha", type=float, default=1.0,
                         help="total Dirichlet pseudo-count mass for the "
                         "informative-prior log-odds scoring")
+    parser.add_argument("--company-matrix-npz", type=Path, default=None,
+                        help="optional path for a compact company x top-vocab "
+                        "weight matrix (npz) for downstream visualisation")
+    parser.add_argument("--matrix-vocab", type=int, default=5000,
+                        help="vocabulary size for --company-matrix-npz")
+    parser.add_argument("--concept-normalize", action="store_true",
+                        help="lemmatize and conservatively filter token pieces "
+                        "before accumulating any analysis counts")
+    parser.add_argument("--min-english-zipf", type=float, default=2.0,
+                        help="wordfreq threshold used by --concept-normalize")
     args = parser.parse_args()
 
     band_layers = {int(x) for x in args.band_layers.split(",") if x.strip()}
@@ -200,10 +273,31 @@ def main() -> None:
                     if token is not None:
                         prompt_counter[token] += 1
 
+    concept_normalizer: ConceptNormalizer | None = None
+    if args.concept_normalize:
+        prompt_vocab = {
+            token
+            for counter in sector_prompt_tokens.values()
+            for token in counter
+        }
+        concept_normalizer = ConceptNormalizer(
+            prompt_vocab, min_zipf=args.min_english_zipf
+        )
+        normalized_prompt_tokens: dict[str, Counter] = {}
+        for sector, counter in sector_prompt_tokens.items():
+            normalized = Counter()
+            for token, count in counter.items():
+                concept = concept_normalizer(token)
+                if concept is not None:
+                    normalized[concept] += count
+            normalized_prompt_tokens[sector] = normalized
+        sector_prompt_tokens = normalized_prompt_tokens
+
     company_band: dict[str, Counter] = {}
     company_motor: dict[str, Counter] = {}
     # token -> set of record ordinals it appeared in, per company
     company_token_records: dict[str, dict[str, set[int]]] = {}
+    raw_token_weights: Counter = Counter()
     records_seen = 0
     with open(args.readout, encoding="utf-8") as stream:
         for line in stream:
@@ -222,6 +316,8 @@ def main() -> None:
                 motor_layer=args.motor_layer,
                 counter=record_band,
                 motor_counter=record_motor,
+                token_transform=concept_normalizer,
+                raw_token_weights=raw_token_weights if concept_normalizer else None,
             )
             if band_mass <= 0:
                 continue
@@ -352,6 +448,34 @@ def main() -> None:
                 }
             )
     write_jsonl(output_dir / "company_keywords.jsonl", company_rows, overwrite=True)
+
+    if args.company_matrix_npz is not None:
+        global_total = Counter()
+        for counter in company_band.values():
+            global_total.update(counter)
+        top_tokens = [
+            token
+            for token, _ in global_total.most_common(args.matrix_vocab)
+        ]
+        token_index = {token: i for i, token in enumerate(top_tokens)}
+        tickers = sorted(company_band)
+        matrix = np.zeros((len(tickers), len(top_tokens)), dtype=np.float32)
+        for row_i, ticker in enumerate(tickers):
+            for token, weight in company_band[ticker].items():
+                col = token_index.get(token)
+                if col is not None:
+                    matrix[row_i, col] = weight
+        # row-normalise so each company is a distribution
+        row_sums = matrix.sum(axis=1, keepdims=True)
+        row_sums[row_sums == 0] = 1.0
+        matrix /= row_sums
+        np.savez_compressed(
+            args.company_matrix_npz,
+            matrix=matrix,
+            tickers=np.array(tickers),
+            tokens=np.array(top_tokens),
+            sectors=np.array([ticker_meta.get(t, {}).get("sector", "UNKNOWN") for t in tickers]),
+        )
     # z-ranked company tables: primary scope-2 ranking by Monroe log-odds
     for row in company_rows:
         row["_z"] = abs(row.get("logodds_z") or 0.0)
@@ -360,9 +484,25 @@ def main() -> None:
         row.pop("_z")
     write_jsonl(output_dir / "company_logodds.jsonl", company_rows, overwrite=True)
 
+    if concept_normalizer is not None:
+        mapping_rows = []
+        for raw_token, (concept, reason) in concept_normalizer.mapping.items():
+            mapping_rows.append(
+                {
+                    "raw_token": raw_token,
+                    "concept": concept,
+                    "reason": reason,
+                    "raw_probability_weight": round(raw_token_weights.get(raw_token, 0.0), 6),
+                }
+            )
+        mapping_rows.sort(
+            key=lambda row: row["raw_probability_weight"], reverse=True
+        )
+        write_jsonl(output_dir / "token_mapping.jsonl", mapping_rows, overwrite=True)
+
     summary = {
         "artifact_type": "jspace_tfidf_analysis",
-        "schema_version": 1,
+        "schema_version": 2 if args.concept_normalize else 1,
         "records_seen": records_seen,
         "unique_companies": len(company_band),
         "sectors": len(sector_band),
@@ -372,7 +512,13 @@ def main() -> None:
             "top_n_per_document": args.top_n,
             "min_df_scope1": args.min_df,
             "weighting": "readout probability, pooled over band layers, equal record weight",
-            "normalisation": "NFKC, lowercase, strip; skip tokens without [a-z]",
+            "normalisation": (
+                "NFKC, lowercase, strip, English lemmatization; retain prompt "
+                f"vocabulary or wordfreq zipf >= {args.min_english_zipf}"
+                if args.concept_normalize
+                else "NFKC, lowercase, strip; skip tokens without [a-z]"
+            ),
+            "concept_normalize": args.concept_normalize,
         },
     }
     write_json(output_dir / "summary.json", summary, overwrite=True)
