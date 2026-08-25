@@ -112,6 +112,51 @@ def tfidf_scores(
     return tables
 
 
+def log_odds_table(
+    focus: Counter,
+    background: Counter,
+    *,
+    global_counter: Counter,
+    alpha: float = 1.0,
+    min_count: float = 0.0,
+):
+    """Monroe et al. (2017) log-odds ratio with informative Dirichlet prior.
+
+    Returns rows sorted by |z| desc: token, delta (log-odds focus vs
+    background), se, z. ``global_counter`` supplies the prior token
+    distribution pi; ``alpha`` is the total pseudo-count mass.
+    """
+    global_total = sum(global_counter.values()) or 1.0
+    focus_total = sum(focus.values())
+    background_total = sum(background.values())
+    vocab = set(focus) | set(global_counter)
+    rows = []
+    for token in vocab:
+        pi = global_counter.get(token, 0.0) / global_total
+        y1 = focus.get(token, 0.0)
+        y2 = background.get(token, 0.0)
+        if y1 < min_count:
+            continue
+        delta = (
+            math.log(y1 + alpha * pi)
+            - math.log(focus_total + alpha - y1 + alpha * (1 - pi))
+            - math.log(y2 + alpha * pi)
+            + math.log(background_total + alpha - y2 + alpha * (1 - pi))
+        )
+        variance = 1.0 / (y1 + alpha * pi) + 1.0 / (y2 + alpha * pi)
+        se = math.sqrt(variance)
+        rows.append(
+            {
+                "token": token,
+                "delta_logodds": round(delta, 6),
+                "se": round(se, 6),
+                "logodds_z": round(delta / se, 4),
+            }
+        )
+    rows.sort(key=lambda row: abs(row["logodds_z"]), reverse=True)
+    return rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--readout", required=True, type=Path)
@@ -127,6 +172,9 @@ def main() -> None:
     parser.add_argument("--min-record-df", type=int, default=3,
                         help="minimum number of the company's own records a token "
                         "must appear in for scope-2 ranking")
+    parser.add_argument("--logodds-alpha", type=float, default=1.0,
+                        help="total Dirichlet pseudo-count mass for the "
+                        "informative-prior log-odds scoring")
     args = parser.parse_args()
 
     band_layers = {int(x) for x in args.band_layers.split(",") if x.strip()}
@@ -134,6 +182,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     ticker_meta: dict[str, dict] = {}
+    sector_prompt_tokens: dict[str, Counter] = {}
     with open(args.input_csv, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             ticker_meta[row["ticker"]] = {
@@ -141,6 +190,15 @@ def main() -> None:
                 "name": row.get("name", ""),
                 "marketcap": row.get("marketcap", ""),
             }
+            # prompt-echo baseline: token distribution of the raw prompt text
+            prompt_counter = sector_prompt_tokens.setdefault(row["sector"], Counter())
+            for column, text in row.items():
+                if not column.startswith("prompt_with_context") or not text:
+                    continue
+                for word in re.findall(r"[A-Za-z]+", text):
+                    token = normalize_token(word)
+                    if token is not None:
+                        prompt_counter[token] += 1
 
     company_band: dict[str, Counter] = {}
     company_motor: dict[str, Counter] = {}
@@ -191,14 +249,39 @@ def main() -> None:
 
     sector_tables = tfidf_scores(sector_band, min_df=args.min_df)
     sector_total_band = {k: sum(c.values()) for k, c in sector_band.items()}
+    global_counter: Counter = Counter()
+    for counter in sector_band.values():
+        global_counter.update(counter)
     sector_rows = []
+    sector_logodds_rows = []
     for sector, table in sorted(sector_tables.items()):
         band_total = sector_total_band.get(sector, 1.0)
         motor_total = sum(sector_motor.get(sector, Counter()).values()) or 1.0
+        background = Counter(global_counter)
+        background.subtract(sector_band[sector])
+        logodds_by_token = {
+            row["token"]: row
+            for row in log_odds_table(
+                sector_band[sector], background, global_counter=global_counter,
+                alpha=args.logodds_alpha,
+            )
+        }
+        sector_logodds_rows.extend(
+            {
+                "scope": "sector",
+                "document": sector,
+                **row,
+            }
+            for row in logodds_by_token.values()
+        )
+        prompt_counter = sector_prompt_tokens.get(sector, Counter())
+        prompt_total = sum(prompt_counter.values()) or 1.0
         for entry in table[: args.top_n]:
             token = entry["token"]
             band_share = sector_band[sector][token] / band_total
             motor_share = sector_motor.get(sector, Counter())[token] / motor_total
+            prompt_share = prompt_counter.get(token, 0) / prompt_total
+            lod = logodds_by_token.get(token, {})
             sector_rows.append(
                 {
                     "scope": "sector",
@@ -206,9 +289,14 @@ def main() -> None:
                     **entry,
                     "motor_share": round(motor_share, 8),
                     "gws_specificity": round(band_share / (motor_share + 1e-9), 4),
+                    "prompt_share": round(prompt_share, 8),
+                    "echo_lift": round(band_share / prompt_share, 4) if prompt_share > 0 else None,
+                    "delta_logodds": lod.get("delta_logodds"),
+                    "logodds_z": lod.get("logodds_z"),
                 }
             )
     write_jsonl(output_dir / "sector_keywords.jsonl", sector_rows, overwrite=True)
+    write_jsonl(output_dir / "sector_logodds.jsonl", sector_logodds_rows, overwrite=True)
 
     # ------------------------------------- scope 2: company vs its industry
     company_rows = []
@@ -224,6 +312,16 @@ def main() -> None:
         eps = 1e-12
         token_records = company_token_records.get(ticker, {})
         lifts = []
+        industry_excl = Counter(industry_counter)
+        industry_excl.subtract(company_counter)
+        industry_excl_total = sum(industry_excl.values()) or 1.0
+        logodds_by_token = {
+            row["token"]: row
+            for row in log_odds_table(
+                company_counter, industry_excl, global_counter=global_counter,
+                alpha=args.logodds_alpha,
+            )
+        }
         for token, weight in company_counter.items():
             if len(token_records.get(token, ())) < args.min_record_df:
                 continue
@@ -237,7 +335,8 @@ def main() -> None:
                 )
             )
         lifts.sort(key=lambda item: (item[0], item[1]), reverse=True)
-        for score, share, token in lifts[: args.top_n]:
+        for score, share, token in lifts[: args.top_n * 2]:
+            lod = logodds_by_token.get(token, {})
             company_rows.append(
                 {
                     "scope": "company",
@@ -248,9 +347,18 @@ def main() -> None:
                     "company_share": round(share, 8),
                     "record_df": len(token_records.get(token, ())),
                     "industry_lift_log": round(score, 6),
+                    "delta_logodds": lod.get("delta_logodds"),
+                    "logodds_z": lod.get("logodds_z"),
                 }
             )
     write_jsonl(output_dir / "company_keywords.jsonl", company_rows, overwrite=True)
+    # z-ranked company tables: primary scope-2 ranking by Monroe log-odds
+    for row in company_rows:
+        row["_z"] = abs(row.get("logodds_z") or 0.0)
+    company_rows.sort(key=lambda r: (r["document"], -r["_z"]))
+    for row in company_rows:
+        row.pop("_z")
+    write_jsonl(output_dir / "company_logodds.jsonl", company_rows, overwrite=True)
 
     summary = {
         "artifact_type": "jspace_tfidf_analysis",

@@ -22,7 +22,7 @@ def main() -> None:
     ]
     company_rows = [
         json.loads(line)
-        for line in (args.run_dir / "company_keywords.jsonl").open()
+        for line in (args.run_dir / "company_logodds.jsonl").open()
     ]
     params = summary["params"]
     band = ", ".join(str(l) for l in params["band_layers"])
@@ -48,21 +48,44 @@ def main() -> None:
     lines.append("")
 
     # ------------------------------------------------------------- scope 1
+    sector_logodds: dict[str, list[dict]] = defaultdict(list)
+    lod_path = args.run_dir / "sector_logodds.jsonl"
+    if lod_path.is_file():
+        for line in lod_path.open():
+            row = json.loads(line)
+            if abs(row.get("logodds_z") or 0.0) >= 2.0:
+                sector_logodds[row["document"]].append(row)
+
     lines.append("## Scope 1: industry-distinctive tokens")
     lines.append("")
-    lines.append("| sector | top keywords (TF-IDF) | high GWS-specificity (>3x band/motor) |")
-    lines.append("|---|---|---|")
+    lines.append("Columns: (1) top TF-IDF — high within-sector share, unique across "
+                 "sectors; (2) log-odds |z|>=2 — statistically reliable overuse vs "
+                 "other sectors (Monroe et al.); (3) same TF-IDF words annotated "
+                 "with prompt echo-lift (=1 suggests prompt parroting; !=1 means "
+                 "readout-specific usage).")
+    lines.append("")
+    lines.append("| sector | top keywords (TF-IDF) | log-odds z>=2 | echo check (TF-IDF words: lift) |")
+    lines.append("|---|---|---|---|")
     for sector in sorted(by_sector):
         rows = by_sector[sector]
         core = [r for r in rows if not is_fragment(r["token"])][: args.top_n]
-        specific = [r for r in rows if r["gws_specificity"] > 3 and not is_fragment(r["token"])][
-            : args.top_n
-        ]
+        lod_top = [
+            r
+            for r in sorted(sector_logodds.get(sector, []), key=lambda r: -abs(r["logodds_z"]))
+            if not is_fragment(r["token"])
+        ][ : args.top_n]
 
         def fmt(rows_: list[dict], key: str) -> str:
             return ", ".join(f"{r['token']} ({r[key]:.4g})" for r in rows_) or "—"
 
-        lines.append(f"| **{sector}** | {fmt(core, 'tfidf')} | {fmt(specific, 'gws_specificity')} |")
+        echo = ", ".join(
+            f"{r['token']} ({r['echo_lift']:.2f})"
+            for r in core[:8]
+            if r.get("echo_lift") is not None
+        ) or "—"
+        lines.append(
+            f"| **{sector}** | {fmt(core, 'tfidf')} | {fmt(lod_top, 'logodds_z')} | {echo} |"
+        )
     lines.append("")
 
     # ------------------------------------------------------------- scope 2
@@ -76,8 +99,9 @@ def main() -> None:
 
     lines.append("## Scope 2: company-distinctive tokens within industry")
     lines.append("")
-    lines.append(f"Tokens ranked by log-lift vs industry share; only tokens appearing "
-                 f"in >= {params.get('min_record_df', 3)} of the company's records.")
+    lines.append("Tokens ranked by absolute log-odds z vs own industry (company "
+                 "excluded from reference); only tokens appearing in >= "
+                 f"{params.get('min_record_df', 3)} of the company's records.")
     lines.append("")
     for sector in sorted(by_sector_companies):
         lines.append(f"### {sector}")
@@ -85,7 +109,7 @@ def main() -> None:
         for ticker in by_sector_companies[sector]:
             rows = by_company[ticker][: args.top_n]
             tokens = ", ".join(
-                f"{r['token']} ({r['industry_lift_log']:.1f})" for r in rows if not is_fragment(r["token"])
+                f"{r['token']} (z={r.get('logodds_z') or 0:.1f})" for r in rows if not is_fragment(r["token"])
             )
             name = rows[0]["name"] if rows else ""
             lines.append(f"- **{ticker}** ({name}): {tokens or '—'}")
