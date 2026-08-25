@@ -1,0 +1,34 @@
+{
+  "source": "../baseline/runs/paper-local-qwen36-27b/trial_plan.jsonl",
+  "source_sha256": "4b6ded6efe2a0eea430f7682819b103813c3711dc83d69549daea17ba165d6e6",
+  "source_record_count": 30744,
+  "source_provider_models": [
+    "qwen3.6-27b"
+  ],
+  "record_identity": "trial_key; (set_index, trial_index) may repeat per (ticker, condition)",
+  "tickers": 427,
+  "conditions": [
+    {
+      "condition": "attribute",
+      "trials_per_ticker": 30
+    },
+    {
+      "condition": "volume",
+      "trials_per_ticker": 6
+    },
+    {
+      "condition": "intensity",
+      "trials_per_ticker": 24
+    },
+    {
+      "condition": "strategy",
+      "trials_per_ticker": 12
+    }
+  ],
+  "prompt_columns": 72,
+  "missing_cells": 0,
+  "date": "2026-01-01",
+  "output": "data/baseline/paper-local-qwen36-27b/trial_plan_prompts.csv",
+  "output_sha256": "6aad67c951ae7d982e5d8c417ee619225ade15a59fe6314a35c24a633e612570",
+  "layout": "legacy-wide; one row per ticker; prompt_with_context_<condition>_<occurrence> columns"
+}

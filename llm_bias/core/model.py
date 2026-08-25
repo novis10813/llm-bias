@@ -117,6 +117,32 @@ def qwen27b_two_gpu_device_map() -> dict[str, int]:
     return mapping
 
 
+def qwen27b_two_gpu_24_device_map() -> dict[str, int]:
+    """Asymmetric GPU-only Qwen27B split for busy machines.
+
+    Keeps only layers 0-23 on GPU 0 (~18 GB with embed + visual tower) so the
+    lower shard fits in ~22 GB of free VRAM; GPU 1 hosts layers 24-63, the
+    final norm and the lm_head (~31 GB), leaving room for the 6.6 GB Jacobian
+    lens alongside the upper shard.
+    """
+    mapping = {"model.visual": 0, "model.language_model.embed_tokens": 0, "model.language_model.norm": 1, "model.language_model.rotary_emb": 1, "lm_head": 1}
+    mapping.update({f"model.language_model.layers.{i}": (0 if i <= 23 else 1) for i in range(64)})
+    return mapping
+
+
+def qwen27b_two_gpu_16_device_map() -> dict[str, int]:
+    """Aggressively asymmetric GPU-only Qwen27B split for very busy machines.
+
+    Keeps only layers 0-15 on GPU 0 (~13 GB with embed + visual tower) so the
+    lower shard fits in ~17 GB of free VRAM; GPU 1 hosts layers 16-63, the
+    final norm and the lm_head (~35 GB), leaving room for the 6.6 GB Jacobian
+    lens alongside the upper shard.
+    """
+    mapping = {"model.visual": 0, "model.language_model.embed_tokens": 0, "model.language_model.norm": 1, "model.language_model.rotary_emb": 1, "lm_head": 1}
+    mapping.update({f"model.language_model.layers.{i}": (0 if i <= 15 else 1) for i in range(64)})
+    return mapping
+
+
 def load_model(
     model: str = DEFAULT_MODEL,
     *,
@@ -146,10 +172,22 @@ def load_model(
     requested_map = device_map
     if device_map == "qwen27b_two_gpu":
         requested_map = qwen27b_two_gpu_device_map()
+    elif device_map == "qwen27b_two_gpu_24":
+        requested_map = qwen27b_two_gpu_24_device_map()
+    elif device_map == "qwen27b_two_gpu_16":
+        requested_map = qwen27b_two_gpu_16_device_map()
     if sharded:
         if device_map == "auto":
             raise ValueError("Use an explicit GPU-only map or qwen27b_two_gpu; auto may offload")
-        kwargs.update(device_map=requested_map, max_memory=max_memory or {0: "28GiB", 1: "28GiB"})
+        named_budgets = {
+            "qwen27b_two_gpu": {0: "28GiB", 1: "28GiB"},
+            "qwen27b_two_gpu_24": {0: "24GiB", 1: "36GiB"},
+            "qwen27b_two_gpu_16": {0: "16GiB", 1: "40GiB"},
+        }
+        kwargs.update(
+            device_map=requested_map,
+            max_memory=max_memory or named_budgets.get(device_map, {0: "28GiB", 1: "28GiB"}),
+        )
     hf_model = auto_model.from_pretrained(name, **kwargs)
     if not sharded:
         hf_model = hf_model.to(device)

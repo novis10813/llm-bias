@@ -15,6 +15,7 @@ third_party/*
 
 # Downloaded models and experiment artifacts
 .cache/
+.pi/
 artifacts/*
 !artifacts/.gitkeep
 
