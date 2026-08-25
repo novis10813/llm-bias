@@ -21,3 +21,4 @@ artifacts/*
 
 # Local research inputs and exports
 *.csv
+graphify-out/
