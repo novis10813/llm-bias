@@ -33,6 +33,10 @@ chain-of-thought or discrete reasoning paths.
   comparing compatible local models; not a proposal component or entity-bias
   evidence gate.
 
+### Experiment reports
+
+- [J-space sector intervention: methods, calibration, and preliminary findings](docs/jspace-sector-intervention-interim.md)
+
 ### Workflow operations
 
 - [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
