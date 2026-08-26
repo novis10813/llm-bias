@@ -58,6 +58,39 @@ def matched_random_direction_pair(
     return matched[:, 0], matched[:, 1]
 
 
+def norm_match_intervention(
+    original: torch.Tensor,
+    control_patched: torch.Tensor,
+    reference_patched: torch.Tensor,
+    *,
+    control_positions: Sequence[int],
+    reference_positions: Sequence[int],
+) -> torch.Tensor:
+    """Rescale a control delta to the local norm of the primary delta."""
+    control_indices = list(control_positions)
+    reference_indices = list(reference_positions)
+    control_delta = (
+        control_patched[:, control_indices, :].float()
+        - original[:, control_indices, :].float()
+    )
+    reference_delta = (
+        reference_patched[:, reference_indices, :].float()
+        - original[:, reference_indices, :].float()
+    )
+    control_norm = control_delta.norm()
+    reference_norm = reference_delta.norm()
+    if float(reference_norm) == 0.0:
+        return original
+    if float(control_norm) <= 1e-12:
+        raise ValueError("control intervention has zero norm and cannot be dose matched")
+    matched = original.clone()
+    matched[:, control_indices, :] = (
+        original[:, control_indices, :].float()
+        + control_delta * (reference_norm / control_norm)
+    ).to(original.dtype)
+    return matched
+
+
 def matched_random_prototypes(
     source: Mapping[int, torch.Tensor],
     target: Mapping[int, torch.Tensor],
@@ -79,5 +112,6 @@ __all__ = [
     "matched_random_direction",
     "matched_random_direction_pair",
     "matched_random_prototypes",
+    "norm_match_intervention",
     "shuffled_evidence_positions",
 ]

@@ -22,6 +22,7 @@ from llm_bias.jspace_intervention.concepts import (
 from llm_bias.jspace_intervention.controls import (
     matched_random_direction,
     matched_random_prototypes,
+    norm_match_intervention,
     shuffled_evidence_positions,
 )
 from llm_bias.jspace_intervention.positions import select_loaded_positions
@@ -284,6 +285,9 @@ def run_swap_record(
         active_source, active_target = directions_by_control[direction_control]
         for position_control in config.position_controls:
             intervention_positions = positions_by_control[position_control]
+            dose_matched_control = (
+                direction_control != "prototype" or position_control != "evidence"
+            )
             for mode in config.coordinate_modes:
                 for swap_fraction in config.swap_fractions:
                     transforms = {}
@@ -292,6 +296,8 @@ def run_swap_record(
                         for layer in config.layers:
                             source_direction = active_source[layer]
                             target_direction = active_target[layer]
+                            reference_source = source[layer]
+                            reference_target = target[layer]
 
                             def transform(
                                 tensor: torch.Tensor,
@@ -302,6 +308,10 @@ def run_swap_record(
                                 edit_mode=mode,
                                 positions=intervention_positions,
                                 layer_id=layer,
+                                ref_src=reference_source,
+                                ref_tgt=reference_target,
+                                ref_positions=selected.positions,
+                                match_control=dose_matched_control,
                             ) -> torch.Tensor:
                                 patched = coordinate_intervention(
                                     tensor,
@@ -311,6 +321,22 @@ def run_swap_record(
                                     alpha=fraction,
                                     mode=edit_mode,
                                 )
+                                if match_control:
+                                    reference_patched = coordinate_intervention(
+                                        tensor,
+                                        positions=ref_positions,
+                                        source_direction=ref_src,
+                                        target_direction=ref_tgt,
+                                        alpha=fraction,
+                                        mode=edit_mode,
+                                    )
+                                    patched = norm_match_intervention(
+                                        tensor,
+                                        patched,
+                                        reference_patched,
+                                        control_positions=positions,
+                                        reference_positions=ref_positions,
+                                    )
                                 live_diagnostics[layer_id] = _swap_diagnostics(
                                     {layer_id: tensor.detach()},
                                     {layer_id: src},
@@ -360,6 +386,7 @@ def run_swap_record(
                             "target_prototype": config.target.name,
                             "direction_control": direction_control,
                             "position_control": position_control,
+                            "dose_matched_control": dose_matched_control,
                             "intervention_positions": list(intervention_positions),
                             "layers": list(config.layers),
                             "swap_fraction": swap_fraction,
@@ -437,12 +464,16 @@ def run_concept_gain_record(
         active_directions = directions_by_control[direction_control]
         for position_control in config.position_controls:
             intervention_positions = positions_by_control[position_control]
+            dose_matched_control = (
+                direction_control != "prototype" or position_control != "evidence"
+            )
             for gain in config.gains:
                 transforms = {}
                 live_diagnostics: dict[int, dict[str, float]] = {}
                 if gain != 1 and selected.loaded:
                     for layer in config.layers:
                         direction = active_directions[layer]
+                        reference_direction = directions[layer]
 
                         def transform(
                             tensor: torch.Tensor,
@@ -451,6 +482,9 @@ def run_concept_gain_record(
                             multiplier=gain,
                             positions=intervention_positions,
                             layer_id=layer,
+                            ref_vector=reference_direction,
+                            ref_positions=selected.positions,
+                            match_control=dose_matched_control,
                         ) -> torch.Tensor:
                             patched = coordinate_gain(
                                 tensor,
@@ -458,6 +492,20 @@ def run_concept_gain_record(
                                 direction=vector,
                                 gain=multiplier,
                             )
+                            if match_control:
+                                reference_patched = coordinate_gain(
+                                    tensor,
+                                    positions=ref_positions,
+                                    direction=ref_vector,
+                                    gain=multiplier,
+                                )
+                                patched = norm_match_intervention(
+                                    tensor,
+                                    patched,
+                                    reference_patched,
+                                    control_positions=positions,
+                                    reference_positions=ref_positions,
+                                )
                             live_diagnostics[layer_id] = _gain_diagnostics(
                                 {layer_id: tensor.detach()},
                                 {layer_id: vector},
@@ -516,6 +564,7 @@ def run_concept_gain_record(
                         ),
                         "direction_control": direction_control,
                         "position_control": position_control,
+                        "dose_matched_control": dose_matched_control,
                         "intervention_positions": list(intervention_positions),
                         "layers": list(config.layers),
                         "gain": gain,

@@ -11,6 +11,7 @@ from llm_bias.jspace_intervention.concepts import (
 )
 from llm_bias.jspace_intervention.controls import (
     matched_random_direction_pair,
+    norm_match_intervention,
     shuffled_evidence_positions,
 )
 from llm_bias.jspace_intervention.positions import select_loaded_positions
@@ -291,6 +292,25 @@ def test_matched_random_pair_preserves_gram_and_position_control_is_disjoint() -
         (2, 10), (3, 5), count=2, seed=large_seed
     )
     assert not set(positions) & {3, 5}
+
+
+def test_control_intervention_is_norm_matched_to_primary_delta() -> None:
+    original = torch.zeros(1, 3, 2)
+    control = original.clone()
+    control[:, 0, 0] = 1.0
+    reference = original.clone()
+    reference[:, 1, :] = torch.tensor([3.0, 4.0])
+
+    matched = norm_match_intervention(
+        original,
+        control,
+        reference,
+        control_positions=[0],
+        reference_positions=[1],
+    )
+
+    assert (matched[:, 0] - original[:, 0]).norm() == pytest.approx(5.0)
+    assert torch.equal(matched[:, 1:], original[:, 1:])
 
 
 def test_coordinate_swap_exchanges_coordinates_and_preserves_complement() -> None:
