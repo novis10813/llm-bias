@@ -91,6 +91,32 @@ def norm_match_intervention(
     return matched
 
 
+def norm_match_intervention_to_target(
+    original: torch.Tensor,
+    control_patched: torch.Tensor,
+    *,
+    control_positions: Sequence[int],
+    target_norm: float,
+) -> torch.Tensor:
+    """Rescale a control delta to a fixed paired-primary layer norm."""
+    control_indices = list(control_positions)
+    control_delta = (
+        control_patched[:, control_indices, :].float()
+        - original[:, control_indices, :].float()
+    )
+    control_norm = control_delta.norm()
+    if target_norm == 0.0:
+        return original
+    if float(control_norm) <= 1e-12:
+        raise ValueError("control intervention has zero norm and cannot be dose matched")
+    matched = original.clone()
+    matched[:, control_indices, :] = (
+        original[:, control_indices, :].float()
+        + control_delta * (float(target_norm) / control_norm)
+    ).to(original.dtype)
+    return matched
+
+
 def matched_random_prototypes(
     source: Mapping[int, torch.Tensor],
     target: Mapping[int, torch.Tensor],
@@ -113,5 +139,6 @@ __all__ = [
     "matched_random_direction_pair",
     "matched_random_prototypes",
     "norm_match_intervention",
+    "norm_match_intervention_to_target",
     "shuffled_evidence_positions",
 ]

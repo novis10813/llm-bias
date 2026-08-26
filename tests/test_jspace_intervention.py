@@ -12,6 +12,7 @@ from llm_bias.jspace_intervention.concepts import (
 from llm_bias.jspace_intervention.controls import (
     matched_random_direction_pair,
     norm_match_intervention,
+    norm_match_intervention_to_target,
     shuffled_evidence_positions,
 )
 from llm_bias.jspace_intervention.positions import select_loaded_positions
@@ -136,6 +137,7 @@ def test_swap_runner_changes_margin_through_tuple_decoder_hooks() -> None:
             },
             "layers": [0],
             "alphas": [0, 1],
+            "direction_controls": ["prototype", "matched_random"],
         }
     )
     model = Model()
@@ -158,6 +160,11 @@ def test_swap_runner_changes_margin_through_tuple_decoder_hooks() -> None:
     assert rows[1]["delivered_dose"]["relative_perturbation_norm"] > 0
     assert rows[1]["direction_control"] == "prototype"
     assert rows[1]["position_control"] == "evidence"
+    assert rows[3]["dose_match_basis"] == "paired_primary_layer_delta_norm"
+    assert rows[3]["dose_match_relative_error"] == pytest.approx(0.0, abs=1e-6)
+    assert rows[3]["delivered_dose"]["perturbation_norm"] == pytest.approx(
+        rows[1]["delivered_dose"]["perturbation_norm"], rel=1e-6
+    )
     assert not model.layers[0]._forward_hooks
 
 
@@ -205,6 +212,7 @@ def test_gain_runner_uses_one_as_noop_and_reports_live_dose() -> None:
             },
             "layers": [0],
             "gains": [0, 1, 2],
+            "direction_controls": ["prototype", "matched_random"],
         }
     )
     model = Model()
@@ -227,6 +235,10 @@ def test_gain_runner_uses_one_as_noop_and_reports_live_dose() -> None:
     assert rows[2]["gain"] == 2
     assert rows[2]["intervened_margin"] == pytest.approx(-4.0)
     assert rows[2]["delivered_dose"]["coordinate_after_mean"] == pytest.approx(4.0)
+    assert rows[5]["dose_match_relative_error"] == pytest.approx(0.0, abs=1e-6)
+    assert rows[5]["delivered_dose"]["perturbation_norm"] == pytest.approx(
+        rows[2]["delivered_dose"]["perturbation_norm"], rel=1e-6
+    )
     assert not model.layers[0]._forward_hooks
 
 
@@ -311,6 +323,22 @@ def test_control_intervention_is_norm_matched_to_primary_delta() -> None:
 
     assert (matched[:, 0] - original[:, 0]).norm() == pytest.approx(5.0)
     assert torch.equal(matched[:, 1:], original[:, 1:])
+
+
+def test_control_intervention_matches_fixed_paired_primary_norm() -> None:
+    original = torch.zeros(1, 2, 2)
+    control = original.clone()
+    control[:, 0, :] = torch.tensor([6.0, 8.0])
+
+    matched = norm_match_intervention_to_target(
+        original,
+        control,
+        control_positions=[0],
+        target_norm=2.5,
+    )
+
+    assert (matched[:, 0] - original[:, 0]).norm() == pytest.approx(2.5)
+    assert torch.equal(matched[:, 1], original[:, 1])
 
 
 def test_coordinate_swap_exchanges_coordinates_and_preserves_complement() -> None:

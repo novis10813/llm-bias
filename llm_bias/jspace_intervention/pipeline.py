@@ -239,7 +239,7 @@ def run_swap_pipeline(
                     )
                 for result in results:
                     yield {
-                        "schema_version": 2,
+                        "schema_version": 3,
                         "artifact_type": "jspace_intervention_result",
                         "record_id": record_id,
                         "ticker": record["ticker"],
@@ -257,7 +257,7 @@ def run_swap_pipeline(
             metadata_path,
             {
                 "artifact_type": "jspace_intervention_metadata",
-                "schema_version": 2,
+                "schema_version": 3,
                 "model": model_name,
                 "input": str(input_path),
                 "split_manifest": str(split_manifest),

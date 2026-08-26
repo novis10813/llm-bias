@@ -22,7 +22,7 @@ from llm_bias.jspace_intervention.concepts import (
 from llm_bias.jspace_intervention.controls import (
     matched_random_direction,
     matched_random_prototypes,
-    norm_match_intervention,
+    norm_match_intervention_to_target,
     shuffled_evidence_positions,
 )
 from llm_bias.jspace_intervention.positions import select_loaded_positions
@@ -280,6 +280,55 @@ def run_swap_record(
         directions_by_control["matched_random"] = matched_random_prototypes(
             source, target, seed=control_seed
         )
+    paired_primary_norms: dict[tuple[str, float], dict[int, float]] = {}
+    has_controls = any(
+        direction != "prototype" or position != "evidence"
+        for direction in config.direction_controls
+        for position in config.position_controls
+    )
+    if has_controls and selected.loaded:
+        for mode in config.coordinate_modes:
+            for swap_fraction in config.swap_fractions:
+                if swap_fraction == 0:
+                    continue
+                layer_norms: dict[int, float] = {}
+                primary_transforms = {}
+                for layer in config.layers:
+                    source_direction = source[layer]
+                    target_direction = target[layer]
+
+                    def primary_transform(
+                        tensor: torch.Tensor,
+                        *,
+                        src=source_direction,
+                        tgt=target_direction,
+                        fraction=swap_fraction,
+                        edit_mode=mode,
+                        positions=selected.positions,
+                        layer_id=layer,
+                    ) -> torch.Tensor:
+                        patched = coordinate_intervention(
+                            tensor,
+                            positions=positions,
+                            source_direction=src,
+                            target_direction=tgt,
+                            alpha=fraction,
+                            mode=edit_mode,
+                        )
+                        layer_norms[layer_id] = float(
+                            (
+                                patched[:, list(positions), :].float()
+                                - tensor[:, list(positions), :].float()
+                            ).norm().detach().cpu()
+                        )
+                        return patched
+
+                    primary_transforms[layer] = primary_transform
+                with residual_interventions(model, primary_transforms), torch.inference_mode():
+                    model(clean_tensor)
+                if set(layer_norms) != set(config.layers):
+                    raise RuntimeError("paired primary swap forward missed intervention layers")
+                paired_primary_norms[(mode, swap_fraction)] = layer_norms
     rows = []
     for direction_control in config.direction_controls:
         active_source, active_target = directions_by_control[direction_control]
@@ -296,8 +345,11 @@ def run_swap_record(
                         for layer in config.layers:
                             source_direction = active_source[layer]
                             target_direction = active_target[layer]
-                            reference_source = source[layer]
-                            reference_target = target[layer]
+                            paired_target_norm = (
+                                paired_primary_norms[(mode, swap_fraction)][layer]
+                                if dose_matched_control
+                                else None
+                            )
 
                             def transform(
                                 tensor: torch.Tensor,
@@ -308,9 +360,7 @@ def run_swap_record(
                                 edit_mode=mode,
                                 positions=intervention_positions,
                                 layer_id=layer,
-                                ref_src=reference_source,
-                                ref_tgt=reference_target,
-                                ref_positions=selected.positions,
+                                target_norm=paired_target_norm,
                                 match_control=dose_matched_control,
                             ) -> torch.Tensor:
                                 patched = coordinate_intervention(
@@ -322,20 +372,11 @@ def run_swap_record(
                                     mode=edit_mode,
                                 )
                                 if match_control:
-                                    reference_patched = coordinate_intervention(
-                                        tensor,
-                                        positions=ref_positions,
-                                        source_direction=ref_src,
-                                        target_direction=ref_tgt,
-                                        alpha=fraction,
-                                        mode=edit_mode,
-                                    )
-                                    patched = norm_match_intervention(
+                                    patched = norm_match_intervention_to_target(
                                         tensor,
                                         patched,
-                                        reference_patched,
                                         control_positions=positions,
-                                        reference_positions=ref_positions,
+                                        target_norm=float(target_norm),
                                     )
                                 live_diagnostics[layer_id] = _swap_diagnostics(
                                     {layer_id: tensor.detach()},
@@ -363,6 +404,8 @@ def run_swap_record(
                                 config.negative_candidate,
                                 device=device,
                             )
+                            # Keep diagnostics from the prompt-only forward so every
+                            # condition uses the same causal prefix as the paired primary.
                             live_diagnostics.clear()
                             intervened_log_probs = next_token_log_probabilities(
                                 model, tokenizer, scoring_prompt, device=device
@@ -379,6 +422,21 @@ def run_swap_record(
                             mode=mode,
                         )
                     )
+                    paired_norm = None
+                    dose_match_error = None
+                    if delivered_fraction != 0:
+                        paired_norm = (
+                            sum(
+                                value * value
+                                for value in paired_primary_norms.get(
+                                    (mode, swap_fraction), {}
+                                ).values()
+                            ) ** 0.5
+                            if has_controls else diagnostics["perturbation_norm"]
+                        )
+                        dose_match_error = abs(
+                            diagnostics["perturbation_norm"] - paired_norm
+                        ) / max(paired_norm, 1e-12)
                     rows.append(
                         {
                             "intervention_type": f"sector_coordinate_{mode}",
@@ -387,6 +445,14 @@ def run_swap_record(
                             "direction_control": direction_control,
                             "position_control": position_control,
                             "dose_matched_control": dose_matched_control,
+                            "dose_match_basis": (
+                                "not_applicable"
+                                if delivered_fraction == 0
+                                else "paired_primary_layer_delta_norm"
+                                if dose_matched_control else "primary"
+                            ),
+                            "paired_primary_perturbation_norm": paired_norm,
+                            "dose_match_relative_error": dose_match_error,
                             "intervention_positions": list(intervention_positions),
                             "layers": list(config.layers),
                             "swap_fraction": swap_fraction,
@@ -459,6 +525,49 @@ def run_concept_gain_record(
             )
             for offset, (layer, direction) in enumerate(sorted(directions.items()))
         }
+    paired_primary_norms: dict[float, dict[int, float]] = {}
+    has_controls = any(
+        direction != "prototype" or position != "evidence"
+        for direction in config.direction_controls
+        for position in config.position_controls
+    )
+    if has_controls and selected.loaded:
+        for gain in config.gains:
+            if gain == 1:
+                continue
+            layer_norms: dict[int, float] = {}
+            primary_transforms = {}
+            for layer in config.layers:
+                direction = directions[layer]
+
+                def primary_transform(
+                    tensor: torch.Tensor,
+                    *,
+                    vector=direction,
+                    multiplier=gain,
+                    positions=selected.positions,
+                    layer_id=layer,
+                ) -> torch.Tensor:
+                    patched = coordinate_gain(
+                        tensor,
+                        positions=positions,
+                        direction=vector,
+                        gain=multiplier,
+                    )
+                    layer_norms[layer_id] = float(
+                        (
+                            patched[:, list(positions), :].float()
+                            - tensor[:, list(positions), :].float()
+                        ).norm().detach().cpu()
+                    )
+                    return patched
+
+                primary_transforms[layer] = primary_transform
+            with residual_interventions(model, primary_transforms), torch.inference_mode():
+                model(clean_tensor)
+            if set(layer_norms) != set(config.layers):
+                raise RuntimeError("paired primary gain forward missed intervention layers")
+            paired_primary_norms[gain] = layer_norms
     rows = []
     for direction_control in config.direction_controls:
         active_directions = directions_by_control[direction_control]
@@ -473,7 +582,10 @@ def run_concept_gain_record(
                 if gain != 1 and selected.loaded:
                     for layer in config.layers:
                         direction = active_directions[layer]
-                        reference_direction = directions[layer]
+                        paired_target_norm = (
+                            paired_primary_norms[gain][layer]
+                            if dose_matched_control else None
+                        )
 
                         def transform(
                             tensor: torch.Tensor,
@@ -482,8 +594,7 @@ def run_concept_gain_record(
                             multiplier=gain,
                             positions=intervention_positions,
                             layer_id=layer,
-                            ref_vector=reference_direction,
-                            ref_positions=selected.positions,
+                            target_norm=paired_target_norm,
                             match_control=dose_matched_control,
                         ) -> torch.Tensor:
                             patched = coordinate_gain(
@@ -493,18 +604,11 @@ def run_concept_gain_record(
                                 gain=multiplier,
                             )
                             if match_control:
-                                reference_patched = coordinate_gain(
-                                    tensor,
-                                    positions=ref_positions,
-                                    direction=ref_vector,
-                                    gain=multiplier,
-                                )
-                                patched = norm_match_intervention(
+                                patched = norm_match_intervention_to_target(
                                     tensor,
                                     patched,
-                                    reference_patched,
                                     control_positions=positions,
-                                    reference_positions=ref_positions,
+                                    target_norm=float(target_norm),
                                 )
                             live_diagnostics[layer_id] = _gain_diagnostics(
                                 {layer_id: tensor.detach()},
@@ -530,6 +634,8 @@ def run_concept_gain_record(
                             config.negative_candidate,
                             device=device,
                         )
+                        # Keep diagnostics from the prompt-only forward so every
+                        # condition uses the same causal prefix as the paired primary.
                         live_diagnostics.clear()
                         intervened_log_probs = next_token_log_probabilities(
                             model, tokenizer, scoring_prompt, device=device
@@ -544,6 +650,19 @@ def run_concept_gain_record(
                         gain=1.0,
                     )
                 )
+                paired_norm = None
+                dose_match_error = None
+                if delivered_gain != 1:
+                    paired_norm = (
+                        sum(
+                            value * value
+                            for value in paired_primary_norms.get(gain, {}).values()
+                        ) ** 0.5
+                        if has_controls else diagnostics["perturbation_norm"]
+                    )
+                    dose_match_error = abs(
+                        diagnostics["perturbation_norm"] - paired_norm
+                    ) / max(paired_norm, 1e-12)
                 rows.append(
                     {
                         "intervention_type": (
@@ -565,6 +684,14 @@ def run_concept_gain_record(
                         "direction_control": direction_control,
                         "position_control": position_control,
                         "dose_matched_control": dose_matched_control,
+                        "dose_match_basis": (
+                            "not_applicable"
+                            if delivered_gain == 1
+                            else "paired_primary_layer_delta_norm"
+                            if dose_matched_control else "primary"
+                        ),
+                        "paired_primary_perturbation_norm": paired_norm,
+                        "dose_match_relative_error": dose_match_error,
                         "intervention_positions": list(intervention_positions),
                         "layers": list(config.layers),
                         "gain": gain,
