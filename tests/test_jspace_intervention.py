@@ -281,10 +281,15 @@ def test_matched_random_pair_preserves_gram_and_position_control_is_disjoint() -
     random_gram = torch.stack((random_source, random_target), dim=-1).T @ torch.stack(
         (random_source, random_target), dim=-1
     )
-    positions = shuffled_evidence_positions((2, 10), (3, 5), count=2, seed=9)
+    large_seed = 2**90 + 9
+    positions = shuffled_evidence_positions(
+        (2, 10), (3, 5), count=2, seed=large_seed
+    )
 
     assert torch.allclose(original_gram, random_gram, atol=1e-5)
-    assert positions == shuffled_evidence_positions((2, 10), (3, 5), count=2, seed=9)
+    assert positions == shuffled_evidence_positions(
+        (2, 10), (3, 5), count=2, seed=large_seed
+    )
     assert not set(positions) & {3, 5}
 
 

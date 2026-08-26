@@ -6,6 +6,10 @@ from collections.abc import Mapping, Sequence
 import torch
 
 
+def _torch_seed(seed: int) -> int:
+    return int(seed) % (2**63 - 1)
+
+
 def shuffled_evidence_positions(
     evidence_span: tuple[int, int],
     selected: Sequence[int],
@@ -18,7 +22,7 @@ def shuffled_evidence_positions(
     candidates = [index for index in range(start, end) if index not in set(selected)]
     if len(candidates) < count:
         raise ValueError("evidence span has too few positions for a disjoint control")
-    generator = torch.Generator(device="cpu").manual_seed(int(seed))
+    generator = torch.Generator(device="cpu").manual_seed(_torch_seed(seed))
     order = torch.randperm(len(candidates), generator=generator)[:count].tolist()
     return tuple(sorted(candidates[index] for index in order))
 
@@ -26,7 +30,7 @@ def shuffled_evidence_positions(
 def matched_random_direction(direction: torch.Tensor, *, seed: int) -> torch.Tensor:
     """Return a seeded isotropic direction with the same Euclidean norm."""
     vector = direction.detach().float().cpu()
-    generator = torch.Generator(device="cpu").manual_seed(int(seed))
+    generator = torch.Generator(device="cpu").manual_seed(_torch_seed(seed))
     random = torch.randn(vector.shape, generator=generator)
     random = random / random.norm().clamp_min(1e-12)
     return random * vector.norm()
@@ -47,7 +51,7 @@ def matched_random_direction_pair(
     if float(eigenvalues.min()) <= 1e-8:
         raise ValueError("source/target directions are too collinear for a matched control")
     gram_root = eigenvectors @ torch.diag(eigenvalues.sqrt()) @ eigenvectors.T
-    generator = torch.Generator(device="cpu").manual_seed(int(seed))
+    generator = torch.Generator(device="cpu").manual_seed(_torch_seed(seed))
     random = torch.randn(matrix.shape, generator=generator)
     basis, _ = torch.linalg.qr(random, mode="reduced")
     matched = basis @ gram_root
