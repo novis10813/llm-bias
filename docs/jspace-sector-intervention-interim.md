@@ -307,6 +307,38 @@ C_{position}=E(\text{sector, evidence})-E(\text{sector, final}).
 
 Individual-token gain 維持 exploratory status，不取代 sector-prototype primary estimand。
 
+## Held-out test 結果
+
+Held-out test 使用 test ticker：Technology 11 個、Financial Services 12 個；固定 `swap_fraction = 0.5`，並在 inference 前凍結本文件定義的兩個 estimands。
+
+### 各 condition 的 held-out mean ΔM
+
+| Direction condition | Position condition | Technology → Financial | Financial Services → Technology |
+|---|---|---:|---:|
+| sector prototype | loaded evidence | −0.0114 | +0.0104 |
+| matched random | loaded evidence | −0.0341 | +0.0104 |
+| sector prototype | shuffled evidence | −0.0227 | 約 0 |
+| sector prototype | final position | −0.0455 | +0.0938 |
+| matched random | final position | +0.0341 | −0.0208 |
+
+各 primary evidence mean 的 ticker-bootstrap 95% CI：
+
+- Technology → Financial：`[−0.0568, 0.0341]`
+- Financial Services → Technology：`[−0.0208, 0.0417]`
+
+兩個 frozen estimands 的 descriptive estimates：
+
+| Estimand | Held-out estimate | Calibration estimate | 結論 |
+|---|---:|---:|---|
+| Direction specificity \(C_{direction}\) | −0.0114 | +0.0313 | 不支持 |
+| Position specificity \(C_{position}\) | −0.0587 | +0.0052 | 不支持 |
+
+Held-out 的 primary sector-evidence effect 沒有優於 matched-random evidence control，因此 direction-specificity claim 沒有通過。Sector prototype 的 final-position effect 在 Financial Services → Technology 方向更大，position-specificity contrast 也呈現反方向。這表示 calibration 中看到的 sector/evidence pattern 沒有泛化到 test tickers。
+
+Held-out margin sign flip 只有 1 個，出現在 Technology → Financial 的 sector final-position control；兩個 primary evidence conditions 都沒有 sign flip。這仍是固定 continuation margin 結果，不等同於完整文字生成決策翻轉。
+
+因此目前最保守的整體結論是：Qwen3.5-4B 在 L14–L26 對小幅 residual/J-space manipulation 有 margin sensitivity，但本 pilot 沒有在 held-out ticker 上證明 sector-direction specificity，也沒有證明 evidence-position specificity。
+
 ## Reproducibility
 
 Primary dose runs：
