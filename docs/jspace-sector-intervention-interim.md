@@ -242,6 +242,19 @@ E=\tfrac12[\Delta M(\text{Financial}\rightarrow\text{Technology})-\Delta M(\text
 
 Primary loaded-evidence effect 大於多數 controls，尤其在 Financial Services → Technology 方向。然而它沒有大於所有 controls：Technology → Financial 的 sector-final effect 比 loaded-evidence effect 更大。Calibration sample size 不大，而且各 arms 共用 prompts，因此這些 contrasts 目前只作 descriptive comparison。
 
+## Source removal 與 target installation decomposition
+
+在 calibration tickers 上，固定 `swap_fraction = 0.5`，將 full swap 拆成 source-removal component 與 target-installation component。兩個 component 不是可加總的 causal effects；後續 layers 會收到不同 state，因此 decomposition 只作 pathway diagnostic。
+
+| 方向 | Source removal ΔM | Target installation ΔM | Full swap ΔM |
+|---|---:|---:|---:|
+| Technology → Financial Services | −0.0208 | −0.0313 | −0.0417 |
+| Financial Services → Technology | +0.0208 | +0.0521 | +0.0625 |
+
+兩個方向中，target installation 的絕對效果都大於 source removal。Financial Services → Technology 的 full-swap effect 主要來自 target installation；Technology → Financial Services 也呈現相同方向，但兩個 component 的差距較小。所有 decomposition rows 都沒有 Buy/Sell sign flip。
+
+這項結果支持將後續 held-out 的主要 interpretation 聚焦在 target installation contribution，但不允許把 target installation component 視為與 full swap 相同的 estimand。
+
 ## 結果解讀
 
 目前結果支持三項較窄的敘述：
