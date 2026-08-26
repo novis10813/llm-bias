@@ -325,7 +325,7 @@ def run_swap_record(
 
                     primary_transforms[layer] = primary_transform
                 with residual_interventions(model, primary_transforms), torch.inference_mode():
-                    model(clean_tensor)
+                    model.forward(clean_tensor)
                 if set(layer_norms) != set(config.layers):
                     raise RuntimeError("paired primary swap forward missed intervention layers")
                 paired_primary_norms[(mode, swap_fraction)] = layer_norms
@@ -564,7 +564,7 @@ def run_concept_gain_record(
 
                 primary_transforms[layer] = primary_transform
             with residual_interventions(model, primary_transforms), torch.inference_mode():
-                model(clean_tensor)
+                model.forward(clean_tensor)
             if set(layer_norms) != set(config.layers):
                 raise RuntimeError("paired primary gain forward missed intervention layers")
             paired_primary_norms[gain] = layer_norms
