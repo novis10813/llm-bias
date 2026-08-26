@@ -9,39 +9,31 @@ commands 或取代各 workflow 文件。
 ## Package 邊界
 
 - `core/prompt_input/`、`core/inference/`、`core/analysis/`、`core/artifacts/`：承接
-  shared experiment workflow 的 prepare、forward、analyze、finalize mechanics；目前
-  尚未落地的子目錄不得被測試或文件假設為已存在。現有 `core/` 其他模組仍只放
-  model loading、prompt formatting、token alignment 與 lens artifact metadata/validation
+  shared experiment workflow 的 prepare、forward、analyze、finalize mechanics。
+- `core/` 其他模組：只放 model loading、prompt formatting、token alignment、
+  continuation scoring、artifact paths 與 lens artifact metadata/validation
   等模型無關的共用基礎設施。
-- `lens_fitting/`：獨立 fitting Jacobian lens；不可 import 任一 experiment。
-- `counterfactual_patching/`：擁有 `Pair`、residual patch、transfer analysis
-  與 interactive counterfactual visualization。
+- `lens_fitting/` / `lens_install/`：lens fitting 與安裝；不可 import 任一 experiment。
+- `baseline_trial/`：擁有 baseline trial prompt 準備、forward 與 artifact pipeline。
+- `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
+  dose-matched controls、position/direction controls 與 analysis。
 - `prompt_analysis/`：擁有 CSV prompt readout、generated-token attribution、
   attribution validation 與結果視覺化。
+- `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
+  `edgar_preparation/`：已隨程式移至 `archive/llm_bias/`（frozen），操作文件在
+  `docs/archive/`。
 
-兩個 experiment package 不可互相 import。共同能力必須先確認確實與研究語意
-無關，才可放進 `core/`。三個 CLI 入口分別是 `jacobian-lens fit`、
-`counterfactual-patching` 與 `prompt-analysis`；experiment CLI 不可自行 fitting
-lens。
-
-## Counterfactual API
-
-`POST /api/counterfactual` 接收 pair id、patch layer、patch position、readout
-mode 與 top-k，回傳：
-
-- `source`：原始 source prompt 的 grid
-- `target`：target prompt 的 grid
-- `patched`：source prompt 注入 target entity residual 後的 grid
-- `metrics`：source/target/patched answer margins、answer ranks、normalized transfer
-- `comparison`：各 layer/position 的 top-1 對照
-
-Grid 的 `top_ids` 與 `top_probs` 必須保留完整 top-k；前端可以只顯示 top-1，
-但不能在 backend 提前截斷成單一 token。
+三個 experiment package 不可互相 import；shared infrastructure 不可 import 任一
+experiment package。共同能力必須先確認確實與研究語意無關，才可放進 `core/`。
+四個 CLI 入口分別是 `jacobian-lens`、`prompt-analysis`、`baseline-trial` 與
+`jspace-intervention`；experiment CLI 不可自行 fitting lens。
 
 ## 修改與驗證原則
 
-- 優先使用 `apply_patch` 修改檔案。
-- 修改 activation patch 語意時，至少執行 `uv run pytest -q`，並用實際 local
-  model 做一次 API smoke test。
-- 不要儲存完整 raw activations；interactive endpoint 應即時重算 selected pair
-  與 selected layer，或只儲存 compact top-k/rank 結果。
+- 小改用精確文字替換（edit tool），避免整檔重寫。
+- 修改 intervention/hook 語意或 artifact schema 時，至少執行 `uv run pytest -q`
+  並補 regression test。
+- 不要儲存完整 raw activations；只輸出 compact top-k/rank、scalar dose
+  diagnostics 與 provenance。
+- 模型載入與 GPU inference 屬於 smoke/integration，不得讓 `uv run pytest -q`
+  依賴特定 GPU。
