@@ -27,6 +27,7 @@ dependencies = [
 jacobian-lens = "llm_bias.lens_cli:main"
 prompt-analysis = "llm_bias.prompt_analysis.cli:main"
 baseline-trial = "llm_bias.baseline_trial.cli:main"
+jspace-intervention = "llm_bias.jspace_intervention.cli:main"
 
 [project.optional-dependencies]
 extraction = [

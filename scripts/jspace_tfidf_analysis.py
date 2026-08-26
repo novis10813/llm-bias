@@ -248,7 +248,27 @@ def main() -> None:
                         "before accumulating any analysis counts")
     parser.add_argument("--min-english-zipf", type=float, default=2.0,
                         help="wordfreq threshold used by --concept-normalize")
+    parser.add_argument("--split-manifest", type=Path, default=None,
+                        help="optional jspace-intervention ticker split JSON")
+    parser.add_argument("--split-name", choices=("discovery", "calibration", "test"),
+                        default=None, help="required with --split-manifest")
     args = parser.parse_args()
+
+    if (args.split_manifest is None) != (args.split_name is None):
+        parser.error("--split-manifest and --split-name must be provided together")
+    allowed_tickers: set[str] | None = None
+    split_manifest_sha256: str | None = None
+    if args.split_manifest is not None:
+        import hashlib
+
+        split_payload = json.loads(args.split_manifest.read_text())
+        assignments = split_payload.get("assignments", {})
+        allowed_tickers = {
+            ticker for ticker, split in assignments.items() if split == args.split_name
+        }
+        if not allowed_tickers:
+            raise ValueError(f"split {args.split_name!r} contains no tickers")
+        split_manifest_sha256 = hashlib.sha256(args.split_manifest.read_bytes()).hexdigest()
 
     band_layers = {int(x) for x in args.band_layers.split(",") if x.strip()}
     output_dir = args.output_dir
@@ -258,6 +278,8 @@ def main() -> None:
     sector_prompt_tokens: dict[str, Counter] = {}
     with open(args.input_csv, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
+            if allowed_tickers is not None and row["ticker"] not in allowed_tickers:
+                continue
             ticker_meta[row["ticker"]] = {
                 "sector": row["sector"],
                 "name": row.get("name", ""),
@@ -306,6 +328,8 @@ def main() -> None:
                 continue
             row = json.loads(line)
             ticker = row.get("ticker") or "UNKNOWN"
+            if allowed_tickers is not None and ticker not in allowed_tickers:
+                continue
             # per-record counters, then equal-weight normalisation before
             # merging, so generation length does not dominate
             record_band: Counter = Counter()
@@ -519,6 +543,9 @@ def main() -> None:
                 else "NFKC, lowercase, strip; skip tokens without [a-z]"
             ),
             "concept_normalize": args.concept_normalize,
+            "split_name": args.split_name,
+            "split_manifest": str(args.split_manifest) if args.split_manifest else None,
+            "split_manifest_sha256": split_manifest_sha256,
         },
     }
     write_json(output_dir / "summary.json", summary, overwrite=True)

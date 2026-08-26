@@ -130,8 +130,10 @@ def forward_batch(
 def record_residuals(model: Any, input_ids: torch.Tensor, layers: Iterable[int]) -> dict[int, torch.Tensor]:
     """Record full-sequence residuals for intervention consumers."""
     requested = sorted(set(int(layer) for layer in layers))
-    if not requested or not hasattr(model, "layers"):
+    if not requested:
         return {}
+    if not hasattr(model, "layers"):
+        raise TypeError("model does not expose decoder layers")
     from jlens.hooks import ActivationRecorder
     with torch.no_grad(), ActivationRecorder(model.layers, at=requested) as recorder:
         _forward(model, EncodedBatch(input_ids, torch.ones_like(input_ids), torch.full((input_ids.shape[0],), input_ids.shape[1] - 1, device=input_ids.device)))
