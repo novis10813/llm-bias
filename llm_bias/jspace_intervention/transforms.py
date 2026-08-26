@@ -37,6 +37,33 @@ def steer_positions(
     return patched
 
 
+def coordinate_gain(
+    tensor: torch.Tensor,
+    *,
+    positions: Sequence[int],
+    direction: torch.Tensor,
+    gain: float,
+) -> torch.Tensor:
+    """Multiply one least-squares concept coordinate, preserving its complement."""
+    if not torch.isfinite(torch.tensor(gain)) or gain < 0:
+        raise ValueError("gain must be finite and non-negative")
+    selected = _validated_positions(tensor, positions)
+    if not selected or gain == 1:
+        return tensor
+    vector = direction.to(device=tensor.device, dtype=torch.float32).reshape(-1)
+    if vector.numel() != tensor.shape[-1]:
+        raise ValueError("direction dimension does not match residual width")
+    denominator = vector.square().sum()
+    if not torch.isfinite(denominator) or denominator <= 0:
+        raise ValueError("direction must have finite non-zero norm")
+    values = tensor[:, selected, :].float()
+    coordinates = (values @ vector) / denominator
+    delta = (gain - 1.0) * coordinates.unsqueeze(-1) * vector
+    patched = tensor.clone()
+    patched[:, selected, :] = (values + delta).to(tensor.dtype)
+    return patched
+
+
 def coordinate_intervention(
     tensor: torch.Tensor,
     *,
@@ -48,12 +75,21 @@ def coordinate_intervention(
 ) -> torch.Tensor:
     """Edit source/target least-squares coordinates at selected positions.
 
-    Modes are ``swap`` (exchange both coordinates), ``source_ablation`` (set
-    the source coordinate to the target coordinate), and ``target_addition``
-    (set the target coordinate to the source coordinate). The latter two sum
-    to the full swap delta.
+    Modes are ``swap`` (exchange both coordinates),
+    ``source_removal_component`` (set the source coordinate to the target
+    level), and ``target_installation_component`` (set the target coordinate
+    to the source level). The latter two sum to the full swap delta. Historical
+    mode names are accepted as input aliases but are never emitted.
     """
-    if mode not in {"swap", "source_ablation", "target_addition"}:
+    mode = {
+        "source_ablation": "source_removal_component",
+        "target_addition": "target_installation_component",
+    }.get(mode, mode)
+    if mode not in {
+        "swap",
+        "source_removal_component",
+        "target_installation_component",
+    }:
         raise ValueError(f"unknown coordinate intervention mode: {mode}")
     selected = _validated_positions(tensor, positions)
     source = source_direction.reshape(-1)
@@ -72,7 +108,7 @@ def coordinate_intervention(
     coordinates = values @ pinv.T
     if mode == "swap":
         desired = coordinates[..., [1, 0]]
-    elif mode == "source_ablation":
+    elif mode == "source_removal_component":
         desired = torch.stack((coordinates[..., 1], coordinates[..., 1]), dim=-1)
     else:
         desired = torch.stack((coordinates[..., 0], coordinates[..., 0]), dim=-1)
@@ -111,6 +147,7 @@ def perturbation_norm(before: torch.Tensor, after: torch.Tensor) -> float:
 
 
 __all__ = [
+    "coordinate_gain",
     "coordinate_intervention",
     "coordinate_swap",
     "perturbation_norm",

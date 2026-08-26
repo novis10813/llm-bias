@@ -9,10 +9,18 @@ from llm_bias.jspace_intervention.concepts import (
     sector_prototype,
     token_direction,
 )
+from llm_bias.jspace_intervention.controls import (
+    matched_random_direction_pair,
+    shuffled_evidence_positions,
+)
 from llm_bias.jspace_intervention.positions import select_loaded_positions
-from llm_bias.jspace_intervention.runner import run_swap_record
-from llm_bias.jspace_intervention.schemas import InterventionConfig
+from llm_bias.jspace_intervention.runner import (
+    run_concept_gain_record,
+    run_swap_record,
+)
+from llm_bias.jspace_intervention.schemas import GainConfig, InterventionConfig
 from llm_bias.jspace_intervention.transforms import (
+    coordinate_gain,
     coordinate_intervention,
     coordinate_swap,
     steer_positions,
@@ -145,6 +153,79 @@ def test_swap_runner_changes_margin_through_tuple_decoder_hooks() -> None:
     assert rows[0]["clean_margin"] == pytest.approx(-2.0)
     assert rows[1]["intervened_margin"] == pytest.approx(2.0)
     assert rows[1]["delta_margin"] == pytest.approx(4.0)
+    assert rows[1]["next_token_kl"] > 0
+    assert rows[1]["delivered_dose"]["relative_perturbation_norm"] > 0
+    assert rows[1]["direction_control"] == "prototype"
+    assert rows[1]["position_control"] == "evidence"
+    assert not model.layers[0]._forward_hooks
+
+
+def test_gain_runner_uses_one_as_noop_and_reports_live_dose() -> None:
+    class TupleBlock(torch.nn.Module):
+        def forward(self, value: torch.Tensor):
+            return (value,)
+
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = torch.nn.ModuleList([TupleBlock()])
+            self.n_layers = 1
+            self.embedding = torch.nn.Embedding(3, 2)
+            self.register_buffer(
+                "unembedding",
+                torch.tensor([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0]]),
+            )
+            with torch.no_grad():
+                self.embedding.weight.zero_()
+                self.embedding.weight[0] = torch.tensor([2.0, 0.0])
+
+        def forward(self, input_ids, attention_mask=None):
+            value = self.embedding(input_ids)
+            for layer in self.layers:
+                value = layer(value)[0]
+            return value
+
+        def unembed(self, value):
+            return value @ self.unembedding.T
+
+    class Tokenizer:
+        mapping = {"P": [0], "Pbuy": [0, 1], "Psell": [0, 2]}
+
+        def __call__(self, text, add_special_tokens=True):
+            return {"input_ids": self.mapping[text]}
+
+    config = GainConfig.from_dict(
+        {
+            "prototype": {
+                "name": "Technology:gain",
+                "sector": "Technology",
+                "score_type": "test",
+                "tokens": [{"token": "source", "token_id": 2, "weight": 1.0}],
+            },
+            "layers": [0],
+            "gains": [0, 1, 2],
+        }
+    )
+    model = Model()
+    rows = run_concept_gain_record(
+        model=model,
+        tokenizer=Tokenizer(),
+        lens=None,
+        scoring_prompt="P",
+        evidence_span=(0, 1),
+        config=config,
+        device="cpu",
+        prototypes={0: torch.tensor([1.0, 0.0])},
+    )
+
+    assert rows[0]["gain"] == 0
+    assert rows[0]["intervened_margin"] == pytest.approx(0.0)
+    assert rows[1]["gain"] == 1
+    assert rows[1]["delta_margin"] == 0
+    assert rows[1]["next_token_kl"] == 0
+    assert rows[2]["gain"] == 2
+    assert rows[2]["intervened_margin"] == pytest.approx(-4.0)
+    assert rows[2]["delivered_dose"]["coordinate_after_mean"] == pytest.approx(4.0)
     assert not model.layers[0]._forward_hooks
 
 
@@ -170,6 +251,41 @@ def test_steering_changes_coordinate_only_at_selected_positions() -> None:
     assert concept_coordinate(patched[0, 1], direction).item() == 0.5
     assert torch.equal(patched[0, 0], tensor[0, 0])
     assert torch.equal(patched[0, 2], tensor[0, 2])
+
+
+def test_coordinate_gain_multiplies_only_selected_coordinate() -> None:
+    tensor = torch.tensor([[[2.0, 5.0, 7.0], [1.0, 3.0, 9.0]]])
+    direction = torch.tensor([1.0, 0.0, 0.0])
+
+    doubled = coordinate_gain(
+        tensor, positions=[0], direction=direction, gain=2.0
+    )
+    ablated = coordinate_gain(
+        tensor, positions=[0], direction=direction, gain=0.0
+    )
+
+    assert torch.equal(doubled[0, 0], torch.tensor([4.0, 5.0, 7.0]))
+    assert torch.equal(ablated[0, 0], torch.tensor([0.0, 5.0, 7.0]))
+    assert torch.equal(doubled[0, 1], tensor[0, 1])
+
+
+def test_matched_random_pair_preserves_gram_and_position_control_is_disjoint() -> None:
+    source = torch.tensor([2.0, 0.0, 0.0, 0.0])
+    target = torch.tensor([1.0, 3.0, 0.0, 0.0])
+    random_source, random_target = matched_random_direction_pair(
+        source, target, seed=9
+    )
+    original_gram = torch.stack((source, target), dim=-1).T @ torch.stack(
+        (source, target), dim=-1
+    )
+    random_gram = torch.stack((random_source, random_target), dim=-1).T @ torch.stack(
+        (random_source, random_target), dim=-1
+    )
+    positions = shuffled_evidence_positions((2, 10), (3, 5), count=2, seed=9)
+
+    assert torch.allclose(original_gram, random_gram, atol=1e-5)
+    assert positions == shuffled_evidence_positions((2, 10), (3, 5), count=2, seed=9)
+    assert not set(positions) & {3, 5}
 
 
 def test_coordinate_swap_exchanges_coordinates_and_preserves_complement() -> None:

@@ -14,8 +14,12 @@ from llm_bias.core.lens_loader import load_validated_lens
 from llm_bias.core.model import load_model, load_tokenizer
 from llm_bias.core.prompt_input.encoding import input_ids
 from llm_bias.jspace_intervention.prompting import prepare_scoring_prompt
-from llm_bias.jspace_intervention.runner import layer_prototypes, run_swap_record
-from llm_bias.jspace_intervention.schemas import InterventionConfig
+from llm_bias.jspace_intervention.runner import (
+    layer_prototypes,
+    run_concept_gain_record,
+    run_swap_record,
+)
+from llm_bias.jspace_intervention.schemas import GainConfig, InterventionConfig
 
 
 def _iter_prompt_records(
@@ -50,7 +54,7 @@ def _preflight_records(
     tokenizer: Any,
     records: Iterator[dict[str, str]],
     *,
-    config: InterventionConfig,
+    config: InterventionConfig | GainConfig,
     max_records: int | None,
     max_seq_len: int,
 ) -> int:
@@ -91,8 +95,11 @@ def run_swap_pipeline(
     max_records: int | None = None,
     max_seq_len: int = 1024,
     prompt_columns: set[str] | None = None,
+    _operation: str = "swap",
 ) -> Path:
-    """Run one directional sector-prototype swap into a canonical run tree."""
+    """Run one directional J-space intervention into a canonical run tree."""
+    if _operation not in {"swap", "gain"}:
+        raise ValueError(f"unsupported intervention operation: {_operation}")
     input_path = Path(input_path)
     split_manifest = Path(split_manifest)
     config_path = Path(config_path)
@@ -105,7 +112,16 @@ def run_swap_pipeline(
         raise ValueError(
             "run split manifest does not match the discovery manifest frozen in config"
         )
-    config = InterventionConfig.from_dict(config_payload)
+    config = (
+        InterventionConfig.from_dict(config_payload)
+        if _operation == "swap"
+        else GainConfig.from_dict(config_payload)
+    )
+    source_sector = (
+        config.source.sector
+        if isinstance(config, InterventionConfig)
+        else config.prototype.sector
+    )
     preflight_tokenizer = load_tokenizer(model_name)
     _preflight_records(
         preflight_tokenizer,
@@ -113,7 +129,7 @@ def run_swap_pipeline(
             input_path,
             assignments=assignments,
             split_name=split_name,
-            source_sector=config.source.sector,
+            source_sector=source_sector,
             prompt_columns=prompt_columns,
         ),
         config=config,
@@ -133,8 +149,12 @@ def run_swap_pipeline(
         stage="prepare", role="input",
     )
     run.manifest.register_artifact(
-        config_path, artifact_type="jspace_intervention_config",
-        stage="prepare", role="input",
+        config_path,
+        artifact_type=(
+            "jspace_intervention_config" if _operation == "swap" else "jspace_gain_config"
+        ),
+        stage="prepare",
+        role="input",
     )
     run.manifest.save()
 
@@ -149,12 +169,20 @@ def run_swap_pipeline(
             artifact_root=artifact_root,
         )
         device = getattr(model, "input_device", fallback_device)
-        source_prototypes = layer_prototypes(
-            model, loaded_lens.lens, config.source, config.layers
-        )
-        target_prototypes = layer_prototypes(
-            model, loaded_lens.lens, config.target, config.layers
-        )
+        if isinstance(config, InterventionConfig):
+            source_prototypes = layer_prototypes(
+                model, loaded_lens.lens, config.source, config.layers
+            )
+            target_prototypes = layer_prototypes(
+                model, loaded_lens.lens, config.target, config.layers
+            )
+            gain_prototypes = None
+        else:
+            source_prototypes = None
+            target_prototypes = None
+            gain_prototypes = layer_prototypes(
+                model, loaded_lens.lens, config.prototype, config.layers
+            )
         run.manifest.register_artifact(
             loaded_lens.path,
             artifact_type="jacobian_lens",
@@ -170,7 +198,7 @@ def run_swap_pipeline(
                 input_path,
                 assignments=assignments,
                 split_name=split_name,
-                source_sector=config.source.sector,
+                source_sector=source_sector,
                 prompt_columns=prompt_columns,
             )
             for record in records:
@@ -184,20 +212,34 @@ def run_swap_pipeline(
                 record_id = stable_record_id(
                     record["ticker"], record["prompt_column"], split_name
                 )
-                results = run_swap_record(
-                    model=model,
-                    tokenizer=tokenizer,
-                    lens=loaded_lens.lens,
-                    scoring_prompt=scoring_prompt,
-                    evidence_span=evidence_span,
-                    config=config,
-                    device=device,
-                    source_prototypes=source_prototypes,
-                    target_prototypes=target_prototypes,
-                )
+                if isinstance(config, InterventionConfig):
+                    results = run_swap_record(
+                        model=model,
+                        tokenizer=tokenizer,
+                        lens=loaded_lens.lens,
+                        scoring_prompt=scoring_prompt,
+                        evidence_span=evidence_span,
+                        config=config,
+                        device=device,
+                        source_prototypes=source_prototypes,
+                        target_prototypes=target_prototypes,
+                        control_seed=int(record_id.rsplit("_", 1)[-1], 16),
+                    )
+                else:
+                    results = run_concept_gain_record(
+                        model=model,
+                        tokenizer=tokenizer,
+                        lens=loaded_lens.lens,
+                        scoring_prompt=scoring_prompt,
+                        evidence_span=evidence_span,
+                        config=config,
+                        device=device,
+                        prototypes=gain_prototypes,
+                        control_seed=int(record_id.rsplit("_", 1)[-1], 16),
+                    )
                 for result in results:
                     yield {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "artifact_type": "jspace_intervention_result",
                         "record_id": record_id,
                         "ticker": record["ticker"],
@@ -215,7 +257,7 @@ def run_swap_pipeline(
             metadata_path,
             {
                 "artifact_type": "jspace_intervention_metadata",
-                "schema_version": 1,
+                "schema_version": 2,
                 "model": model_name,
                 "input": str(input_path),
                 "split_manifest": str(split_manifest),
@@ -247,4 +289,9 @@ def run_swap_pipeline(
         raise
 
 
-__all__ = ["run_swap_pipeline"]
+def run_gain_pipeline(**kwargs: Any) -> Path:
+    """Run a coordinate-gain experiment using the shared artifact lifecycle."""
+    return run_swap_pipeline(**kwargs, _operation="gain")
+
+
+__all__ = ["run_gain_pipeline", "run_swap_pipeline"]

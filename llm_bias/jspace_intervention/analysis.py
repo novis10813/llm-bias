@@ -57,24 +57,45 @@ def grouped_effects(
     """Summarize each intervention/source/target/dose condition."""
     groups: dict[tuple, list[dict]] = defaultdict(list)
     for row in rows:
+        if "swap_fraction" in row:
+            dose_name, dose_value = "swap_fraction", row["swap_fraction"]
+        elif "gain" in row:
+            dose_name, dose_value = "gain", row["gain"]
+        else:
+            dose_name, dose_value = "alpha", row["alpha"]
+        loaded = bool(row.get("loaded_positions", {}).get("loaded", True))
+        no_op_value = 1.0 if dose_name == "gain" else 0.0
+        if not loaded and float(dose_value) != no_op_value:
+            continue
         key = (
             row["intervention_type"],
             row.get("source_prototype"),
             row.get("target_prototype"),
+            row.get("prototype"),
             row.get("token"),
-            float(row["alpha"]),
+            row.get("direction_control"),
+            row.get("position_control"),
+            dose_name,
+            float(dose_value),
         )
         groups[key].append(row)
     result = []
     for key, group in sorted(groups.items(), key=lambda item: str(item[0])):
-        intervention, source, target, token, alpha = key
+        (
+            intervention, source, target, prototype, token,
+            direction_control, position_control, dose_name, dose_value,
+        ) = key
         result.append(
             {
                 "intervention_type": intervention,
                 "source_prototype": source,
                 "target_prototype": target,
+                "prototype": prototype,
                 "token": token,
-                "alpha": alpha,
+                "direction_control": direction_control,
+                "position_control": position_control,
+                "dose_name": dose_name,
+                dose_name: dose_value,
                 **ticker_clustered_effect(
                     group, seed=seed, bootstrap_samples=bootstrap_samples
                 ),

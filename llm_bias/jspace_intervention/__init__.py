@@ -14,11 +14,17 @@ outcomes; they do not establish a global workspace claim.
 
 from .concepts import concept_coordinate, sector_prototype, token_direction
 from .positions import LoadedPositions, select_loaded_positions
-from .transforms import coordinate_intervention, coordinate_swap, steer_positions
+from .transforms import (
+    coordinate_gain,
+    coordinate_intervention,
+    coordinate_swap,
+    steer_positions,
+)
 
 __all__ = [
     "LoadedPositions",
     "concept_coordinate",
+    "coordinate_gain",
     "coordinate_intervention",
     "coordinate_swap",
     "sector_prototype",

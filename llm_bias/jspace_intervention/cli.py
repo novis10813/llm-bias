@@ -12,7 +12,11 @@ from llm_bias.core.artifact_paths import sha256_file
 from llm_bias.core.artifacts.io import write_json
 from llm_bias.jspace_intervention.analysis import grouped_effects
 from llm_bias.jspace_intervention.candidates import select_prototype
-from llm_bias.jspace_intervention.schemas import InterventionConfig
+from llm_bias.jspace_intervention.schemas import (
+    GainConfig,
+    InterventionConfig,
+    PrototypeSpec,
+)
 from llm_bias.jspace_intervention.splits import (
     assign_balanced_ticker_splits,
     assign_ticker_splits,
@@ -43,12 +47,30 @@ def build_parser() -> argparse.ArgumentParser:
     config.add_argument("--score-type", choices=("tfidf", "logodds_z"), default="logodds_z")
     config.add_argument("--top-n", type=int, default=4)
     config.add_argument("--layers", default="14,15,16,17,18,19,20,21,22,23,24,25,26")
-    config.add_argument("--alphas", default="0,0.5,1,2")
+    config.add_argument(
+        "--swap-fractions", "--alphas", dest="swap_fractions",
+        default="0,0.25,0.5,0.75,1",
+        help="replacement fractions in [0,1]; --alphas is a deprecated alias",
+    )
     config.add_argument(
         "--coordinate-modes",
-        default="swap,source_ablation,target_addition",
+        default="swap,source_removal_component,target_installation_component",
     )
+    config.add_argument("--position-controls", default="evidence")
+    config.add_argument("--direction-controls", default="prototype")
     config.add_argument("--output", required=True, type=Path)
+
+    gain_config = commands.add_parser(
+        "prepare-gain-config", help="derive one gain config from a frozen swap config"
+    )
+    gain_config.add_argument("--swap-config", required=True, type=Path)
+    gain_config.add_argument("--prototype", choices=("source", "target"), required=True)
+    gain_config.add_argument(
+        "--token", default=None,
+        help="optional concept token from the selected prototype for an exploratory gain arm",
+    )
+    gain_config.add_argument("--gains", default="0,0.5,1,1.5,2")
+    gain_config.add_argument("--output", required=True, type=Path)
 
     validate = commands.add_parser("validate-config", help="validate an intervention JSON config")
     validate.add_argument("--config", required=True, type=Path)
@@ -66,6 +88,20 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-records", type=int, default=None)
     run.add_argument("--max-seq-len", type=int, default=1024)
     run.add_argument("--prompt-column", action="append", dest="prompt_columns")
+
+    gain_run = commands.add_parser("run-gain", help="run one concept-coordinate gain sweep")
+    gain_run.add_argument("--input", required=True, type=Path)
+    gain_run.add_argument("--split-manifest", required=True, type=Path)
+    gain_run.add_argument("--config", required=True, type=Path)
+    gain_run.add_argument("--model", required=True)
+    gain_run.add_argument("--lens", default=None)
+    gain_run.add_argument("--run-id", required=True)
+    gain_run.add_argument("--dataset", default="jspace-concept-gain")
+    gain_run.add_argument("--artifact-root", default="artifacts")
+    gain_run.add_argument("--split", choices=("discovery", "calibration", "test"), default="test")
+    gain_run.add_argument("--max-records", type=int, default=None)
+    gain_run.add_argument("--max-seq-len", type=int, default=1024)
+    gain_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
@@ -160,9 +196,17 @@ def _prepare_config(args: argparse.Namespace) -> None:
             "source": source.to_dict(),
             "target": target.to_dict(),
             "layers": [int(value) for value in args.layers.split(",") if value.strip()],
-            "alphas": [float(value) for value in args.alphas.split(",") if value.strip()],
+            "swap_fractions": [
+                float(value) for value in args.swap_fractions.split(",") if value.strip()
+            ],
             "coordinate_modes": [
                 value for value in args.coordinate_modes.split(",") if value.strip()
+            ],
+            "position_controls": [
+                value for value in args.position_controls.split(",") if value.strip()
+            ],
+            "direction_controls": [
+                value for value in args.direction_controls.split(",") if value.strip()
             ],
         }
     )
@@ -171,7 +215,7 @@ def _prepare_config(args: argparse.Namespace) -> None:
         {
             **config.to_dict(),
             "artifact_type": "jspace_intervention_config",
-            "schema_version": 1,
+            "schema_version": 2,
             "discovery_run": str(args.discovery_run),
             "discovery_summary_sha256": sha256_file(args.discovery_run / "summary.json"),
             "split_manifest_sha256": summary["params"]["split_manifest_sha256"],
@@ -183,8 +227,78 @@ def _prepare_config(args: argparse.Namespace) -> None:
     print(args.output)
 
 
+def _prepare_gain_config(args: argparse.Namespace) -> None:
+    payload = json.loads(args.swap_config.read_text())
+    swap_config = InterventionConfig.from_dict(payload)
+    prototype = (
+        swap_config.source if args.prototype == "source" else swap_config.target
+    )
+    if args.token is not None:
+        matches = [token for token in prototype.tokens if token.token == args.token]
+        if len(matches) != 1:
+            raise ValueError(
+                f"token {args.token!r} is not present exactly once in {prototype.name}"
+            )
+        prototype = PrototypeSpec.from_dict(
+            {
+                "name": f"{prototype.sector}:{args.token}:gain",
+                "sector": prototype.sector,
+                "score_type": prototype.score_type,
+                "tokens": [{
+                    "token": matches[0].token,
+                    "token_id": matches[0].token_id,
+                    "weight": 1.0,
+                    "selection_score": matches[0].selection_score,
+                }],
+            }
+        )
+    gain_config = GainConfig.from_dict(
+        {
+            "prototype": prototype.to_dict(),
+            "layers": list(swap_config.layers),
+            "gains": [float(value) for value in args.gains.split(",") if value.strip()],
+            "position_controls": list(swap_config.position_controls),
+            "direction_controls": list(swap_config.direction_controls),
+            "top_positions": swap_config.top_positions,
+            "loading_threshold": swap_config.loading_threshold,
+            "decision_prefix": swap_config.decision_prefix,
+            "positive_candidate": swap_config.positive_candidate,
+            "negative_candidate": swap_config.negative_candidate,
+        }
+    )
+    provenance = {
+        key: value
+        for key, value in payload.items()
+        if key in {
+            "model",
+            "discovery_run",
+            "discovery_summary_sha256",
+            "split_manifest_sha256",
+            "candidate_table_sha256",
+        }
+    }
+    write_json(
+        args.output,
+        {
+            **gain_config.to_dict(),
+            **provenance,
+            "artifact_type": "jspace_gain_config",
+            "schema_version": 2,
+            "parent_swap_config": str(args.swap_config),
+            "parent_swap_config_sha256": sha256_file(args.swap_config),
+        },
+        overwrite=True,
+    )
+    print(args.output)
+
+
 def _validate_config(args: argparse.Namespace) -> None:
-    config = InterventionConfig.from_dict(json.loads(args.config.read_text()))
+    payload = json.loads(args.config.read_text())
+    config = (
+        GainConfig.from_dict(payload)
+        if "prototype" in payload
+        else InterventionConfig.from_dict(payload)
+    )
     print(json.dumps(config.to_dict(), indent=2, sort_keys=True))
 
 
@@ -192,6 +306,26 @@ def _run_swap(args: argparse.Namespace) -> None:
     from llm_bias.jspace_intervention.pipeline import run_swap_pipeline
 
     run_root = run_swap_pipeline(
+        input_path=args.input,
+        split_manifest=args.split_manifest,
+        config_path=args.config,
+        model_name=args.model,
+        lens_path=args.lens,
+        run_id=args.run_id,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        split_name=args.split,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+        prompt_columns=set(args.prompt_columns) if args.prompt_columns else None,
+    )
+    print(run_root)
+
+
+def _run_gain(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.pipeline import run_gain_pipeline
+
+    run_root = run_gain_pipeline(
         input_path=args.input,
         split_manifest=args.split_manifest,
         config_path=args.config,
@@ -217,7 +351,7 @@ def _analyze(args: argparse.Namespace) -> None:
         args.output,
         {
             "artifact_type": "jspace_intervention_analysis",
-            "schema_version": 1,
+            "schema_version": 2,
             "input": str(args.input),
             "input_sha256": sha256_file(args.input),
             "groups": summary,
@@ -233,10 +367,14 @@ def main() -> None:
         _prepare_splits(args)
     elif args.command == "prepare-config":
         _prepare_config(args)
+    elif args.command == "prepare-gain-config":
+        _prepare_gain_config(args)
     elif args.command == "validate-config":
         _validate_config(args)
     elif args.command == "run-swap":
         _run_swap(args)
+    elif args.command == "run-gain":
+        _run_gain(args)
     else:
         _analyze(args)
 

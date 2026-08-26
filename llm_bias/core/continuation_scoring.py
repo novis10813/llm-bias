@@ -106,6 +106,49 @@ def _extract_logits(output: Any, model: Any, input_ids: torch.Tensor) -> torch.T
     return logits
 
 
+def next_token_log_probabilities(
+    model: Any,
+    tokenizer: Any,
+    prompt: str,
+    *,
+    device: torch.device | str | None = None,
+    forward: Callable[[torch.Tensor], Any] | None = None,
+) -> torch.Tensor:
+    """Return the full-vocabulary next-token log distribution in memory.
+
+    Callers may derive compact diagnostics such as KL divergence, but must not
+    persist this vocabulary-sized tensor.
+    """
+    prompt_ids = _input_ids(tokenizer, prompt, add_special_tokens=True)
+    if not prompt_ids:
+        raise ValueError("prompt produced no tokens")
+    input_tensor = torch.tensor([prompt_ids], dtype=torch.long)
+    if device is not None:
+        input_tensor = input_tensor.to(torch.device(device))
+    with torch.no_grad():
+        output = forward(input_tensor) if forward is not None else model.forward(input_tensor)
+        logits = _extract_logits(output, model, input_tensor).float()
+    return torch.log_softmax(logits[0, -1], dim=-1).detach()
+
+
+def categorical_kl_divergence(
+    reference_log_probs: torch.Tensor,
+    comparison_log_probs: torch.Tensor,
+) -> float:
+    """Compute ``KL(reference || comparison)`` as one compact scalar."""
+    if reference_log_probs.shape != comparison_log_probs.shape:
+        raise ValueError("KL distributions must have identical shapes")
+    if reference_log_probs.ndim != 1:
+        raise ValueError("KL distributions must be one-dimensional")
+    value = torch.sum(
+        reference_log_probs.exp() * (reference_log_probs - comparison_log_probs)
+    )
+    result = float(value.detach().cpu())
+    if not torch.isfinite(value):
+        raise ValueError("non-finite categorical KL divergence")
+    return max(0.0, result)
+
+
 def score_token_ids(
     model: Any,
     tokenizer: Any,

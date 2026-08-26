@@ -3,12 +3,12 @@ from __future__ import annotations
 import torch
 import pytest
 
-from llm_bias.jspace_intervention.analysis import ticker_clustered_effect
+from llm_bias.jspace_intervention.analysis import grouped_effects, ticker_clustered_effect
 from llm_bias.jspace_intervention.candidates import select_prototype
 from llm_bias.jspace_intervention.pipeline import run_swap_pipeline
 from llm_bias.jspace_intervention.prompting import prepare_scoring_prompt
 from llm_bias.jspace_intervention.runner import layer_prototypes
-from llm_bias.jspace_intervention.schemas import InterventionConfig, PrototypeSpec
+from llm_bias.jspace_intervention.schemas import GainConfig, InterventionConfig, PrototypeSpec
 from llm_bias.jspace_intervention.splits import (
     assign_balanced_ticker_splits,
     assign_ticker_splits,
@@ -149,6 +149,15 @@ def test_intervention_config_requires_noop_and_cross_sector() -> None:
         InterventionConfig.from_dict(
             {"source": prototype, "target": other, "layers": [14], "alphas": [1]}
         )
+    with pytest.raises(ValueError, match=r"within \[0, 1\]"):
+        InterventionConfig.from_dict(
+            {
+                "source": prototype,
+                "target": other,
+                "layers": [14],
+                "swap_fractions": [0, 2],
+            }
+        )
 
     answer_prototype = {
         **prototype,
@@ -162,6 +171,29 @@ def test_intervention_config_requires_noop_and_cross_sector() -> None:
                 "layers": [14],
                 "alphas": [0, 1],
             }
+        )
+
+
+def test_gain_config_uses_one_as_noop_and_validates_controls() -> None:
+    prototype = {
+        "name": "Technology:gain",
+        "sector": "Technology",
+        "score_type": "test",
+        "tokens": [{"token": "alpha", "token_id": 10, "weight": 1.0}],
+    }
+    config = GainConfig.from_dict(
+        {
+            "prototype": prototype,
+            "layers": [14],
+            "gains": [0, 0.5, 1, 2],
+            "position_controls": ["evidence", "final_position"],
+            "direction_controls": ["prototype", "matched_random"],
+        }
+    )
+    assert config.gains == (0.0, 0.5, 1.0, 2.0)
+    with pytest.raises(ValueError, match="no-op"):
+        GainConfig.from_dict(
+            {"prototype": prototype, "layers": [14], "gains": [0, 2]}
         )
 
 
@@ -194,6 +226,29 @@ def test_ticker_clustered_effect_weights_tickers_equally() -> None:
     assert summary["mean_delta_margin"] == pytest.approx(0.0)
     assert summary["ticker_count"] == 2
     assert summary["record_count"] == 4
+
+
+def test_grouped_effects_excludes_undelivered_non_noop_rows() -> None:
+    rows = [
+        {
+            "ticker": "A",
+            "intervention_type": "sector_prototype_gain",
+            "gain": 1.0,
+            "delta_margin": 0.0,
+            "loaded_positions": {"loaded": False},
+        },
+        {
+            "ticker": "A",
+            "intervention_type": "sector_prototype_gain",
+            "gain": 2.0,
+            "delta_margin": 0.0,
+            "loaded_positions": {"loaded": False},
+        },
+    ]
+    groups = grouped_effects(rows, bootstrap_samples=10)
+
+    assert len(groups) == 1
+    assert groups[0]["gain"] == 1.0
 
 
 def test_prompt_preparation_maps_only_the_evidence_span() -> None:
