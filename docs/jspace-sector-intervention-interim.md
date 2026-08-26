@@ -254,14 +254,43 @@ Primary loaded-evidence effect 大於多數 controls，尤其在 Financial Servi
 
 安全介入沒有改變任何 prompt 的離散 Buy/Sell preference；目前觀察到的是 probability margin shift。
 
+## Held-out estimands（test inference 前凍結）
+
+Held-out test 將 direction specificity 與 position specificity 視為兩個獨立 estimands，不以其中一項替代另一項。
+
+先對任一 condition \(c\) 定義雙向效果
+
+\[
+E(c)=\tfrac12[\Delta M_{F\rightarrow T}(c)-\Delta M_{T\rightarrow F}(c)].
+\]
+
+### Estimand 1：direction specificity
+
+固定 intervention positions 為 loaded evidence，對比 sector prototype 與 matched-random direction：
+
+\[
+C_{direction}=E(\text{sector, evidence})-E(\text{random, evidence}).
+\]
+
+\(C_{direction}>0\) 才支持 sector-direction specificity。Calibration descriptive estimate 為 \(0.0521-0.0208=0.0313\)。
+
+### Estimand 2：position specificity
+
+固定 direction 為 sector prototype，對比 loaded evidence 與 final position：
+
+\[
+C_{position}=E(\text{sector, evidence})-E(\text{sector, final}).
+\]
+
+\(C_{position}>0\) 才支持 evidence-position specificity。Calibration descriptive estimate 僅為 \(0.0521-0.0469=0.0052\)，因此 held-out 很可能不支持此 claim；仍需按預先定義完整報告。Sector-prototype shuffled-evidence contrast 作為 secondary position control，不改變 primary position estimand。
+
+兩個 estimands 將分別報告 ticker-clustered paired bootstrap interval。Direction specificity 成立時，不自動宣稱 position specificity；position specificity 未成立時，也不抹除 direction contrast 的結果。
+
 ## Held-out test 前仍需完成的工作
 
-1. 凍結 v3 paired-primary control implementation 與 dose tolerance。
-2. 在查看 test 結果前，明確定義 primary 與 final-position、matched-random controls 的 confirmatory contrast。
-3. 在 calibration tickers 上，以 `swap_fraction = 0.5` 執行 source-removal 與 target-installation decomposition。
-4. 決定 held-out claim 聚焦於 sector-direction specificity、evidence-position specificity，或兩者都要求通過。
-5. 固定 estimand 後才執行 held-out ticker test。
-6. 在介入狀態下檢查完整生成答案的格式與實際 Buy/Sell decision。
+1. 在 calibration tickers 上，以 `swap_fraction = 0.5` 執行 source-removal 與 target-installation decomposition。
+2. 完成 decomposition 後，以已凍結的 v3 implementation 與上述 estimands 執行 held-out ticker test。
+3. 在介入狀態下檢查完整生成答案的格式與實際 Buy/Sell decision。
 
 Individual-token gain 維持 exploratory status，不取代 sector-prototype primary estimand。
 
