@@ -2,9 +2,9 @@
 
 ## 文件狀態
 
-本文件整理 Qwen3.5-4B 在 Technology（科技）與 Financial Services（金融服務）之間的 J-space 介入校準結果。目前尚未執行 held-out test，因此本文不提出 held-out causal claim；test tickers 仍未使用。
+本文件整理 Qwen3.5-4B 在 Technology（科技）與 Financial Services（金融服務）之間的 J-space 介入校準與 held-out test。Test tickers 已依預先凍結的 estimands 執行；結果未支持 sector-direction specificity 或 evidence-position specificity。完整文字生成檢查仍未完成。
 
-目前的實驗顯示：在候選 workspace layer band 施加小幅介入，會改變模型對固定 continuation `buy` 與 `sell` 的機率差，但現有 controls 尚未證明效果只來自指定產業座標與 evidence positions。
+實驗顯示：在候選 workspace layer band 施加小幅介入會改變固定 continuation `buy` 與 `sell` 的機率差，但 controls 與 held-out contrasts 未證明效果只來自指定產業座標與 evidence positions。
 
 ## 摘要
 
@@ -299,11 +299,11 @@ C_{position}=E(\text{sector, evidence})-E(\text{sector, final}).
 
 兩個 estimands 將分別報告 ticker-clustered paired bootstrap interval。Direction specificity 成立時，不自動宣稱 position specificity；position specificity 未成立時，也不抹除 direction contrast 的結果。
 
-## Held-out test 前仍需完成的工作
+## Held-out 執行狀態
 
-1. 在 calibration tickers 上，以 `swap_fraction = 0.5` 執行 source-removal 與 target-installation decomposition。
-2. 完成 decomposition 後，以已凍結的 v3 implementation 與上述 estimands 執行 held-out ticker test。
-3. 在介入狀態下檢查完整生成答案的格式與實際 Buy/Sell decision。
+1. Calibration decomposition 已完成。
+2. Frozen v3 held-out ticker test 已完成，結果見下節。
+3. 介入狀態下的完整生成格式與實際 Buy/Sell decision 檢查仍待執行。
 
 Individual-token gain 維持 exploratory status，不取代 sector-prototype primary estimand。
 
