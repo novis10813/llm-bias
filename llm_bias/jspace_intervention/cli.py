@@ -103,6 +103,25 @@ def build_parser() -> argparse.ArgumentParser:
     gain_run.add_argument("--max-seq-len", type=int, default=1024)
     gain_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
+    valence = commands.add_parser(
+        "run-valence-readout",
+        help="positive-vs-negative J-space vocabulary readout (prepare/forward/analyze/finalize)",
+    )
+    valence.add_argument("--input", required=True, type=Path)
+    valence.add_argument("--split-manifest", required=True, type=Path)
+    valence.add_argument("--model", required=True)
+    valence.add_argument("--lens", default=None)
+    valence.add_argument("--run-id", required=True)
+    valence.add_argument("--dataset", default="jspace-valence-readout")
+    valence.add_argument("--artifact-root", default="artifacts")
+    valence.add_argument("--sector", default="Technology")
+    valence.add_argument("--split", choices=("discovery", "calibration", "test"), default="discovery")
+    valence.add_argument("--trials-per-ticker", type=int, default=3)
+    valence.add_argument("--layers", default=",".join(str(layer) for layer in range(14, 27)))
+    valence.add_argument("--top-k", type=int, default=30)
+    valence.add_argument("--max-seq-len", type=int, default=1024)
+    valence.add_argument("--seed", type=int, default=0)
+
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
     analyze.add_argument("--output", required=True, type=Path)
@@ -342,6 +361,28 @@ def _run_gain(args: argparse.Namespace) -> None:
     print(run_root)
 
 
+def _run_valence_readout(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.valence_readout import run_valence_readout_pipeline
+
+    run_root = run_valence_readout_pipeline(
+        input_path=args.input,
+        split_manifest=args.split_manifest,
+        model_name=args.model,
+        lens_path=args.lens,
+        run_id=args.run_id,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        sector=args.sector,
+        split_name=args.split,
+        trials_per_ticker=args.trials_per_ticker,
+        layers=[int(value) for value in args.layers.split(",") if value.strip()],
+        top_k=args.top_k,
+        max_seq_len=args.max_seq_len,
+        seed=args.seed,
+    )
+    print(run_root)
+
+
 def _analyze(args: argparse.Namespace) -> None:
     rows = [json.loads(line) for line in args.input.open() if line.strip()]
     summary = grouped_effects(
@@ -375,6 +416,8 @@ def main() -> None:
         _run_swap(args)
     elif args.command == "run-gain":
         _run_gain(args)
+    elif args.command == "run-valence-readout":
+        _run_valence_readout(args)
     else:
         _analyze(args)
 
