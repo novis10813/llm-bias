@@ -126,7 +126,7 @@ constant while varying entity identity. The planned condition families are:
 The current V1 materialises five pairing strategies because `real_vs_real` has
 both a same-industry `matched_exposure` strategy and a cross-industry
 neutral/stress strategy. The exact data contract, review gates, and artifact
-schema are maintained in [the counterfactual dataset protocol](../counterfactual-dataset-generation.md).
+schema are maintained in [the archived counterfactual dataset protocol](../archive/counterfactual-dataset-generation.md).
 
 These contrasts help separate event semantics, entity priors, reputation
 transfer, memorised identity, name-form effects, and temporal leakage. They do

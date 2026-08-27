@@ -1,5 +1,9 @@
 # EDGAR 8-K 清理與事件候選資料
 
+**Archived 2026-08.** Implementation and CLI are frozen under `archive/`; the active
+`pyproject.toml` does not register this entry point. Restore it by following
+[`archive/README.md`](../../archive/README.md).
+
 本文件說明 `prepare-edgar-8k` 的資料來源、清理規則、輸出 schema，以及
 2026-07-30 全量執行的結果。這個 workflow 的目的，是把 edgar-crawler 已抽取的
 8-K JSON 轉成可稽核、可重現、適合後續 event-frame 與 counterfactual pair
@@ -29,9 +33,9 @@ extracted filing JSON
 
 實作位於：
 
-- `llm_bias/edgar_preparation/pipeline.py`：streaming cleaner、schema 與 validator。
-- `llm_bias/edgar_preparation/taxonomy.py`：新舊 8-K item taxonomy。
-- `llm_bias/edgar_preparation/cli.py`：`clean` 與 `validate` CLI。
+- `archive/llm_bias/edgar_preparation/pipeline.py`：streaming cleaner、schema 與 validator。
+- `archive/llm_bias/edgar_preparation/taxonomy.py`：新舊 8-K item taxonomy。
+- `archive/llm_bias/edgar_preparation/cli.py`：`clean` 與 `validate` CLI。
 
 ## 執行方式
 

@@ -51,13 +51,14 @@ model-specific rendering are both part of the dataset-construction window.
 
 | Workstream | Code/protocol status | Validated evidence status |
 |---|---|---|
-| Model-specific Jacobian lenses | Fitting, metadata, validation, and Llama/Qwen workflows exist; archived/candidate alternatives are available | Cross-model conclusions and alternative-lens sensitivity/robustness are not established |
-| Residual span patching | Core mapping and hooks exist; variable-length support is under integration validation | Full model smoke coverage and all acceptance artifacts remain pending |
-| Entity-only counterfactual data | Annotation, review bundle, promotion, four families, five pairing strategies, rendering, and validation code exist | Draft rows still require review/promotion; no unpromoted draft is research-ready |
+| Model-specific Jacobian lenses | Qwen fitting, selection, promotion, and pinned-registry workflows exist; Llama usage remains in the archived patching smoke path | Cross-model conclusions and alternative-lens sensitivity/robustness are not established |
+| Residual span patching | Batch mapping, hooks, and variable-length normalized-nearest mapping are implemented under `archive/llm_bias/counterfactual_patching/`; the archived interactive dashboard still rejects differing encoded shapes | Full model smoke coverage and all acceptance artifacts remain pending |
+| Entity-only counterfactual data | Annotation, review bundle, promotion, four families, five pairing strategies, rendering, and validation code are frozen under `archive/llm_bias/counterfactual_data/` | Draft rows still require review/promotion; no unpromoted draft is research-ready |
 | External entity covariates | Market capitalisation, media/corpus exposure, and other continuous attributes are part of the research design | No date-aligned, provenance-complete continuous covariate linkage or coverage/missingness validation exists; current synthetic evidence uses only coarse tier/sector groupings |
 | Representation readout | Compact transported readouts and outcome margins exist | Formal residual-distance/divergence evidence is pending |
 | Causal controls/statistics | Basic non-entity control and exploratory summaries exist; the entity-only patching protocol and code paths are available | Reviewed/promoted pairs, full entity-only patching runs, bidirectional and unrelated/random controls, independent sampling, paired uncertainty, and correction are pending |
-| Selective intervention | Research design only | Not implemented or evaluated |
+| Entity-specific selective intervention | Research design only | Not implemented or evaluated |
+| J-space sector intervention | Active `jspace-intervention` workflow implements swap/gain, dose-matched controls, valence readout, and V1 token causal screening; outcome-conditioned decision-flip V2 is protocol-only | Qwen3.5-4B sector held-out specificity was not supported; V1 token shortlist is empty; V2 has no implementation or evidence |
 | Cross-model/task evaluation | Model loaders and model-specific lens paths exist | No standardised cross-model/task result exists |
 | Optional J-space-candidate preflight | Proposed non-runnable design exists | `jspace_eval` package and CLI are not implemented |
 
@@ -81,7 +82,7 @@ strategies:
 
 `matched_exposure` is based on historical filing exposure and is not market-cap
 or size matching. The authoritative schema, review gate, and omission behavior
-are documented in [8-K counterfactual entity dataset](../counterfactual-dataset-generation.md).
+are documented in [archived 8-K counterfactual entity dataset](../archive/counterfactual-dataset-generation.md).
 
 ## Milestones
 
@@ -214,9 +215,14 @@ or draft rather than validated evidence of harmful entity bias.
 
 ## Canonical execution documents
 
-- [Counterfactual patching](../counterfactual-patching.md)
-- [8-K counterfactual entity dataset](../counterfactual-dataset-generation.md)
+- [Counterfactual patching (archived)](../archive/counterfactual-patching.md)
+- [8-K counterfactual entity dataset (archived)](../archive/counterfactual-dataset-generation.md)
 - [Qwen Jacobian-lens selection](../qwen-jacobian-lens-selection.md)
-- [EDGAR 8-K preparation](../edgar-8k-preparation.md)
+- [EDGAR 8-K preparation (archived)](../archive/edgar-8k-preparation.md)
+- [J-space sector intervention](../jspace-sector-intervention-interim.md)
+- [J-space valence vocabulary readout](../jspace-valence-vocabulary-readout.md)
+- [J-space token experiment versions](../jspace-token-causal-screen.md)
+- [J-space token causal screen V1](../jspace-token-causal-screen-v1.md)
+- [J-space outcome-conditioned decision-flip V2](../jspace-outcome-direction-flip-v2.md)
 - [Prompt-analysis reproducibility](../prompt-analysis-reproducibility.md)
 - [Repository constraints and verification commands](../../CLAUDE.md)

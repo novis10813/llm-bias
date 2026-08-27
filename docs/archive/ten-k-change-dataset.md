@@ -1,6 +1,11 @@
 # 10-K metadata-change window CSV
 
-`prepare-10k-change-data` 從已處理的 EDGAR 10-K JSON 建立一份可自行組裝 prompt 的 CSV。它不固定問題模板、不載入或呼叫模型，也不推論答案。
+**Archived 2026-08.** Implementation and CLI are frozen under `archive/`; the active
+`pyproject.toml` does not register this entry point. Restore it by following
+[`archive/README.md`](../../archive/README.md). The restored package still depends on
+the active `llm_bias/prompt_analysis/` package.
+
+After restoration, `prepare-10k-change-data` 從已處理的 EDGAR 10-K JSON 建立一份可自行組裝 prompt 的 CSV。它不固定問題模板、不載入或呼叫模型，也不推論答案。
 
 輸入預設為：
 

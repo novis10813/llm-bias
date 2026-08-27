@@ -3,6 +3,10 @@
 **Status:** exploratory feasibility workflow. It is not the reviewed financial
 entity-bias dataset and does not replace the M1–M5 financial protocol.
 
+**Archived 2026-08.** This workflow uses the frozen `counterfactual-patching` entry
+point, which the active `pyproject.toml` does not register. Restore it by following
+[`archive/README.md`](../../archive/README.md).
+
 This workflow re-runs the small Traditional Chinese career prompt from
 `../easy-bias` with a local, gradient-accessible model. The first target is
 Qwen3.5-4B with its model-specific canonical Jacobian lens. The experiment asks

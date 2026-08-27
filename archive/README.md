@@ -1,8 +1,9 @@
 # Archived experiment code
 
 這個目錄保存與 baseline 資料集（`data/baseline/`）無關的實驗程式。Active tree
-（`llm_bias/`）目前只保留 baseline 實驗棧：`core`、`prompt_analysis`、
-`baseline_trial` 與 lens infra（`lens_fitting`、`lens_install`、`lens_cli.py`）。
+（`llm_bias/`）目前保留 baseline 實驗棧 `core`、`prompt_analysis`、
+`baseline_trial`，active experiments `jspace_intervention`、`span_sensitivity`，以及 lens
+infra（`lens_fitting`、`lens_install`、`lens_cli.py`）。
 
 **Frozen：不要在此目錄開發新功能。** 若新的 baseline 實驗需要這裡的實作，
 先評估能否重寫成更小的版本放入 active tree；確需沿用時按下方步驟還原。

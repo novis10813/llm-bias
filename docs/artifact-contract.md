@@ -3,7 +3,7 @@
 This contract describes the canonical run manifest emitted by the prompt-analysis
 runner. Producers use the helpers in `llm_bias.core.artifact_paths` and
 `llm_bias.core.artifact_manifest` directly. The synthetic entity-bias workflow has
-an additional normative artifact contract in [synthetic-entity-bias.md](synthetic-entity-bias.md);
+an additional normative artifact contract in [the archived synthetic workflow](archive/synthetic-entity-bias.md);
 its compact schemas, no-raw rules, and lifecycle postchecks apply to synthetic runs.
 
 ## Shared workflow boundary
@@ -104,6 +104,10 @@ Raw activation and gradient artifact types are rejected. Store only compact top-
 probability, summary, token, generation, and provenance data.
 
 ## Derived visualization bundles
+
+The synthetic workflow is frozen under `archive/` and its CLI is not registered in the active
+`pyproject.toml`; restore it according to [`archive/README.md`](../archive/README.md). The contracts below remain
+normative for existing synthetic artifacts.
 
 A synthetic entity-bias visualization is a read-only derivative of one completed lifecycle run. `synthetic-entity-bias visualize --run-root <run-root>` validates the source manifest, registered output paths, SHA-256 digests, schemas, counts, and numeric domains before writing `<run-root>/visualization/` (or an explicit output directory). It never loads a model or lens and does not add a visualization stage to, or otherwise modify, the source `manifest.json`.
 

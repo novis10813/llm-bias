@@ -1,6 +1,11 @@
 # Synthetic entity-bias pilot contract
 
-`synthetic-entity-bias validate|run` is the reproducible Qwen entity-bias pilot. It accepts only the explicit S&P 500, Russell 1000, and Russell 2000 constituent CSV paths; `all_constituents_2020_2025.csv` is their derived concatenation and must not be supplied as a fourth input. Input schema is `index_name,year,ticker,company_name,gics_sector` (the index may also be inferred from the explicit filename). Rows are restricted to 2020–2025, deduplicated by complete source-row identity, then aggregated by normalized ticker (`trim`, uppercase, `.` to `-`). The current three inputs produce 3,045 entities and 9,138 preflight prompts. The pool preserves `years`, `memberships`, `membership_years`, `sectors`, source row count, highest tier, and anomaly flags. Source files may contain current snapshots copied across years; preserved years are source provenance, not independently verified historical membership evidence. Input SHA-256 and source row counts belong in run provenance.
+**Archived 2026-08.** Implementation and CLI are frozen under `archive/`; the active
+`pyproject.toml` does not register this entry point. Restore it by following
+[`archive/README.md`](../../archive/README.md). The contract below remains normative
+for existing synthetic artifacts.
+
+After restoration, `synthetic-entity-bias validate|run` is the reproducible Qwen entity-bias pilot. It accepts only the explicit S&P 500, Russell 1000, and Russell 2000 constituent CSV paths; `all_constituents_2020_2025.csv` is their derived concatenation and must not be supplied as a fourth input. Input schema is `index_name,year,ticker,company_name,gics_sector` (the index may also be inferred from the explicit filename). Rows are restricted to 2020–2025, deduplicated by complete source-row identity, then aggregated by normalized ticker (`trim`, uppercase, `.` to `-`). The current three inputs produce 3,045 entities and 9,138 preflight prompts. The pool preserves `years`, `memberships`, `membership_years`, `sectors`, source row count, highest tier, and anomaly flags. Source files may contain current snapshots copied across years; preserved years are source provenance, not independently verified historical membership evidence. Input SHA-256 and source row counts belong in run provenance.
 
 ## Immutable protocol
 

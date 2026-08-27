@@ -4,6 +4,10 @@
 source for `counterfactual-patching`; the research design and dataset protocol
 are documented separately.
 
+**Archived 2026-08.** Implementation and CLI are frozen under `archive/`; the active
+`pyproject.toml` does not register this entry point. Restore it by following
+[`archive/README.md`](../../archive/README.md).
+
 The workflow records source and target residual streams, replaces a selected
 source representation with the target representation, and compares the final
 answer distribution. It supports both factual smoke/generalisation pairs and
@@ -314,7 +318,8 @@ support for entity-bias visualization as an explicit future implementation task.
 
 ## Verification
 
-For the deterministic span mapping regression:
+After restoring the package and archived tests, run the deterministic span mapping
+regression from its restored `tests/` path:
 
 ```bash
 uv run pytest -q \
@@ -322,6 +327,6 @@ uv run pytest -q \
 ```
 
 For repository-wide verification, follow the commands in
-[`CLAUDE.md`](../CLAUDE.md). This document is the canonical source for patching
+[`CLAUDE.md`](../../CLAUDE.md). This document is the canonical source for patching
 workflow commands and semantics; the proposal and dataset documents should link
 here rather than duplicate this operational detail.

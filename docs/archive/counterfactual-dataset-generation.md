@@ -3,9 +3,14 @@
 **Status:** protocol and generation workflow implemented; validated dataset review
 and promotion remain pending.
 
+**Archived 2026-08.** Implementation and CLI are frozen under `archive/`; the active
+`pyproject.toml` does not register this entry point. Restore it by following
+[`archive/README.md`](../../archive/README.md).
+
 這份 workflow 把已清理的 8-K earnings events 轉成「內容與正確答案不變、只改
-entity identity」的 span-patching pairs。實作位於
-`llm_bias/counterfactual_data/`，CLI 是 `prepare-counterfactual-data`。
+entity identity」的 span-patching pairs。Frozen implementation 位於
+`archive/llm_bias/counterfactual_data/`；還原後的 CLI 是
+`prepare-counterfactual-data`。
 
 ## 研究契約
 
