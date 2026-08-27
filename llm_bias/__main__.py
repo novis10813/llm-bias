@@ -8,7 +8,8 @@ def main() -> None:
         "Choose one independent workflow:\n"
         "  jacobian-lens    Fit or install a reusable Jacobian lens\n"
         "  prompt-analysis  Run prompt readout and attribution experiments\n"
-        "  baseline-trial   Run baseline trial-plan prompts through prompt-analysis stages"
+        "  baseline-trial   Run baseline trial-plan prompts through prompt-analysis stages\n"
+        "  span-sensitivity Score single-sector identity-header conditions"
     )
 
 
