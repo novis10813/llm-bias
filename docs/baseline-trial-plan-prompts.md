@@ -154,8 +154,8 @@ bash scripts/visualize_prompt_analysis.sh
   黑箱 bias 指標（flip rate 等）要從 generate 輸出另行解析計算。
 - baseline 的 `sp500_final.csv` 沒有搬進來：本 repo 已有 2020–2025 成分股
   資料（更完整），且 `synthetic-entity-bias` workflow 驗證嚴格 schema／檔名。
-- `data/baseline/` 目前 untracked（48 MB paper CSV）；是否入 git 或加入
-  `.gitignore` 由使用者決定。provenance JSON 已記錄 source SHA-256 可重現。
+- `data/baseline/` 的 CSV 由 root `.gitignore` 的 `*.csv` 規則排除；provenance
+  JSON 記錄 source SHA-256，讓本地資料可查核與重建。
 
 ## 6. 未納入（後續研究選項）
 
