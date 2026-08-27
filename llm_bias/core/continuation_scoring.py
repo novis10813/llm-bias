@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Callable, Iterable
 
 import torch
+import torch.nn.functional as F
 
 
 @dataclass(frozen=True)
@@ -208,6 +209,85 @@ def score_candidate(
         log_probability=score.log_probability,
         token_count=score.token_count,
     )
+
+
+def score_single_token_margin_fp32(
+    model: Any,
+    tokenizer: Any,
+    prompt: str,
+    positive: str,
+    negative: str,
+    *,
+    device: torch.device | str | None = None,
+) -> CandidateMargin:
+    """Score a one-token margin with FP32 final norm and unembedding.
+
+    BF16 decoder logits can quantize small intervention effects before the
+    margin is formed. This path captures the final residual, then performs only
+    the final normalization and vocabulary projection in FP32. It is restricted
+    to single-token candidates so the fixed answer margin needs one forward.
+    """
+    positive_prompt_ids, positive_ids = continuation_token_ids(tokenizer, prompt, positive)
+    negative_prompt_ids, negative_ids = continuation_token_ids(tokenizer, prompt, negative)
+    if positive_prompt_ids != negative_prompt_ids:
+        raise ValueError("answer candidates must share the same tokenized prompt prefix")
+    if len(positive_ids) != 1 or len(negative_ids) != 1:
+        return score_margin(
+            model, tokenizer, prompt, positive, negative, device=device
+        )
+    if not all(hasattr(model, name) for name in ("layers", "n_layers", "_final_norm", "_lm_head")):
+        return score_margin(
+            model, tokenizer, prompt, positive, negative, device=device
+        )
+
+    from llm_bias.core.inference.forward import record_residuals
+
+    target_device = torch.device(device) if device is not None else torch.device("cpu")
+    input_tensor = torch.tensor(
+        [positive_prompt_ids], dtype=torch.long, device=target_device
+    )
+    final_layer = int(model.n_layers) - 1
+    with torch.no_grad():
+        residual = record_residuals(model, input_tensor, [final_layer])[final_layer]
+        values = residual[:, -1, :].float()
+        norm = model._final_norm
+        weight = norm.weight.float().to(values.device)
+        epsilon = float(
+            getattr(norm, "variance_epsilon", getattr(norm, "eps", 1e-6))
+        )
+        norm_name = type(norm).__name__.lower()
+        if "rmsnorm" in norm_name or hasattr(norm, "variance_epsilon"):
+            normalized = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + epsilon)
+            normalized = normalized * weight
+        else:
+            bias = getattr(norm, "bias", None)
+            normalized = F.layer_norm(
+                values,
+                tuple(weight.shape),
+                weight,
+                bias.float().to(values.device) if bias is not None else None,
+                epsilon,
+            )
+        head = model._lm_head
+        logits = F.linear(
+            normalized,
+            head.weight.float().to(normalized.device),
+            head.bias.float().to(normalized.device) if getattr(head, "bias", None) is not None else None,
+        )
+        log_probs = F.log_softmax(logits[0], dim=-1)
+    positive_score = CandidateScore(
+        candidate=positive,
+        token_ids=positive_ids,
+        log_probability=float(log_probs[positive_ids[0]].detach().cpu()),
+        token_count=1,
+    )
+    negative_score = CandidateScore(
+        candidate=negative,
+        token_ids=negative_ids,
+        log_probability=float(log_probs[negative_ids[0]].detach().cpu()),
+        token_count=1,
+    )
+    return CandidateMargin(positive=positive_score, negative=negative_score)
 
 
 def score_margin(
