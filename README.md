@@ -121,7 +121,7 @@ uv run pytest -q
 uv run jacobian-lens fit \
   --model .cache/models/llama-3.2-1b-instruct \
   --calibration-prompts 16
-uv run baseline-trial inspect \
+uv run baseline-trial inspect-input \
   --input data/baseline/qwen36-27b-50stocks/trial_plan_prompts.csv
 ```
 
