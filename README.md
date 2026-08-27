@@ -10,6 +10,11 @@ target entity activation causally changes the answer distribution.
   prompt-analysis stages, with a lens-forward per-layer readout stage.
 - `prompt-analysis`: per-layer prompt readout, uncertainty, generated-token
   attribution, validation, and result visualization.
+- `span-sensitivity`: single-sector behavioral screen over explicit ticker/name
+  header spans using fixed Buy/Sell continuation margins.
+- `jspace-intervention`: sector-coordinate swap/gain, valence vocabulary readout,
+  and matched-random V1 token causal screening over a validated canonical lens.
+  Outcome-conditioned decision-flip V2 is documented but not implemented.
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -22,6 +27,10 @@ not installed entry points.
 chain-of-thought or discrete reasoning paths.
 
 ## Documentation map
+
+- [Documentation and instruction system](docs/documentation-system.md)
+- [Artifact identity and run manifest contract](docs/artifact-contract.md)
+- [Research scripts reference](docs/research-scripts.md)
 
 ### Research design and planning
 
@@ -36,15 +45,28 @@ chain-of-thought or discrete reasoning paths.
 ### Experiment reports
 
 - [J-space sector intervention: methods, calibration, and preliminary findings](docs/jspace-sector-intervention-interim.md)
+- [J-space valence vocabulary readout](docs/jspace-valence-vocabulary-readout.md) —
+  Technology positive-vs-negative J-space vocabulary readout that nominates
+  representation candidates for later signed steering/gain/swap; transported-
+  representation evidence, not causal evidence
+- [J-space token experiment versions](docs/jspace-token-causal-screen.md) —
+  separates completed V1 vocabulary-direction margin screening from proposed V2
+  outcome-gradient Buy/Sell decision-flip testing
+  - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md) —
+    completed discovery screen; no candidate passed the frozen shortlist gate
+  - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
+    protocol draft; Buy/Sell flips are primary and full generation is required validation;
+    not implemented and no evidence yet
 
 ### Workflow operations
 
 - [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
+- [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
 - [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
 - [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
-- [Archived workflow operations](docs/archive/) — counterfactual patching,
-  8-K/10-K dataset preparation, synthetic entity-bias pilot
+- [Archived workflow operations](docs/archive/README.md) — counterfactual patching,
+  8-K/10-K dataset preparation, synthetic entity-bias pilot, and easy-bias feasibility
 
 ## Setup
 
@@ -62,8 +84,9 @@ git clone https://github.com/Festyve/jspace-viz.git third_party/jspace-viz
 uv sync
 ```
 
-The implementation targets `unsloth/Llama-3.2-1B-Instruct`. Download the model
-into the ignored `.cache/` directory when needed:
+The lightweight smoke example uses `unsloth/Llama-3.2-1B-Instruct`; current
+Technology J-space experiments use Qwen3.5-4B with its model-specific canonical lens.
+Download the smoke model into the ignored `.cache/` directory when needed:
 
 ```bash
 mkdir -p artifacts .cache/models
@@ -138,4 +161,5 @@ uv run pytest -q
 uv run python -m compileall -q llm_bias
 uv build
 node --check llm_bias/static/prompt_readout.js
+node --check llm_bias/static/attribution_dashboard.js
 ```

@@ -1,7 +1,8 @@
 # `llm_bias/static/` scope
 
-這個目錄是 entity-bias counterfactual dashboard 的無 build-step frontend；
-Python server 與 API 規則見上層 `llm_bias/AGENTS.md`。
+這個目錄是 frozen entity-bias counterfactual dashboard 的無 build-step frontend；
+archive 與還原規則見 [`../../AGENTS.md`](../../AGENTS.md)，counterfactual workflow/API
+contract 見 [`../../../docs/archive/counterfactual-patching.md`](../../../docs/archive/counterfactual-patching.md)。
 
 ## 檔案責任
 
@@ -22,12 +23,17 @@ Python server 與 API 規則見上層 `llm_bias/AGENTS.md`。
   effect 應使用固定 source/target answer token 的 probability、logit margin 或
   normalized transfer。
 
+## Instruction Index
+
+本目錄沒有含 `AGENTS.md` 的直接子目錄。
+
 ## 前端修改後檢查
 
 ```bash
-node --check llm_bias/static/counterfactual.js
-uv run pytest -q
+node --check archive/llm_bias/static/counterfactual.js
 ```
+
+還原 frontend 後，再從 restored paths 執行 counterfactual workflow 的 regression tests。
 
 若更新 static asset 的行為，請同步提高 `counterfactual.html` 中的 query-string
 版本，避免長時間運行的瀏覽器使用舊版 JavaScript/CSS。

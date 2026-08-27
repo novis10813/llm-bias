@@ -16,21 +16,38 @@ commands 或取代各 workflow 文件。
 - `lens_fitting/` / `lens_install/`：lens fitting 與安裝；不可 import 任一 experiment。
 - `baseline_trial/`：擁有 baseline trial prompt 準備、forward 與 artifact pipeline。
 - `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
-  dose-matched controls、position/direction controls 與 analysis。
+  dose-matched controls、valence vocabulary readout、V1 token causal screen 與 analysis。
+  詳細語意見 [`../docs/jspace-sector-intervention-interim.md`](../docs/jspace-sector-intervention-interim.md)、
+  [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)
+  與 [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口。
+  V2 outcome-conditioned decision flip 目前只有
+  [`protocol draft`](../docs/jspace-outcome-direction-flip-v2.md)，不可把 V1 CLI/schema
+  當成 V2 implementation。
 - `prompt_analysis/`：擁有 CSV prompt readout、generated-token attribution、
   attribution validation 與結果視覺化。
+- `span_sensitivity/`：擁有單一產業 identity-header conditions、固定 Buy/Sell
+  continuation margin 與 ticker-clustered paired analysis；workflow 見
+  [`../docs/technology-header-span-sensitivity.md`](../docs/technology-header-span-sensitivity.md)。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
   `edgar_preparation/`：已隨程式移至 `archive/llm_bias/`（frozen），操作文件在
   `docs/archive/`。
 
-三個 experiment package 不可互相 import；shared infrastructure 不可 import 任一
-experiment package。共同能力必須先確認確實與研究語意無關，才可放進 `core/`。
-四個 CLI 入口分別是 `jacobian-lens`、`prompt-analysis`、`baseline-trial` 與
-`jspace-intervention`；experiment CLI 不可自行 fitting lens。
+Shared infrastructure 不可 import 任一 experiment package。`baseline_trial` 目前為
+legacy compatibility 直接重用部分 `prompt_analysis` modules；不要擴大這個例外，新增
+跨實驗共用能力應移入 `core/`。其餘 experiment packages 不可互相 import。
+CLI 入口是 `jacobian-lens`、`prompt-analysis`、`baseline-trial`、
+`jspace-intervention` 與 `span-sensitivity`；experiment CLI 不可自行 fitting lens。
+
+## Instruction Index
+
+目前 `llm_bias/` 的直接子目錄沒有 `AGENTS.md`。`core/` 是未來優先候選：shared
+infrastructure 若再增加獨立 lifecycle 或 compatibility 規則，於 `core/` 新增
+`AGENTS.md` 並只更新本節。Experiment package 只有在出現無法由 canonical workflow
+文件覆蓋的局部架構時才新增。
 
 ## 修改與驗證原則
 
-- 小改用精確文字替換（edit tool），避免整檔重寫。
+- 維持 package ownership；不要為單一 experiment 把 research semantics 下沉到 `core/`。
 - 修改 intervention/hook 語意或 artifact schema 時，至少執行 `uv run pytest -q`
   並補 regression test。
 - 不要儲存完整 raw activations；只輸出 compact top-k/rank、scalar dose
