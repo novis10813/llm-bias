@@ -16,6 +16,8 @@ from llm_bias.jspace_intervention.schemas import (
     GainConfig,
     InterventionConfig,
     PrototypeSpec,
+    TokenScreenCandidate,
+    TokenScreenConfig,
 )
 from llm_bias.jspace_intervention.splits import (
     assign_balanced_ticker_splits,
@@ -121,6 +123,47 @@ def build_parser() -> argparse.ArgumentParser:
     valence.add_argument("--top-k", type=int, default=30)
     valence.add_argument("--max-seq-len", type=int, default=1024)
     valence.add_argument("--seed", type=int, default=0)
+
+    token_screen_config = commands.add_parser(
+        "prepare-token-screen-config",
+        help="freeze a token screen config from a completed valence candidate artifact",
+    )
+    token_screen_config.add_argument(
+        "--candidates", required=True, type=Path,
+        help="completed valence frozen_candidate_suggestions.json",
+    )
+    token_screen_config.add_argument("--model", required=True)
+    token_screen_config.add_argument("--source-sector", required=True)
+    token_screen_config.add_argument("--split-manifest", required=True, type=Path)
+    token_screen_config.add_argument(
+        "--layers", default=",".join(str(layer) for layer in range(14, 27))
+    )
+    token_screen_config.add_argument(
+        "--alphas", default="-1,0,1",
+        help="symmetric dose pair plus 0, e.g. -1,0,1",
+    )
+    token_screen_config.add_argument("--top-positions", type=int, default=3)
+    token_screen_config.add_argument("--loading-threshold", type=float, default=0.0)
+    token_screen_config.add_argument("--controls", default="token,matched_random")
+    token_screen_config.add_argument("--output", required=True, type=Path)
+
+    token_screen_run = commands.add_parser(
+        "run-token-screen", help="run the frozen token causal screen"
+    )
+    token_screen_run.add_argument("--input", required=True, type=Path)
+    token_screen_run.add_argument("--split-manifest", required=True, type=Path)
+    token_screen_run.add_argument("--config", required=True, type=Path)
+    token_screen_run.add_argument("--model", required=True)
+    token_screen_run.add_argument("--lens", default=None)
+    token_screen_run.add_argument("--run-id", required=True)
+    token_screen_run.add_argument("--dataset", default="jspace-token-screen")
+    token_screen_run.add_argument("--artifact-root", default="artifacts")
+    token_screen_run.add_argument(
+        "--split", choices=("discovery", "calibration", "test"), default="discovery"
+    )
+    token_screen_run.add_argument("--max-records", type=int, default=None)
+    token_screen_run.add_argument("--max-seq-len", type=int, default=1024)
+    token_screen_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
@@ -313,12 +356,54 @@ def _prepare_gain_config(args: argparse.Namespace) -> None:
 
 def _validate_config(args: argparse.Namespace) -> None:
     payload = json.loads(args.config.read_text())
-    config = (
-        GainConfig.from_dict(payload)
-        if "prototype" in payload
-        else InterventionConfig.from_dict(payload)
-    )
+    if "candidates" in payload and "candidate_artifact_sha256" in payload:
+        config = TokenScreenConfig.from_dict(payload)
+    elif "prototype" in payload:
+        config = GainConfig.from_dict(payload)
+    else:
+        config = InterventionConfig.from_dict(payload)
     print(json.dumps(config.to_dict(), indent=2, sort_keys=True))
+
+
+def _prepare_token_screen_config(args: argparse.Namespace) -> None:
+    payload = json.loads(args.candidates.read_text())
+    if payload.get("artifact_type") != "frozen_candidate_suggestions":
+        raise ValueError(
+            "candidate input must be a completed valence "
+            "frozen_candidate_suggestions artifact"
+        )
+    candidates = [
+        TokenScreenCandidate.from_dict(row).to_dict()
+        for row in payload.get("candidates", [])
+    ]
+    if not candidates:
+        raise ValueError("candidate artifact contains no frozen candidates")
+    config = TokenScreenConfig.from_dict(
+        {
+            "candidates": candidates,
+            "model": args.model,
+            "source_sector": args.source_sector,
+            "layers": [int(value) for value in args.layers.split(",") if value.strip()],
+            "alphas": [float(value) for value in args.alphas.split(",") if value.strip()],
+            "top_positions": args.top_positions,
+            "loading_threshold": args.loading_threshold,
+            "controls": [value for value in args.controls.split(",") if value.strip()],
+            "candidate_artifact_path": str(args.candidates),
+            "candidate_artifact_sha256": sha256_file(args.candidates),
+            "split_manifest_sha256": sha256_file(args.split_manifest),
+        }
+    )
+    write_json(
+        args.output,
+        {
+            **config.to_dict(),
+            "artifact_type": "jspace_token_screen_config",
+            "schema_version": 1,
+            "model": args.model,
+        },
+        overwrite=True,
+    )
+    print(args.output)
 
 
 def _run_swap(args: argparse.Namespace) -> None:
@@ -383,6 +468,26 @@ def _run_valence_readout(args: argparse.Namespace) -> None:
     print(run_root)
 
 
+def _run_token_screen(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.pipeline import run_token_screen_pipeline
+
+    run_root = run_token_screen_pipeline(
+        input_path=args.input,
+        split_manifest=args.split_manifest,
+        config_path=args.config,
+        model_name=args.model,
+        lens_path=args.lens,
+        run_id=args.run_id,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        split_name=args.split,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+        prompt_columns=set(args.prompt_columns) if args.prompt_columns else None,
+    )
+    print(run_root)
+
+
 def _analyze(args: argparse.Namespace) -> None:
     rows = [json.loads(line) for line in args.input.open() if line.strip()]
     summary = grouped_effects(
@@ -410,6 +515,8 @@ def main() -> None:
         _prepare_config(args)
     elif args.command == "prepare-gain-config":
         _prepare_gain_config(args)
+    elif args.command == "prepare-token-screen-config":
+        _prepare_token_screen_config(args)
     elif args.command == "validate-config":
         _validate_config(args)
     elif args.command == "run-swap":
@@ -418,6 +525,8 @@ def main() -> None:
         _run_gain(args)
     elif args.command == "run-valence-readout":
         _run_valence_readout(args)
+    elif args.command == "run-token-screen":
+        _run_token_screen(args)
     else:
         _analyze(args)
 

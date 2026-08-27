@@ -10,11 +10,13 @@ from llm_bias.core.continuation_scoring import (
     categorical_kl_divergence,
     next_token_log_probabilities,
     score_margin,
+    score_single_token_margin_fp32,
 )
 from llm_bias.core.inference.forward import record_residuals
 from llm_bias.core.inference.interventions import residual_interventions
 from llm_bias.core.prompt_input.encoding import input_ids
 from llm_bias.jspace_intervention.concepts import (
+    concept_coordinate,
     sector_prototype,
     token_direction,
     unembedding_weight,
@@ -26,7 +28,13 @@ from llm_bias.jspace_intervention.controls import (
     shuffled_evidence_positions,
 )
 from llm_bias.jspace_intervention.positions import select_loaded_positions
-from llm_bias.jspace_intervention.schemas import GainConfig, InterventionConfig, PrototypeSpec
+from llm_bias.jspace_intervention.schemas import (
+    GainConfig,
+    InterventionConfig,
+    PrototypeSpec,
+    TokenScreenCandidate,
+    TokenScreenConfig,
+)
 from llm_bias.jspace_intervention.transforms import (
     coordinate_gain,
     coordinate_intervention,
@@ -53,6 +61,33 @@ def layer_prototypes(
             for token in spec.tokens
         }
         result[layer] = sector_prototype(directions, weights).detach()
+    return result
+
+
+def token_screen_directions(
+    model: Any,
+    lens: Any,
+    candidates: Sequence[TokenScreenCandidate],
+    layers: Sequence[int],
+) -> dict[int, dict[int, torch.Tensor]]:
+    """Precompute per-layer token directions for one screen prompt run.
+
+    The direction for a candidate at layer ``l`` is the residual-space row
+    ``W_U J_l[token_id]``; the candidate ``representation_side`` is provenance
+    only and never enters the direction or the dose sign.
+    """
+    unembedding = unembedding_weight(model)
+    result: dict[int, dict[int, torch.Tensor]] = {}
+    for candidate in candidates:
+        layer_directions = {}
+        for layer in layers:
+            if layer not in lens.jacobians:
+                raise ValueError(f"canonical lens does not contain layer {layer}")
+            jacobian = lens.jacobians[layer].float()
+            layer_directions[layer] = token_direction(
+                unembedding, jacobian, candidate.token_id
+            ).detach()
+        result[candidate.token_id] = layer_directions
     return result
 
 
@@ -189,6 +224,58 @@ def _gain_diagnostics(
         )
         after_values = patched[:, list(positions), :].float()
         after = (after_values @ direction) / denominator
+        before_coordinates.extend(before.flatten().tolist())
+        after_coordinates.extend(after.flatten().tolist())
+        perturbation_squared += float((after_values - values).square().sum().cpu())
+        state_squared += float(values.square().sum().cpu())
+    perturbation_norm = perturbation_squared ** 0.5
+    state_norm = state_squared ** 0.5
+    return {
+        "coordinate_before_mean": sum(before_coordinates) / len(before_coordinates),
+        "coordinate_after_mean": sum(after_coordinates) / len(after_coordinates),
+        "perturbation_norm": perturbation_norm,
+        "state_norm": state_norm,
+        "relative_perturbation_norm": perturbation_norm / max(state_norm, 1e-12),
+        "direction_norm_min": min(direction_norms),
+        "direction_norm_max": max(direction_norms),
+    }
+
+
+def _screen_diagnostics(
+    residuals: Mapping[int, torch.Tensor],
+    directions: Mapping[int, torch.Tensor],
+    *,
+    positions: Sequence[int],
+    coordinate_deltas: Mapping[int, float],
+    patched_tensors: Mapping[int, torch.Tensor] | None = None,
+) -> dict[str, float]:
+    before_coordinates = []
+    after_coordinates = []
+    perturbation_squared = 0.0
+    state_squared = 0.0
+    direction_norms = []
+    for layer, tensor in residuals.items():
+        direction = directions[layer].to(device=tensor.device, dtype=torch.float32)
+        norm = float(direction.norm().detach().cpu())
+        if not torch.isfinite(torch.tensor(norm)) or norm <= 0:
+            raise ValueError(f"invalid screen direction norm at layer {layer}")
+        direction_norms.append(norm)
+        values = tensor[:, list(positions), :].float()
+        vector = direction.reshape(-1)
+        denominator = vector.square().sum()
+        before = (values @ vector) / denominator
+        patched = (
+            patched_tensors[layer]
+            if patched_tensors is not None
+            else steer_positions(
+                tensor,
+                positions=positions,
+                direction=vector,
+                coordinate_delta=coordinate_deltas[layer],
+            )
+        )
+        after_values = patched[:, list(positions), :].float()
+        after = (after_values @ vector) / denominator
         before_coordinates.extend(before.flatten().tolist())
         after_coordinates.extend(after.flatten().tolist())
         perturbation_squared += float((after_values - values).square().sum().cpu())
@@ -794,9 +881,166 @@ def run_token_steering_record(
     return rows
 
 
+def run_token_screen_record(
+    *,
+    model: Any,
+    tokenizer: Any,
+    scoring_prompt: str,
+    evidence_span: tuple[int, int],
+    config: TokenScreenConfig,
+    device: Any,
+    directions: Mapping[int, Mapping[int, torch.Tensor]],
+    control_seed: int = 0,
+) -> list[dict]:
+    """Run one formatted prompt across every frozen candidate and arm.
+
+    The clean residuals and clean margin are computed once per prompt.  For
+    each candidate the PRIMARY evidence positions are selected from the clean
+    pass, a per-layer local scale is the median absolute concept coordinate at
+    those positions (exact zero floored to 1e-6), and the delivered coordinate
+    delta is ``alpha * local_scale / sqrt(n_layers)``.  A positive alpha adds
+    the candidate direction; a negative alpha subtracts it.  The matched-random
+    arm uses the same PRIMARY positions and scales with a seeded same-norm
+    random direction, so no norm rescaling or extra position control is needed.
+    """
+    layers = list(config.layers)
+    missing = [
+        candidate.token_id
+        for candidate in config.candidates
+        if candidate.token_id not in directions
+    ]
+    if missing:
+        raise ValueError(f"precomputed directions miss candidates: {missing}")
+    clean_tensor = _input_tensor(tokenizer, scoring_prompt, device)
+    residuals = record_residuals(model, clean_tensor, layers)
+    clean_margin = score_single_token_margin_fp32(
+        model,
+        tokenizer,
+        scoring_prompt,
+        config.positive_candidate,
+        config.negative_candidate,
+        device=device,
+    )
+    rows = []
+    divisor = len(layers) ** 0.5
+    for candidate_index, candidate in enumerate(config.candidates):
+        layer_directions = {layer: directions[candidate.token_id][layer] for layer in layers}
+        selected = select_loaded_positions(
+            residuals,
+            layer_directions,
+            evidence_span=evidence_span,
+            top_k=config.top_positions,
+            threshold=config.loading_threshold,
+        )
+        scales = {}
+        for layer in layers:
+            values = residuals[layer][0, list(selected.positions), :].float()
+            coordinate = concept_coordinate(values, layer_directions[layer])
+            scale = float(coordinate.abs().median())
+            scales[layer] = scale if scale > 0.0 else 1e-6
+        arm_directions: dict[str, Mapping[int, torch.Tensor]] = {"token": layer_directions}
+        if "matched_random" in config.controls:
+            arm_directions["matched_random"] = {
+                layer: matched_random_direction(
+                    layer_directions[layer],
+                    seed=control_seed + 1009 * candidate_index + 7 * offset,
+                )
+                for offset, layer in enumerate(sorted(layers))
+            }
+        for arm in config.controls:
+            active_directions = arm_directions[arm]
+            for alpha in config.alphas:
+                transforms = {}
+                live_diagnostics: dict[int, dict[str, float]] = {}
+                delivered_alpha = alpha if alpha != 0.0 and selected.loaded else 0.0
+                if delivered_alpha != 0.0:
+                    for layer in layers:
+                        vector = active_directions[layer]
+                        delta = delivered_alpha * scales[layer] / divisor
+
+                        def transform(
+                            tensor: torch.Tensor,
+                            *,
+                            vec=vector,
+                            dose=delta,
+                            layer_id=layer,
+                            positions=selected.positions,
+                        ) -> torch.Tensor:
+                            patched = steer_positions(
+                                tensor,
+                                positions=positions,
+                                direction=vec,
+                                coordinate_delta=dose,
+                            )
+                            live_diagnostics[layer_id] = _screen_diagnostics(
+                                {layer_id: tensor.detach()},
+                                {layer_id: vec},
+                                positions=positions,
+                                coordinate_deltas={layer_id: dose},
+                                patched_tensors={layer_id: patched.detach()},
+                            )
+                            return patched
+
+                        transforms[layer] = transform
+                with residual_interventions(model, transforms):
+                    margin = (
+                        clean_margin
+                        if delivered_alpha == 0.0
+                        else score_single_token_margin_fp32(
+                            model,
+                            tokenizer,
+                            scoring_prompt,
+                            config.positive_candidate,
+                            config.negative_candidate,
+                            device=device,
+                        )
+                    )
+                diagnostics = (
+                    _aggregate_live_diagnostics(live_diagnostics)
+                    if delivered_alpha != 0.0
+                    else _screen_diagnostics(
+                        residuals,
+                        active_directions,
+                        positions=selected.positions,
+                        coordinate_deltas={layer: 0.0 for layer in layers},
+                    )
+                )
+                rows.append(
+                    {
+                        "intervention_type": "token_coordinate_screen",
+                        "outcome_scoring": config.outcome_scoring,
+                        "candidate": candidate.token,
+                        "token_id": candidate.token_id,
+                        "representation_side": candidate.representation_side,
+                        "mean_positive": candidate.mean_positive,
+                        "mean_negative": candidate.mean_negative,
+                        "band_probability_diff": candidate.band_probability_diff,
+                        "band_smoothed_log_ratio": candidate.band_smoothed_log_ratio,
+                        "band_js_contribution": candidate.band_js_contribution,
+                        "arm": arm,
+                        "alpha": float(alpha),
+                        "delivered_alpha": delivered_alpha,
+                        "layers": layers,
+                        "intervention_positions": list(selected.positions),
+                        "loaded_positions": selected.to_dict(),
+                        "coordinate_scale_min": min(scales.values()),
+                        "coordinate_scale_mean": sum(scales.values()) / len(scales),
+                        "coordinate_scale_max": max(scales.values()),
+                        "clean_margin": clean_margin.value,
+                        "intervened_margin": margin.value,
+                        "delta_margin": margin.value - clean_margin.value,
+                        "delivered_dose": diagnostics,
+                        "score": _margin_dict(margin),
+                    }
+                )
+    return rows
+
+
 __all__ = [
     "layer_prototypes",
     "run_concept_gain_record",
     "run_swap_record",
+    "run_token_screen_record",
     "run_token_steering_record",
+    "token_screen_directions",
 ]

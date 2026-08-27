@@ -207,4 +207,168 @@ class InterventionConfig:
         return asdict(self)
 
 
-__all__ = ["ConceptToken", "GainConfig", "InterventionConfig", "PrototypeSpec"]
+@dataclass(frozen=True)
+class TokenScreenCandidate:
+    """One frozen valence candidate copied into a token screen config.
+
+    ``representation_side`` is provenance only: the screen never multiplies
+    an intervention by the side sign.
+    """
+
+    token: str
+    token_id: int
+    representation_side: str
+    mean_positive: float
+    mean_negative: float
+    band_probability_diff: float
+    band_smoothed_log_ratio: float
+    band_js_contribution: float
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "TokenScreenCandidate":
+        side = value.get("representation_side", value.get("side"))
+        result = cls(
+            token=str(value["token"]),
+            token_id=int(value["token_id"]),
+            representation_side=str(side),
+            mean_positive=float(value["mean_positive"]),
+            mean_negative=float(value["mean_negative"]),
+            band_probability_diff=float(value["band_probability_diff"]),
+            band_smoothed_log_ratio=float(value["band_smoothed_log_ratio"]),
+            band_js_contribution=float(value["band_js_contribution"]),
+        )
+        if not result.token or result.token_id < 0:
+            raise ValueError("invalid token screen candidate")
+        if result.representation_side not in {"positive", "negative"}:
+            raise ValueError("candidate representation side must be positive or negative")
+        scores = (
+            result.mean_positive,
+            result.mean_negative,
+            result.band_probability_diff,
+            result.band_smoothed_log_ratio,
+            result.band_js_contribution,
+        )
+        if any(not math.isfinite(score) for score in scores):
+            raise ValueError("candidate readout scores must be finite")
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class TokenScreenConfig:
+    candidates: tuple[TokenScreenCandidate, ...]
+    model: str
+    source_sector: str
+    layers: tuple[int, ...]
+    alphas: tuple[float, ...] = (-1.0, 0.0, 1.0)
+    top_positions: int = 3
+    loading_threshold: float = 0.0
+    controls: tuple[str, ...] = ("token", "matched_random")
+    decision_prefix: str = '{\n  "decision": "'
+    positive_candidate: str = "buy"
+    negative_candidate: str = "sell"
+    outcome_scoring: str = "single_token_fp32_final_norm_unembedding"
+    candidate_artifact_path: str = ""
+    candidate_artifact_sha256: str = ""
+    split_manifest_sha256: str = ""
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "TokenScreenConfig":
+        result = cls(
+            candidates=tuple(
+                TokenScreenCandidate.from_dict(row) for row in value["candidates"]
+            ),
+            model=str(value.get("model", "")),
+            source_sector=str(value["source_sector"]),
+            layers=tuple(int(layer) for layer in value["layers"]),
+            alphas=tuple(float(alpha) for alpha in value.get("alphas", (-1.0, 0.0, 1.0))),
+            top_positions=int(value.get("top_positions", 3)),
+            loading_threshold=float(value.get("loading_threshold", 0.0)),
+            controls=tuple(value.get("controls", ("token", "matched_random"))),
+            decision_prefix=str(value.get('decision_prefix', '{\n  "decision": "')),
+            positive_candidate=str(value.get("positive_candidate", "buy")),
+            negative_candidate=str(value.get("negative_candidate", "sell")),
+            outcome_scoring=str(
+                value.get("outcome_scoring", "single_token_fp32_final_norm_unembedding")
+            ),
+            candidate_artifact_path=str(value.get("candidate_artifact_path", "")),
+            candidate_artifact_sha256=str(value.get("candidate_artifact_sha256", "")),
+            split_manifest_sha256=str(value.get("split_manifest_sha256", "")),
+        )
+        if not result.model:
+            raise ValueError("model is required")
+        if not result.source_sector:
+            raise ValueError("source_sector is required")
+        if not result.candidates:
+            raise ValueError("token screen requires at least one candidate")
+        token_ids = [candidate.token_id for candidate in result.candidates]
+        if len(token_ids) != len(set(token_ids)):
+            raise ValueError("candidate token IDs must be unique")
+        if not result.layers or len(result.layers) != len(set(result.layers)):
+            raise ValueError("layers must be non-empty and unique")
+        doses = sorted(result.alphas)
+        if (
+            len(doses) != 3
+            or len(set(doses)) != 3
+            or doses[1] != 0.0
+            or doses[0] != -doses[2]
+            or doses[2] <= 0.0
+            or any(not math.isfinite(dose) for dose in doses)
+        ):
+            raise ValueError(
+                "alphas must be exactly one symmetric nonzero dose pair plus 0 "
+                "(e.g. -1, 0, 1)"
+            )
+        if result.top_positions <= 0:
+            raise ValueError("top_positions must be positive")
+        if not math.isfinite(result.loading_threshold):
+            raise ValueError("loading_threshold must be finite")
+        if not result.controls or len(result.controls) != len(set(result.controls)):
+            raise ValueError("controls must be a non-empty unique set")
+        if not set(result.controls) <= {"token", "matched_random"}:
+            raise ValueError("unsupported token screen control")
+        answer_terms = {
+            result.positive_candidate.strip().lower(),
+            result.negative_candidate.strip().lower(),
+        }
+        if not answer_terms or answer_terms == {""}:
+            raise ValueError("answer candidates must be non-empty")
+        if result.outcome_scoring != "single_token_fp32_final_norm_unembedding":
+            raise ValueError("unsupported token screen outcome scorer")
+        candidate_terms = {
+            candidate.token.strip().lower() for candidate in result.candidates
+        }
+        overlap = answer_terms & candidate_terms
+        if overlap:
+            raise ValueError(
+                f"answer candidates cannot be screen candidates: {sorted(overlap)}"
+            )
+        for label, sha in (
+            ("candidate_artifact_sha256", result.candidate_artifact_sha256),
+            ("split_manifest_sha256", result.split_manifest_sha256),
+        ):
+            if len(sha) != 64 or any(char not in "0123456789abcdef" for char in sha):
+                raise ValueError(f"{label} must be a lowercase SHA-256 hex digest")
+        if not result.candidate_artifact_path:
+            raise ValueError("candidate_artifact_path is required")
+        return result
+
+    @property
+    def positive_dose(self) -> float:
+        """The positive dose ``a`` of the configured ``(-a, 0, a)"` pair."""
+        return max(alpha for alpha in self.alphas if alpha > 0.0)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+__all__ = [
+    "ConceptToken",
+    "GainConfig",
+    "InterventionConfig",
+    "PrototypeSpec",
+    "TokenScreenCandidate",
+    "TokenScreenConfig",
+]
