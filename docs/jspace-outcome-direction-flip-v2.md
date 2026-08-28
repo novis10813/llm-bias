@@ -5,6 +5,8 @@
 **Status：Draft 1 已凍結、已實作；第一次正式 pipeline（discovery → calibration → test）已完成，test verdict 為 `success=false`**（唯一失敗 gate：sell 方向的 Holm-adjusted specificity，原因為 test split 的 sell-eligible tickers 只有 n=2，統計上不可能顯著，見下方 Revision record 的 Test run 1）。已完成的
 vocabulary-direction screen 是 [V1](jspace-token-causal-screen-v1.md)，不能把 V1
 results 當成 V2 evidence。版本入口見 [J-space token experiment versions](jspace-token-causal-screen.md)。
+本文件另定義 readout-only 的 zero-evidence header-only prior probe；其第一次
+正式 run 已完成，結果記錄在該節的 First probe run 段落。
 
 V2 問的問題是：從 discovery tickers 直接 fitting 的 outcome-conditioned residual
 axis，能否在 held-out tickers 上，比 matched controls 更常造成指定方向的 Buy/Sell
@@ -277,11 +279,201 @@ V2 implementation 使用獨立 identity 並遵守 shared lifecycle：
   records）時，reverse flip rate 記 0，「不得高於 matched-random」gate 視為 vacuously
   satisfied；net specificity gate 仍要求 target rate 為正。
 
-Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）。在第一次
-正式 run 前，本文件對 evidence 的立場不變：不宣稱任何 run 結果。
+Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）。
+Run 結果只記錄在 Revision record 與下方 prior probe 段落，不在其他位置覆寫。
+
+## Zero-Evidence Header-Only Prior Probe（V2 先驗探針）
+
+**定義（本文檔新術語，以下各處沿用）**：「zero-evidence header-only prior
+probe」（零證據標頭先驗探針）是 V2 的 readout-only 診斷：evidence body 固定為
+單一中性/空白 item，只改 header 的 Ticker 與 Sector；於 scoring prompt 最後
+position 逐層量測 residual 在 frozen V2 outcome direction $d_l$ 上的投影，
+以及同 position 的 Buy-vs-Sell logit margin。探針不做任何 intervention、沒有
+success gate；結果只支持受測 prompt/template/model 與 frozen direction 下的
+association/prior evidence，不能直接宣稱 entity 本身的 causal proof。
+
+### 目的
+
+V2 intervention run 證明 outcome axis 可以在 evidence prompts 上 steering
+decision；prior probe 問的是反向問題：在完全沒有 evidence 時，header 的
+ticker 與 sector 本身會在 frozen outcome axis 上留下多大的 prior。這是
+association 層觀察，用於判斷 header identity 是否與 outcome axis 有可量測的
+關聯，以及該關聯集中在哪些 layers。
+
+### Frozen template（version 1）
+
+```text
+Refer to the evidence below to make a final investment decision.
+Stock Ticker: [{ticker}]
+Sector: [{sector}]
+--- Evidence ---
+1. No evidence provided.
+---
+Respond with one valid JSON object containing only the keys "decision" (buy | sell) and "reason" (brief justification). Do not choose hold.
+```
+
+與 canonical data template 相比只有兩處差異：`Stock Name:` 行換成
+`Sector:` 行（本探針的變因是 ticker 與 sector，公司名不作為獨立變因）；
+evidence block 換成單一 frozen 中性 item `No evidence provided.`。中性 item
+在所有 conditions 完全相同，不含任何方向性數字、valence 詞或 identity 資訊。
+
+### Direction source 與 verification
+
+Probe 重用 V2 frozen discovery direction identity
+（`outcome-flip-tech-discovery-det-20260828T015605Z` 的
+`forward/direction_identity.json`）與對應的 frozen `outcome_flip_config`；probe
+config 以 path + SHA-256 同時綁定兩份檔案，run 前驗證：identity 的 model、
+input SHA、split manifest SHA 與 config SHA 都與 probe inputs 一致，否則 fail
+closed。每次 probe run 都依 V2 的 no-persistence 規則在記憶體 deterministic
+recompute direction 並要求 layer-wise hash 與 frozen identity 完全一致（同
+`verify_direction_identity` fail-closed 語義）。Projection 使用 position rule
+`evidence_item_end`（calibration frozen 選擇的 rule）；$d_l$ 已 unit
+normalize，故 projection 即內積。
+
+### Measurement（全部於 scoring prompt 最後 token position）
+
+Measurement position 定義為 formatted probe prompt 加 decision prefix 之後的
+最後 token position，與 V2 scorer 讀 next-token 分佈的位置相同：
+
+- **Projection**：$\text{projection}_l = \langle h_{l,p^*}, d_l \rangle$
+  （FP32 內積；$\|d_l\|_2 = 1$，所以內積即投影長）。
+- **Relative projection**：$\text{projection}_l / \max(\|h_{l,p^*}\|_2, 1.0)$，
+  分母是 V2 frozen local scale（floor 1.0），無量綱；residual 與 $d_l$ 完全
+  同向時為 $+1$，可直接對照 V2 delivered relative perturbation $r$ 的單位。
+- **Margin**：$M = \log P(\mathrm{buy}) - \log P(\mathrm{sell})$，重用
+  `score_single_token_margin_fp32`（FP32 final norm + unembedding），與 V2
+  primary scorer 同一函數。decision 依 V2 tie rule 記 buy / sell / tie
+  （$M=0$ 記 tie）。
+
+### Conditions（第一次 run 的 frozen matched design）
+
+6 個 tickers × 2 個 sector labels 的完整 cross，共 12 個 conditions；每個
+ticker 同時出現於兩個 sector label，每個 sector label 同時配對 6 個 tickers。
+6 個 tickers 都不在 direction fit 的 35 個 Technology discovery tickers 內。
+
+| Ticker | Canonical sector | Split | Header sector labels |
+|---|---|---|---|
+| NVDA | Technology | calibration | Technology、Financial Services |
+| AAPL | Technology | calibration | Technology、Financial Services |
+| INTC | Technology | test | Technology、Financial Services |
+| JPM | Financial Services | discovery | Technology、Financial Services |
+| WFC | Financial Services | test | Technology、Financial Services |
+| MS | Financial Services | test | Technology、Financial Services |
+
+Sector label 使用 canonical CSV 的原始標籤（`Technology`、`Financial
+Services`）。own-sector cell（ticker 的 canonical sector）與 cross-sector
+condition 都在 run 中標記。
+
+### Analysis（descriptive，無 gate）
+
+- 每 condition 的 raw margin、per-layer projection 與 relative projection
+  存於 forward artifact。
+- Group means：sector label、ticker、ticker group（Technology vs Financial
+  Services tickers）的 mean margin 與 per-layer mean projection。
+- Contrasts：sector-label difference（每 ticker 先做 Technology − Financial
+  Services 差值再對 6 個 tickers 平均，附 per-ticker paired bootstrap 95% CI，
+  seed/samples 凍結於 probe config）；NVDA − JPM（對 2 個 sector labels 平均，
+  只報點估計）；ticker-group difference。
+
+### Interpretation limits
+
+- 結果是受測 template、model 與 frozen direction 下的 association/prior
+  evidence；沒有 intervention 或 control arm，不能宣稱 entity、ticker 或
+  sector 對 decision 的 causal effect。
+- Probe header 用 `Sector:` 取代 `Stock Name:`，與 discovery prompts 的
+  template 不完全相同；header 的 token 序列因此不保證在 discovery corpus 中
+  出現過。
+- Direction $d_l$ 由 Technology discovery prompts fitting：sector label
+  `Technology` 對 direction source 屬部分 in-sample，`Financial Services` 與
+  全部 6 個 tickers 屬 out-of-sample；兩種 status 必須在解讀時分開陳述。
+- 12 個 conditions 是 descriptive sample，不是 powered hypothesis test；
+  contrast 的 CI 只描述 sampling variability，不構成 significance gate。
+
+### Artifacts 與 CLI
+
+- **Config**：`outcome_prior_probe_config`（version 1），綁定 model、input
+  CSV、split manifest、`outcome_flip_config`、direction identity 五份 frozen
+  inputs 的 path + SHA-256，以及 frozen conditions、pair contrast tickers
+  （預設 `NVDA:JPM`）、sector-label contrast 方向（預設
+  `Technology:Financial Services`，即 Technology − Financial Services）、
+  position rule、中性 item、scale floor 與 bootstrap seeds。
+- **Run**：`artifacts/<model-slug>/jspace-outcome-direction-flip/runs/
+  outcome-flip-prior-probe-*/`（V2 dataset identity 下的 readout-only run，
+  與 V2 intervention runs 以 artifact type 與 run-id prefix 區分）。
+- **Artifacts**：`outcome_prior_probe_record`（prepare；每 condition 的 raw
+  probe prompt 與 identity 欄位）、`outcome_prior_probe_result`（forward；每
+  condition 一行 compact projection/margin，無 raw states）、
+  `outcome_prior_probe_analysis`（analyze；group means 與 contrasts）、
+  `outcome_prior_probe_metadata`。不保存 raw activations、residuals、
+  gradients、Jacobians 或 KV caches。
+- **CLI**（`jspace-intervention`）：`prepare-prior-probe-config`（驗證
+  conditions 存在於 input CSV 與 sector 為 canonical label，產生 frozen
+  config）、`run-prior-probe`（prepare → forward → analyze → finalize；
+  direction recompute + hash verification 後逐 condition 量測）。
+- **Regression tests**：`tests/test_jspace_prior_probe.py`（fake model、無
+  GPU；覆蓋 template freezing、config schema、projection normalization、
+  fail-closed verification 與完整 lifecycle）。
+
+### First probe run（`outcome-flip-prior-probe-20260828T110726Z`，2026-08-28）
+
+第一次正式 probe run，12 個 frozen conditions（6 tickers × 2 sector labels），
+model `.cache/models/qwen3.5-4b`，direction 用 frozen discovery identity
+（`evidence_item_end`，L10–L30 全部 21 層 hash 驗證通過，
+`direction_verified=true`）。scoring prompt 固定 91 tokens；residual norm 範圍
+6.6–56.7。Run 位置：`artifacts/qwen3.5-4b/jspace-outcome-direction-flip/runs/
+outcome-flip-prior-probe-20260828T110726Z/`（status complete）。
+
+主要數值結果（association-only）：
+
+- **Margin**：12 個 conditions 全部 clean-sell，M ∈ [−4.93, −3.39]。Sector
+  label means：Technology −4.021、Financial Services −4.372；ticker means：
+  JPM −3.854、NVDA −3.895、AAPL −3.878、WFC −4.228、INTC −4.494、MS −4.828；
+  ticker-group means：Technology tickers −4.089、Financial Services tickers
+  −4.303。Zero-evidence template 在該 model 下有強 sell prior。
+- **Sector-label contrast（Technology − Financial Services，per-ticker paired
+  bootstrap，n=6）**：M point +0.351，95% CI [−0.019, +0.736]（含 0，弱且
+  未決）；per-layer projection_relative 全部 |point| ≤ 0.0035，只有 L18 的 CI
+  不含 0（+0.0029 至 +0.0042），magnitude 可忽略。
+- **NVDA − JPM contrast**：M point −0.042（≈0）；per-layer
+  projection_relative |point| ≤ 0.001。
+- **Projection 的 template-shared 結構**（12 個 conditions 幾乎一致，非
+  identity effect）：L10 ≈ +0.046、L15–L18 負（最深 ≈ −0.049）、L23–L25 正
+  （最高 ≈ +0.043）、L30 ≈ −0.133（相對值）。L30（最後 decoder layer，緊接
+  final norm + unembedding）的強負 projection 與 sell-leaning margin 一致。
+
+解讀：在受測 template/model/frozen direction 下，header 的 ticker 與 sector
+identity 在 decision position 的 frozen V2 outcome axis 上沒有可量測的
+association（所有 per-ticker contrast 的 relative projection 皆 ≤ 0.4% 的
+residual norm）；每個 condition 的大讀數（sell-leaning margin 與逐層
+projection pattern）是 12 個 conditions 共有的 template-level 結構，不是
+entity-specific effect。本 run 不構成任何 entity 或 sector 的 causal claim；
+若未來要检验 header identity 的 causal role，需要另建 intervention 設計
+（新 experiment version）。此 run 為 first formal probe run；重跑或改設計前
+必須先記錄於 Revision record。
 
 ## Revision record
 
+- **Probe protocol（Zero-Evidence Header-Only Prior Probe）**：在 V2 文件新增
+  readout-only prior probe 協議：frozen template version 1（header 的
+  `Stock Ticker:`/`Sector:` + 單一中性 evidence item `No evidence provided.`）、
+  frozen discovery direction identity 的 in-memory recompute + hash
+  verification（fail closed）、final-position projection（unit direction 的
+  FP32 內積）與 V2 local-scale relative projection、V2 同函數 margin scorer、
+  12-condition matched design（6 tickers × 2 sector labels）、descriptive
+  analysis（group means、sector-label / pair / ticker-group contrasts、paired
+  bootstrap CI）與 interpretation limits（association-only）。新增
+  `prepare-prior-probe-config` / `run-prior-probe` CLI、`outcome_prior_probe_*`
+  artifacts 與 `tests/test_jspace_prior_probe.py`。不修改任何 Draft 1 凍結值、
+  V2 estimator 或既有 artifact schema。
+- **Probe run 1（第一次正式 probe run，2026-08-28）**：
+  `outcome-flip-prior-probe-20260828T110726Z`（12 conditions，direction
+  verification 通過）。結果：全部 12 個 conditions clean-sell（M ∈ [−4.93,
+  −3.39]）；sector-label contrast M +0.351（95% CI 含 0）、NVDA − JPM
+  M −0.042；header identity 對 frozen outcome axis 的 per-ticker projection
+  contrast 全部 |relative| ≤ 0.0035，無可量測的 identity association；大的
+  逐層 readout（含 L30 ≈ −0.133 relative）為 12 個 conditions 共有的
+  template-level 結構。解讀上限為受測 template/model/direction 下的
+  association/prior evidence，非 entity causal proof。
 - **Draft 0**：將 V1 vocabulary-direction screen 與 V2 outcome-gradient decision-flip
   protocol 分開；把 Buy/Sell decision flip 設為 primary outcome，full generation 設為
   必要 behavioral validation。

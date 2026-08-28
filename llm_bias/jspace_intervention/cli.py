@@ -16,6 +16,7 @@ from llm_bias.jspace_intervention.schemas import (
     GainConfig,
     InterventionConfig,
     OutcomeFlipConfig,
+    PriorProbeConfig,
     PrototypeSpec,
     TokenScreenCandidate,
     TokenScreenConfig,
@@ -224,6 +225,54 @@ def build_parser() -> argparse.ArgumentParser:
     outcome_run.add_argument("--max-records", type=int, default=None)
     outcome_run.add_argument("--max-seq-len", type=int, default=1024)
     outcome_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
+
+    prior_probe_config = commands.add_parser(
+        "prepare-prior-probe-config",
+        help="freeze a V2 zero-evidence header-only prior probe config",
+    )
+    prior_probe_config.add_argument("--model", required=True)
+    prior_probe_config.add_argument("--input", required=True, type=Path)
+    prior_probe_config.add_argument("--split-manifest", required=True, type=Path)
+    prior_probe_config.add_argument(
+        "--outcome-flip-config", required=True, type=Path,
+        help="frozen V2 outcome_flip_config that defines the direction fitting",
+    )
+    prior_probe_config.add_argument(
+        "--direction-identity", required=True, type=Path,
+        help="frozen V2 discovery direction identity artifact",
+    )
+    prior_probe_config.add_argument(
+        "--condition", action="append", required=True,
+        help="one frozen probe condition TICKER:SECTOR (repeatable)",
+    )
+    prior_probe_config.add_argument(
+        "--position-rule", default="evidence_item_end",
+        help="V2 position rule whose frozen direction is probed",
+    )
+    prior_probe_config.add_argument(
+        "--neutral-item", default="No evidence provided.",
+        help="single-line neutral evidence body, identical for all conditions",
+    )
+    prior_probe_config.add_argument(
+        "--contrast-tickers", default="NVDA:JPM",
+        help="two distinct tickers for the frozen pair contrast, TICKER1:TICKER2",
+    )
+    prior_probe_config.add_argument(
+        "--contrast-sectors", default="Technology:Financial Services",
+        help="frozen sector-label contrast orientation, LABEL1:LABEL2 (LABEL1 minus LABEL2)",
+    )
+    prior_probe_config.add_argument("--scale-floor", type=float, default=1.0)
+    prior_probe_config.add_argument("--output", required=True, type=Path)
+
+    prior_probe_run = commands.add_parser(
+        "run-prior-probe",
+        help="run the frozen V2 zero-evidence header-only prior probe",
+    )
+    prior_probe_run.add_argument("--config", required=True, type=Path)
+    prior_probe_run.add_argument("--model", required=True)
+    prior_probe_run.add_argument("--run-id", required=True)
+    prior_probe_run.add_argument("--dataset", default="jspace-outcome-direction-flip")
+    prior_probe_run.add_argument("--artifact-root", default="artifacts")
 
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
@@ -547,6 +596,130 @@ def _run_outcome_flip(args: argparse.Namespace) -> None:
     print(run_root)
 
 
+def _prepare_prior_probe_config(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention import prior_probe
+
+    conditions: list[dict[str, str]] = []
+    for raw in args.condition:
+        ticker, separator, sector = raw.partition(":")
+        if not separator or not ticker or not sector:
+            raise ValueError(
+                f"invalid --condition {raw!r}; expected TICKER:SECTOR"
+            )
+        conditions.append({"ticker": ticker, "sector": sector})
+
+    paths = {
+        "input": args.input,
+        "split_manifest": args.split_manifest,
+        "outcome_flip_config": args.outcome_flip_config,
+        "direction_identity": args.direction_identity,
+    }
+    for label, path in paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(f"{label} not found: {path}")
+
+    v2_payload = json.loads(paths["outcome_flip_config"].read_text(encoding="utf-8"))
+    if v2_payload.get("artifact_type") != "outcome_flip_config":
+        raise ValueError(
+            "--outcome-flip-config must be a frozen outcome_flip_config artifact"
+        )
+    v2_config = OutcomeFlipConfig.from_dict(v2_payload)
+    if v2_config.model != args.model:
+        raise ValueError(
+            f"model {args.model!r} does not match the outcome flip config model"
+        )
+
+    identity = json.loads(paths["direction_identity"].read_text(encoding="utf-8"))
+    if identity.get("artifact_type") != "outcome_flip_direction_identity":
+        raise ValueError(
+            "--direction-identity must be an outcome_flip_direction_identity artifact"
+        )
+    if identity.get("split") != "discovery":
+        raise ValueError("direction identity must come from a discovery run")
+    if identity.get("model") != args.model:
+        raise ValueError("direction identity model does not match the run model")
+    if identity.get("config_sha256") != sha256_file(paths["outcome_flip_config"]):
+        raise ValueError(
+            "direction identity binds a different outcome flip config"
+        )
+    if identity.get("split_manifest_sha256") != sha256_file(paths["split_manifest"]):
+        raise ValueError("direction identity binds a different split manifest")
+    if args.position_rule not in identity.get("position_rules", []):
+        raise ValueError(
+            f"position rule {args.position_rule!r} is not in the direction identity"
+        )
+
+    split_payload = json.loads(paths["split_manifest"].read_text(encoding="utf-8"))
+    if "assignments" not in split_payload:
+        raise ValueError("split manifest is missing ticker assignments")
+
+    ticker_index = prior_probe._read_ticker_index(paths["input"])
+    known_sectors = {row["sector"] for row in ticker_index.values()}
+    for condition in conditions:
+        if condition["ticker"] not in ticker_index:
+            raise ValueError(
+                f"probe ticker {condition['ticker']!r} is not in the input CSV"
+            )
+        if condition["sector"] not in known_sectors:
+            raise ValueError(
+                f"probe sector {condition['sector']!r} is not a canonical sector "
+                "label in the input CSV"
+            )
+    first_ticker, separator, second_ticker = args.contrast_tickers.partition(":")
+    if not separator or not first_ticker or not second_ticker:
+        raise ValueError(
+            "invalid --contrast-tickers; expected TICKER1:TICKER2"
+        )
+    first_sector, separator, second_sector = args.contrast_sectors.partition(":")
+    if not separator or not first_sector or not second_sector:
+        raise ValueError(
+            "invalid --contrast-sectors; expected LABEL1:LABEL2"
+        )
+
+    config = PriorProbeConfig.from_dict(
+        {
+            "model": args.model,
+            "input": str(args.input),
+            "input_sha256": sha256_file(paths["input"]),
+            "split_manifest": str(args.split_manifest),
+            "split_manifest_sha256": sha256_file(paths["split_manifest"]),
+            "outcome_flip_config": str(args.outcome_flip_config),
+            "outcome_flip_config_sha256": sha256_file(paths["outcome_flip_config"]),
+            "direction_identity": str(args.direction_identity),
+            "direction_identity_sha256": sha256_file(paths["direction_identity"]),
+            "position_rule": args.position_rule,
+            "conditions": conditions,
+            "contrast_tickers": [first_ticker, second_ticker],
+            "contrast_sectors": [first_sector, second_sector],
+            "neutral_evidence_item": args.neutral_item,
+            "scale_floor": args.scale_floor,
+        }
+    )
+    write_json(
+        args.output,
+        {
+            **config.to_dict(),
+            "artifact_type": prior_probe.PROBE_CONFIG_ARTIFACT_TYPE,
+            "schema_version": 1,
+        },
+        overwrite=True,
+    )
+    print(args.output)
+
+
+def _run_prior_probe(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.prior_probe import run_prior_probe_pipeline
+
+    run_root = run_prior_probe_pipeline(
+        config_path=args.config,
+        model_name=args.model,
+        run_id=args.run_id,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+    )
+    print(run_root)
+
+
 def _run_swap(args: argparse.Namespace) -> None:
     from llm_bias.jspace_intervention.pipeline import run_swap_pipeline
 
@@ -672,6 +845,10 @@ def main() -> None:
         _run_token_screen(args)
     elif args.command == "run-outcome-flip":
         _run_outcome_flip(args)
+    elif args.command == "prepare-prior-probe-config":
+        _prepare_prior_probe_config(args)
+    elif args.command == "run-prior-probe":
+        _run_prior_probe(args)
     else:
         _analyze(args)
 

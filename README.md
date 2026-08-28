@@ -15,7 +15,9 @@ target entity activation causally changes the answer distribution.
 - `jspace-intervention`: sector-coordinate swap/gain, valence vocabulary readout,
   and matched-random V1 token causal screening over a validated canonical lens.
   Outcome-conditioned decision-flip V2 is implemented against the frozen Draft 1
-  protocol; the first formal run has not been made yet.
+  protocol; the first formal full pipeline completed with test verdict
+  success=false, and the V2 doc also defines a readout-only zero-evidence
+  header-only prior probe (first formal run recorded).
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -57,7 +59,9 @@ chain-of-thought or discrete reasoning paths.
     completed discovery screen; no candidate passed the frozen shortlist gate
   - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
     Draft 1 protocol frozen and implemented; Buy/Sell flips are primary and full
-    generation is required validation; no formal run and no evidence yet
+    generation is required validation; first formal full pipeline completed
+    (test verdict success=false); includes the zero-evidence header-only prior
+    probe readout with its first formal run
 
 ### Workflow operations
 

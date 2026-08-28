@@ -23,7 +23,10 @@
   matching 與 flip role、ticker-level estimands（exact paired test、strata、
   gates、calibration selection 與 fail-closed）、pipeline lifecycle（identity
   tamper 拒絕、missing input 拒絕、frozen combination 綁定）與 CLI 行為；
-  全部用 fake model、無 GPU。
+  全部用 fake model、無 GPU。同族的 `test_jspace_prior_probe.py` 覆蓋 V2
+  zero-evidence header-only prior probe 的 frozen template、config schema、
+  projection normalization、fail-closed direction verification、完整 lifecycle
+  與 CLI（fake model、無 GPU）。
 - `test_baseline_trial_pipeline.py`：baseline trial workflow 行為。
 - `test_span_sensitivity.py`：header condition rendering、paired estimands、artifact lifecycle
   與 CLI。
