@@ -98,6 +98,10 @@ compatibility exception；不要新增同類依賴。新 shared mechanics 必須
   `git status` 與相關 diff。
 - 文件中的命令、path、run 狀態與架構描述要能對上 code、config、tests 或 artifact
   provenance；不確定的內容標成 proposed 或 note。
+- 實驗術語的定義必須在文件中：提及概念時只使用 repo 文件已定義的英文術語（原文
+  照用）；沒有術語的概念用完整中文描述句。需要為新概念命名時，先將定義寫入 owning
+  experiment 的 canonical workflow 文件再使用；不得引入任何文件中查無出處的英文複合詞，
+  也不得在回覆中直接使用未定義的新詞。
 - 新增詳細規則時先更新 `docs/`，再讓 `AGENTS.md` 連結該文件，避免兩處維護完整副本。
 - 討論 J-space token 實驗時必須標明 V1 或 V2。若 direction source、primary outcome、
   controls 或 gate 改變，依
