@@ -40,6 +40,7 @@ tests。
 | Script | Responsibility | Inputs and outputs | Related document |
 |---|---|---|---|
 | `jspace_layer_stats.py` | 計算 layer accuracy、kurtosis、lag agreement、effective dimension 與 CKA | lens/model → `layer_stats*.json`, `cka.npz` | [J-space sector intervention](jspace-sector-intervention-interim.md) |
+| `jspace_outcome_token_attribution.py` | 對 Buy/Sell decision token 做 per-(layer, position) 一階 attribution（embedding + 全層 residual 的 per-position gradient norm、position-class 聚合）；V2 position-rule 診斷 | outcome_flip_config + split prompts → `outcome_token_attribution.json` + metadata | [J-space outcome-conditioned decision-flip V2](jspace-outcome-direction-flip-v2.md) |
 | `render_jspace_report.py` | 將 layer stats 與 CKA 畫成 diagnostic figures | stats/NPZ → PNG | 同上 |
 | `jspace_tfidf_analysis.py` | 從 compact lens readout 計算 sector/company TF-IDF 與 Monroe log-odds；可做 concept normalization | readout + CSV → keyword/log-odds JSONL、summary、optional NPZ | 同上 |
 | `compare_jspace_token_runs.py` | 比較 raw-token 與 normalized-concept ranking overlap | 兩個 TF-IDF run → comparison JSON | 同上 |
