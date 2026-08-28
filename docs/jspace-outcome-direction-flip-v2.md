@@ -2,8 +2,10 @@
 
 ## Status and scope
 
-**Status：protocol draft、not implemented、no evidence。** 本文件先凍結研究問題與
-版本邊界；目前沒有 V2 CLI、config schema、artifact schema 或正式 run。已完成的
+**Status：Draft 1 已凍結、已實作、尚無正式 run、無 evidence。** 本文件凍結研究問題與
+版本邊界；V2 CLI、config schema、artifact schema 與 regression tests 已實作（見下方
+「Artifact and implementation boundary」），但 discovery/calibration/test 的正式 run
+尚未執行。已完成的
 vocabulary-direction screen 是 [V1](jspace-token-causal-screen-v1.md)，不能把 V1
 results 當成 V2 evidence。版本入口見 [J-space token experiment versions](jspace-token-causal-screen.md)。
 
@@ -34,6 +36,7 @@ V2 primary outcomes：
 - outcome direction 與 matched control 的 paired target-flip-rate difference。
 
 `M=0` 的 tie 規則必須在 config schema 完成前固定；不得在分析時依結果決定。
+Draft 1 已凍結：clean `M=0` 恰好成立的 records 排除於兩個 eligible set，計數報告（見下方 Frozen parameters）。
 
 ### Required behavioral validation：full generation
 
@@ -95,7 +98,8 @@ h'_{i,l,p}=h_{i,l,p}+\alpha\frac{s_{i,l}}{\sqrt{|L|}}d_l,
 
 其中 \(s_{i,l}\) 是 clean prompt 的 local scale。`alpha > 0` 對應 Buy steering，
 `alpha < 0` 對應 Sell steering。Local scale definition、floor、maximum relative
-perturbation norm 與 allowed doses 在 calibration 前寫入 config；test 不調整。
+perturbation norm 與 allowed doses 已於 Draft 1 凍結（見下方 Frozen parameters），
+在 calibration 前寫入 config；test 不調整。
 
 ## Split and freeze sequence
 
@@ -167,21 +171,55 @@ C_{flip}^{Sell}=R_{B\rightarrow S}^{outcome}-R_{B\rightarrow S}^{random}.
 同時報告 reverse/error flips。先在 ticker 內聚合，再對 tickers 等權；CI 使用 paired
 ticker bootstrap。若每 ticker 只有一個 eligible binary record，另報 exact paired test。
 
-## Proposed success gates to freeze before implementation
+## Frozen calibration/test parameters (Draft 1)
 
-以下是 draft gates，不是已凍結 threshold。實作與 calibration 前必須在 revision record
-中確定數值：
+以下參數已於 Draft 1 凍結，必須原樣寫入 V2 config schema：
+
+- **Tie rule**：clean `M=0` 恰好成立的 records 排除於 clean-Sell 與 clean-Buy eligible
+  sets，計數報告於 test summary。Near-boundary records（`0 < |M|`）全部保留在
+  eligible set，另依 strata 報告；不得因 boundary proximity 剔除。
+- **Local scale**：`s_{i,l} = max(‖h_{i,l,p}‖₂, 1.0)`。因 `d_l` 單位化，每個 position
+  的 delivered relative perturbation 恰為 `r = |alpha| / sqrt(|L|)`。
+- **Dose grid**：`r ∈ {0.05, 0.10, 0.20, 0.40}`；`alpha = r·sqrt(|L|)` 依選定 band
+  計算。參考：V1 token screen 最大 delivered relative perturbation 約 0.024，840 個
+  interventions 只有 1 個 sign flip，故 V2 grid 需明顯更大。
+- **Safety bound**：test records 所有 positions 的 delivered relative perturbation norm
+  必須 `≤ 0.50`；超出則該 record 無效並計數報告。
+- **Candidate layer bands**（Qwen3.5-4B，32 layers，0-indexed）：
+  `{L14–L26, L12–L28, L10–L30}`；calibration 選定其中一個。L14–L26 是 sector
+  intervention 的 layer localization band，作為候選之一而非預設偏好。
+- **Candidate position rules**：`{evidence item 結尾 tokens（valence-readout 規則）,
+  evidence span 內全部 tokens}`；calibration 選定其中一個，gradient fitting 與
+  intervention 必須使用同一規則。
+- **Clean margin strata**（test 報告用）：`|M| ≤ 0.5`、`0.5 < |M| ≤ 1.5`、`|M| > 1.5`。
+
+### Calibration selection rule
+
+Calibration 從 candidate set 選定 `(band, position rule, r)`，並必須在 calibration
+summary 記錄以下預先指定排序：
+
+1. `r` 取滿足 safety bound 且 calibration prompts 的 full-generation parse success
+   `≥ 90%` 的最大 grid 值。
+2. Band 與 position rule 取 calibration paired（outcome − matched-random）target-flip
+   rate 最大的組合；全部候選組合的數值都必須報告。
+3. 若沒有任何組合在 calibration tickers 上使 Buy 與 Sell 兩方向各至少出現 1 個
+   target flip，V2 fail closed，不進入 test。
+
+## Success gates (frozen in Draft 1)
 
 - Buy 與 Sell 兩個方向都要有非零 target flips，不能只挑成功的一邊。
-- Outcome direction 的 paired target-flip specificity CI 下界必須大於 0。
-- Target flip 必須高於預先指定的最低實用率；目前候選值為 10%。
-- Reverse/error flip 不得與 target flip 同步增加到抵銷 net benefit。
-- Matched-random、label-permutation 與 position controls 不得重現 primary effect。
-- Fixed-choice flips 必須達到預先指定的 full-generation agreement 與 format-success gate。
-- Dose 必須通過 frozen relative-perturbation safety bound。
-
-Holm 或其他 multiplicity correction 的 family 取決於最終 layer/dose variants；必須在
-第一次 calibration run 前定義。
+- Outcome direction 對 matched-random 的 paired target-flip specificity CI 下界
+  必須大於 0。
+- 最低實用 target flip rate 為 **10%**（test primary eligible set）。
+- Outcome arm 的 reverse/error flip rate 不得高於 matched-random arm；另報告
+  net specificity（target − reverse）並必須為正。
+- Matched-random 與 label-permutation arms 的 target-flip rate 不得達到 10%；
+  shuffled-evidence 與 final-position controls 僅報告，不設獨立 gate。
+- Full generation：target-flipped records 的 JSON parse success rate `≥ 90%`，且
+  generated decision 與 target direction agreement `≥ 70%`。
+- Multiplicity family：`{C_flip^Buy, C_flip^Sell}` 兩個 primary tests 做 Holm
+  correction；secondary diagnostics 不在 family 內。因 calibration 凍結單一 band
+  與單一 dose magnitude，test 不引入其他 layer/dose variants。
 
 ## Artifact and implementation boundary
 
@@ -196,12 +234,57 @@ V2 應使用新的 CLI/config/artifact identity，例如獨立的
 - analyze：ticker-level flip estimands、controls、CI 與 gates；
 - finalize：只註冊 compact outputs 與 provenance。
 
-在 CLI、schema、tests 與 calibration freeze 完成前，本文件只是一份 V2 protocol draft，
-不能宣稱已執行或已驗證。
+### Implementation (Draft 1, frozen values unchanged)
+
+V2 implementation 使用獨立 identity 並遵守 shared lifecycle：
+
+- **Dataset slug**：`jspace-outcome-direction-flip`；runs 位於
+  `artifacts/<model-slug>/jspace-outcome-direction-flip/runs/`。
+- **CLI**（`jspace-intervention`）：`prepare-outcome-flip-config`（產生
+  `outcome_flip_config`，fitted layers 預設為 bands 的 union）、`validate-config`
+  （依 `artifact_type` 派發到 `OutcomeFlipConfig`）、`run-outcome-flip`
+  （`--split {discovery,calibration,test}`；calibration/test 必須提供
+  `--direction-identity`，test 另需 `--calibration-selection`，否則 fail closed）。
+- **Config schema**：`outcome_flip_config`（version 1）原樣存放 Draft 1 凍結值（tie
+  rule、scale floor 1.0、dose grid、safety bound 0.50、candidate bands、position
+  rules、margin strata、最低 flip rate 10%、generation gates 90%/70%、fitting 與
+  bootstrap seeds、split manifest hash）。
+- **Artifacts**：`outcome_flip_direction_identity`（discovery 輸出 layer-wise direction
+  hashes 與 norms，不存向量）、`outcome_flip_result`（JSONL 逐行 compact 結果）、
+  `outcome_flip_calibration_summary` 與 `outcome_flip_selection`（calibration；selection
+  綁定 config 與 identity hashes）、`outcome_flip_analysis`（test；含 frozen gates）、
+  `outcome_flip_metadata`。Prepare 階段另記錄 `outcome_flip_prompt_record` 與
+  `outcome_flip_prepare_metadata`；discovery 的 analyze 另記錄
+  `outcome_flip_fit_summary` 與 `outcome_flip_analysis_metadata`。
+- **Scorer 與 fitting target**：decision-position margin 重用既有
+  `score_single_token_margin_fp32`（FP32 final norm + unembedding，於 prompt 最後
+  position 計分）；gradient fitting 使用同一 tail 的可微分 primitive
+  `fp32_next_token_log_probs`，因此 fitting target 與 outcome scorer 是同一函數。
+- **Delivered dose**：relative perturbation 報告每 position 實際 applied `‖Δh‖` 除以
+  local scale；transform 按預期應用時等於 `r`，intervention 未應用時 run fail
+  closed。
+- **Reverse gate**：某方向的 reverse-eligible pool 為空（沒有該 clean decision 的
+  records）時，reverse flip rate 記 0，「不得高於 matched-random」gate 視為 vacuously
+  satisfied；net specificity gate 仍要求 target rate 為正。
+
+Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）。在第一次
+正式 run 前，本文件對 evidence 的立場不變：不宣稱任何 run 結果。
 
 ## Revision record
 
-- **Draft 0（current）**：將 V1 vocabulary-direction screen 與 V2 outcome-gradient
-  decision-flip protocol 分開；把 Buy/Sell decision flip 設為 primary outcome，full
-  generation 設為必要 behavioral validation。尚未凍結 tie rule、dose、minimum useful
-  flip rate、generation agreement threshold 或 multiplicity family。
+- **Draft 0**：將 V1 vocabulary-direction screen 與 V2 outcome-gradient decision-flip
+  protocol 分開；把 Buy/Sell decision flip 設為 primary outcome，full generation 設為
+  必要 behavioral validation。
+- **Draft 1**：凍結 tie rule（`M=0` 排除出 eligible set）、local scale
+  （residual norm，floor 1.0）、dose grid `r ∈ {0.05, 0.10, 0.20, 0.40}` 與 safety
+  bound `r ≤ 0.50`、candidate layer bands `{L14–L26, L12–L28, L10–L30}`、candidate
+  position rules（evidence item 結尾 / evidence span 全 tokens）、clean margin strata、
+  calibration selection rule 與 fail-closed criterion、最低實用 flip rate 10%、
+  reverse-flip gate、full-generation gates（parse success ≥ 90%、decision agreement
+  ≥ 70%）與 multiplicity family（2 primary estimands，Holm）。
+- **Implementation 1（current）**：依 Draft 1 實作 V2 CLI、config schema、artifact
+  schema 與 regression tests；未修改任何 Draft 1 凍結值。Implementation clarifications：
+  decision margin 重用既有 single-token FP32 scorer（於 prompt 最後 position 計分），
+  fitting target 用同一 tail 的可微分版本；delivered dose 改以實際 applied
+  perturbation 量測；reverse gate 對空 reverse-eligible pool 視為 rate 0。第一次正式
+  discovery run 尚未執行。

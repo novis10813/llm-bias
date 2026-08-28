@@ -58,7 +58,7 @@ model-specific rendering are both part of the dataset-construction window.
 | Representation readout | Compact transported readouts and outcome margins exist | Formal residual-distance/divergence evidence is pending |
 | Causal controls/statistics | Basic non-entity control and exploratory summaries exist; the entity-only patching protocol and code paths are available | Reviewed/promoted pairs, full entity-only patching runs, bidirectional and unrelated/random controls, independent sampling, paired uncertainty, and correction are pending |
 | Entity-specific selective intervention | Research design only | Not implemented or evaluated |
-| J-space sector intervention | Active `jspace-intervention` workflow implements swap/gain, dose-matched controls, valence readout, and V1 token causal screening; outcome-conditioned decision-flip V2 is protocol-only | Qwen3.5-4B sector held-out specificity was not supported; V1 token shortlist is empty; V2 has no implementation or evidence |
+| J-space sector intervention | Active `jspace-intervention` workflow implements swap/gain, dose-matched controls, valence readout, V1 token causal screening, and V2 outcome-conditioned decision-flip (Draft 1 frozen, implemented; first formal run pending) | Qwen3.5-4B sector held-out specificity was not supported; V1 token shortlist is empty; V2 has no formal run or evidence |
 | Cross-model/task evaluation | Model loaders and model-specific lens paths exist | No standardised cross-model/task result exists |
 | Optional J-space-candidate preflight | Proposed non-runnable design exists | `jspace_eval` package and CLI are not implemented |
 

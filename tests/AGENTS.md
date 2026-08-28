@@ -17,6 +17,13 @@
   symmetric-slope 分析（equal-ticker 聚合、specificity、Holm、shortlist
   上限）、pipeline lifecycle（preflight 不建 run、SHA tamper 拒絕、
   determinism）與 CLI 行為。
+- `test_jspace_outcome_flip.py`：V2 outcome-conditioned decision flip 的 config
+  驗證、decision-position margin 計分位置語義、direction fitting（gradient
+  確定性/ uphill / hook cleanup、label-permutation signs）、paired arms 的 dose
+  matching 與 flip role、ticker-level estimands（exact paired test、strata、
+  gates、calibration selection 與 fail-closed）、pipeline lifecycle（identity
+  tamper 拒絕、missing input 拒絕、frozen combination 綁定）與 CLI 行為；
+  全部用 fake model、無 GPU。
 - `test_baseline_trial_pipeline.py`：baseline trial workflow 行為。
 - `test_span_sensitivity.py`：header condition rendering、paired estimands、artifact lifecycle
   與 CLI。

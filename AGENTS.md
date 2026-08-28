@@ -26,7 +26,7 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 - [J-space valence vocabulary readout](docs/jspace-valence-vocabulary-readout.md)
 - [J-space token experiment versions](docs/jspace-token-causal-screen.md)
   - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md)（completed；shortlist empty）
-  - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)（protocol draft；not implemented）
+  - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)（Draft 1 已實作；尚無正式 run）
 - [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)

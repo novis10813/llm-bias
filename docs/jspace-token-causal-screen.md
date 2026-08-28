@@ -9,7 +9,7 @@
 | Version | Direction source | Primary outcome | Implementation | Evidence status |
 |---|---|---|---|---|
 | [V1](jspace-token-causal-screen-v1.md) | Valence readout 提名的 vocabulary token directions | 對稱 Buy/Sell margin slope 與 matched-random specificity | `prepare-token-screen-config`、`run-token-screen` 已實作 | Completed discovery screen；shortlist 為空 |
-| [V2](jspace-outcome-direction-flip-v2.md) | Discovery prompts 上直接 fitting 的 outcome-gradient direction | Held-out Buy↔Sell decision flips；完整 generation 作必要 behavioral validation | Protocol draft；尚無 CLI/schema/run | Proposed，未產生 evidence |
+| [V2](jspace-outcome-direction-flip-v2.md) | Discovery prompts 上直接 fitting 的 outcome-gradient direction | Held-out Buy↔Sell decision flips；完整 generation 作必要 behavioral validation | `prepare-outcome-flip-config`、`run-outcome-flip` 已實作（Draft 1 凍結值）；尚無正式 run | Implemented，未產生 evidence |
 
 ## V1 結論
 
@@ -35,9 +35,9 @@ gradient fitting 一條 antisymmetric axis，並以 held-out decision flip 作�
   behavioral steering。
 
 V2 的詳細 split、fitting、controls、estimands 與 freeze gates 見
-[J-space outcome-conditioned decision-flip V2](jspace-outcome-direction-flip-v2.md)。在
-V2 CLI、schema 與 artifact contract 完成前，不得用 V1 的 `run-token-screen` command
-冒充 V2。
+[J-space outcome-conditioned decision-flip V2](jspace-outcome-direction-flip-v2.md)。
+V2 有自己的 CLI（`run-outcome-flip`）、config schema 與 artifact identity；永遠不得用
+V1 的 `run-token-screen` command 或 `jspace-token-screen` artifacts 冒充 V2。
 
 ## Versioning rules
 

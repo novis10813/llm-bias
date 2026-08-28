@@ -14,7 +14,8 @@ target entity activation causally changes the answer distribution.
   header spans using fixed Buy/Sell continuation margins.
 - `jspace-intervention`: sector-coordinate swap/gain, valence vocabulary readout,
   and matched-random V1 token causal screening over a validated canonical lens.
-  Outcome-conditioned decision-flip V2 is documented but not implemented.
+  Outcome-conditioned decision-flip V2 is implemented against the frozen Draft 1
+  protocol; the first formal run has not been made yet.
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -50,13 +51,13 @@ chain-of-thought or discrete reasoning paths.
   representation candidates for later signed steering/gain/swap; transported-
   representation evidence, not causal evidence
 - [J-space token experiment versions](docs/jspace-token-causal-screen.md) —
-  separates completed V1 vocabulary-direction margin screening from proposed V2
-  outcome-gradient Buy/Sell decision-flip testing
+  separates completed V1 vocabulary-direction margin screening from the
+  implemented (Draft 1) V2 outcome-gradient Buy/Sell decision-flip testing
   - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md) —
     completed discovery screen; no candidate passed the frozen shortlist gate
   - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
-    protocol draft; Buy/Sell flips are primary and full generation is required validation;
-    not implemented and no evidence yet
+    Draft 1 protocol frozen and implemented; Buy/Sell flips are primary and full
+    generation is required validation; no formal run and no evidence yet
 
 ### Workflow operations
 

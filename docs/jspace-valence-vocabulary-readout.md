@@ -194,7 +194,7 @@ Band L14–L26 的 frozen representation candidates：
 這些 candidates 已由
 [token causal screen V1](jspace-token-causal-screen-v1.md) 的 `run-token-screen`
 以 SHA-bound config 直接消費，並在 discovery split 完成對稱劑量 screen；V1 shortlist
-為空。後續 proposed V2 不再由本 readout 提名詞彙方向，而改 fitting outcome-gradient
+為空。後續 V2 不再由本 readout 提名詞彙方向，而改 fitting outcome-gradient
 axis。兩版差異見 [J-space token experiment versions](jspace-token-causal-screen.md)。
 
 一個較早的 diagnostic run 在 final prompt position 讀取，結果幾乎全由 JSON opening

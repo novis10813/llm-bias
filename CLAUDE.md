@@ -17,9 +17,9 @@ target entity activation 是否會改變答案分布。主要 workflow 是：
 - `prompt-analysis`：對 CSV prompts 執行逐層 Jacobian-lens readout、uncertainty、
   generated-token attribution、ablation validation 與結果視覺化；也是
   `baseline-trial` 的執行基礎。
-- `jspace-intervention`：執行 sector swap/gain、valence vocabulary readout 與
-  matched-random V1 token causal screen。Outcome-conditioned decision-flip V2 目前只有
-  protocol draft，尚未實作。
+- `jspace-intervention`：執行 sector swap/gain、valence vocabulary readout、
+  matched-random V1 token causal screen 與 outcome-conditioned decision-flip V2
+  （Draft 1 已實作，尚無正式 run）。
 - `span-sensitivity`：對 explicit ticker/name header spans 執行單一產業 behavioral
   screen。
 - `jacobian-lens fit`：獨立的 lens fitting 工具；experiment workflow 只消費
@@ -103,7 +103,8 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
 - `llm_bias/baseline_trial/`：baseline trial-plan CSV 的 stage runner
   （含 lens-forward 逐層 readout 擴展）；建立在 `prompt_analysis` 之上。
 - `llm_bias/jspace_intervention/`：J-space sector swap/gain、dose-matched controls、
-  valence vocabulary readout、V1 token causal screen 與 paired analysis；V2 尚未實作。
+  valence vocabulary readout、V1 token causal screen 與 V2 outcome-conditioned
+  decision flip（Draft 1 已實作）及 paired analysis。
 - `llm_bias/span_sensitivity/`：單一產業 identity-header conditions、固定 Buy/Sell
   continuation margin 與 ticker-level paired analysis。
 - `llm_bias/static/`：prompt readout serve dashboard 與 generated-attribution template

@@ -16,13 +16,16 @@ commands 或取代各 workflow 文件。
 - `lens_fitting/` / `lens_install/`：lens fitting 與安裝；不可 import 任一 experiment。
 - `baseline_trial/`：擁有 baseline trial prompt 準備、forward 與 artifact pipeline。
 - `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
-  dose-matched controls、valence vocabulary readout、V1 token causal screen 與 analysis。
+  dose-matched controls、valence vocabulary readout、V1 token causal screen 與 V2
+  outcome-conditioned decision flip（`prepare-outcome-flip-config`、`run-outcome-flip`）
+  及 analysis。
   詳細語意見 [`../docs/jspace-sector-intervention-interim.md`](../docs/jspace-sector-intervention-interim.md)、
   [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)
   與 [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口。
-  V2 outcome-conditioned decision flip 目前只有
-  [`protocol draft`](../docs/jspace-outcome-direction-flip-v2.md)，不可把 V1 CLI/schema
-  當成 V2 implementation。
+  V2 使用獨立的 `jspace-outcome-direction-flip` slug 與
+  `outcome_flip_*` artifacts（見
+  [`../docs/jspace-outcome-direction-flip-v2.md`](../docs/jspace-outcome-direction-flip-v2.md)），
+  不可把 V1 CLI/schema 當成 V2 implementation。
 - `prompt_analysis/`：擁有 CSV prompt readout、generated-token attribution、
   attribution validation 與結果視覺化。
 - `span_sensitivity/`：擁有單一產業 identity-header conditions、固定 Buy/Sell
