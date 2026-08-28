@@ -86,7 +86,16 @@ deterministic recompute direction；artifact 只保存：
 - compact dose、flip、generation 與 control diagnostics。
 
 Calibration/test run 必須驗證 recomputed direction hashes 與 frozen direction identity
-一致，否則 fail closed。
+一致，否則 fail closed。Direction hash 是 raw float32 bytes 的 SHA-256，要求
+bit-exact；而 bf16 GEMM backward 預設非 deterministic（同一 process 重複 fitting
+同一 prompt 的 raw gradient 即有約 5e-3 max abs 差異），calibration run
+`outcome-flip-tech-calibration-20260828T011744Z` 因此 fail closed。因此
+`run_outcome_flip_pipeline` 在任何 CUDA 使用之前啟用
+`torch.use_deterministic_algorithms(True)` 與 `CUBLAS_WORKSPACE_CONFIG=:4096:8`
+（涵蓋 direction fitting、scoring 與 generation）；啟用後經實測 gradient hash 同
+process 與跨 process 均 bit-identical。在 non-deterministic mode 下算出的
+direction identity 不可被 verify，必須以 deterministic mode 重跑 discovery
+重新 freeze。
 
 ## Intervention
 
@@ -292,7 +301,7 @@ Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）
   fitting target 用同一 tail 的可微分版本；delivered dose 改以實際 applied
   perturbation 量測；reverse gate 對空 reverse-eligible pool 視為 rate 0。第一次正式
   discovery run 尚未執行。
-- **Implementation 2（current）**：第一次 discovery smoke run（real
+- **Implementation 2**：第一次 discovery smoke run（real
   `HFLensModel`）暴露 correctness bug：wrapper 在建構時 freeze 所有 params，frozen
   leaves 的 forward 不建 autograd graph，`fit_prompt_layer_gradients` 因此拿到沒有
   `grad_fn` 的 layer output 而 fail closed（`element 0 of tensors does not require
@@ -300,4 +309,18 @@ Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）
   （同 jlens `ActivationRecorder.start_graph_at` 慣例），retained graph 恰為 fitted
   layers；fake-model 測試的 params 同步 freeze 以把此路徑鎖進 regression tests（移除
   修復後 5 個 fitting/pipeline 測試 fail）。不修改任何 Draft 1 凍結值、estimator 或
+  artifact schema。
+- **Implementation 3（current）**：第一次 discovery 正式 run
+  （`outcome-flip-tech-discovery-20260828T011535Z`）完成後，第一次 calibration
+  嘗試（`outcome-flip-tech-calibration-20260828T011744Z`）fail closed：recomputed
+  direction hash 與 discovery identity 不一致（`evidence_item_end` layer 10）。
+  Diagnosis：default bf16 GEMM backward 非 deterministic，discovery identity
+  本身不可 bit-exact 重現（實測同一 process 重複 fitting 的 raw gradient max abs
+  差異約 5e-3，且集中在 L10–L26）。修復：`run_outcome_flip_pipeline` 在首次 CUDA
+  使用前啟用 `torch.use_deterministic_algorithms(True)` 與
+  `CUBLAS_WORKSPACE_CONFIG=:4096:8`（涵蓋 fitting、scoring、generation）；啟用後
+  gradient hash 實測同 process 與跨 process bit-identical，新增 regression test
+  `test_enable_deterministic_gpu_sets_cublas_workspace_and_flag`。舊 discovery
+  identity 因以 non-deterministic mode 計算而不可 verify，必須以 deterministic
+  mode 重跑 discovery 重新 freeze。不修改任何 Draft 1 凍結值、estimator 或
   artifact schema。

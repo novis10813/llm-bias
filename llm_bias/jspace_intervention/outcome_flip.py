@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -2093,6 +2094,20 @@ def _run_outcome_flip_pipeline(
         raise
 
 
+def _enable_deterministic_gpu() -> None:
+    """Enable deterministic GPU algorithms before the first CUDA use.
+
+    The direction-identity protocol hashes raw float32 bytes, so direction
+    fitting must be bit-exact reproducible across processes.  bf16 GEMM
+    backward is non-deterministic by default, so the whole V2 run (fitting,
+    scoring, generation) runs under ``torch.use_deterministic_algorithms``.
+    The cuBLAS workspace env var must be set before cuBLAS is initialized.
+    """
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    if torch.cuda.is_available():
+        torch.use_deterministic_algorithms(True)
+
+
 def run_outcome_flip_pipeline(
     *,
     input_path: str | Path,
@@ -2116,6 +2131,7 @@ def run_outcome_flip_pipeline(
     emits the frozen selection; test verifies both and runs the single frozen
     combination with the full gate set.
     """
+    _enable_deterministic_gpu()
     input_path = Path(input_path)
     split_manifest = Path(split_manifest)
     config_path = Path(config_path)

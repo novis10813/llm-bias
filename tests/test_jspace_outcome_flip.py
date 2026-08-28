@@ -468,6 +468,25 @@ def test_fit_prompt_layer_gradients_is_deterministic_and_increasing() -> None:
     assert not model.layers[1]._forward_hooks
 
 
+def test_enable_deterministic_gpu_sets_cublas_workspace_and_flag(monkeypatch) -> None:
+    import os
+
+    from llm_bias.jspace_intervention import outcome_flip
+
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
+    calls: list[bool] = []
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        torch, "use_deterministic_algorithms", lambda flag: calls.append(flag)
+    )
+    try:
+        outcome_flip._enable_deterministic_gpu()
+    finally:
+        assert torch.are_deterministic_algorithms_enabled() is False
+    assert calls == [True]
+    assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
+
+
 def test_fit_prompt_layer_gradients_removes_hooks_on_failure() -> None:
     class BrokenModel(_FlipModel):
         def forward(self, input_ids, attention_mask=None, use_cache=False):
