@@ -58,6 +58,10 @@ chain-of-thought or discrete reasoning paths.
   - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
     Draft 1 protocol frozen and implemented; Buy/Sell flips are primary and full
     generation is required validation; no formal run and no evidence yet
+  - [V2 outcome direction geometric projection](docs/jspace-outcome-direction-geometry.md) —
+    auxiliary descriptive geometry: per-layer Technology minus Financial Services
+    sector state difference projected onto the frozen V2 outcome directions
+    (parallel/perpendicular decomposition; not causal evidence)
 
 ### Workflow operations
 

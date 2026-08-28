@@ -225,6 +225,37 @@ def build_parser() -> argparse.ArgumentParser:
     outcome_run.add_argument("--max-seq-len", type=int, default=1024)
     outcome_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
+    geometry_run = commands.add_parser(
+        "run-outcome-geometry",
+        help="auxiliary geometric projection of the sector state difference "
+        "onto the frozen V2 outcome directions (descriptive, non-causal)",
+    )
+    geometry_run.add_argument("--input", required=True, type=Path)
+    geometry_run.add_argument("--split-manifest", required=True, type=Path)
+    geometry_run.add_argument(
+        "--config", required=True, type=Path,
+        help="frozen V2 outcome_flip_config",
+    )
+    geometry_run.add_argument(
+        "--direction-identity", required=True, type=Path,
+        help="V2 discovery direction identity artifact",
+    )
+    geometry_run.add_argument("--model", required=True)
+    geometry_run.add_argument("--run-id", required=True)
+    geometry_run.add_argument("--dataset", default="jspace-outcome-direction-geometry")
+    geometry_run.add_argument("--artifact-root", default="artifacts")
+    geometry_run.add_argument("--contrast-sector", default="Financial Services")
+    geometry_run.add_argument(
+        "--lens", default=None,
+        help="canonical lens (required with --tfidf-config)",
+    )
+    geometry_run.add_argument(
+        "--tfidf-config", type=Path, default=None,
+        help="frozen contrastive TF-IDF sector config (optional geometry arm)",
+    )
+    geometry_run.add_argument("--max-seq-len", type=int, default=1024)
+    geometry_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
+
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
     analyze.add_argument("--output", required=True, type=Path)
@@ -547,6 +578,29 @@ def _run_outcome_flip(args: argparse.Namespace) -> None:
     print(run_root)
 
 
+def _run_outcome_geometry(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.outcome_geometry import (
+        run_outcome_geometry_pipeline,
+    )
+
+    run_root = run_outcome_geometry_pipeline(
+        input_path=args.input,
+        split_manifest=args.split_manifest,
+        config_path=args.config,
+        direction_identity_path=args.direction_identity,
+        model_name=args.model,
+        run_id=args.run_id,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        contrast_sector=args.contrast_sector,
+        lens_path=args.lens,
+        tfidf_config_path=args.tfidf_config,
+        max_seq_len=args.max_seq_len,
+        prompt_columns=set(args.prompt_columns) if args.prompt_columns else None,
+    )
+    print(run_root)
+
+
 def _run_swap(args: argparse.Namespace) -> None:
     from llm_bias.jspace_intervention.pipeline import run_swap_pipeline
 
@@ -672,6 +726,8 @@ def main() -> None:
         _run_token_screen(args)
     elif args.command == "run-outcome-flip":
         _run_outcome_flip(args)
+    elif args.command == "run-outcome-geometry":
+        _run_outcome_geometry(args)
     else:
         _analyze(args)
 

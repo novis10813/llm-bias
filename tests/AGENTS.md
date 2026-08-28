@@ -24,6 +24,13 @@
   gates、calibration selection 與 fail-closed）、pipeline lifecycle（identity
   tamper 拒絕、missing input 拒絕、frozen combination 綁定）與 CLI 行為；
   全部用 fake model、無 GPU。
+- `test_jspace_outcome_geometry.py`：V2 outcome direction geometric projection
+  的 dot projection 公式（general coefficient、normalization invariance、
+  orthogonal/antiparallel、degenerate 與 invalid input）、fake model sector state
+  累積對照 closed form、analyze compact metrics 與 TF-IDF 段、pipeline lifecycle
+  （direction identity tamper fail-closed、missing input 與 bad binding 拒絕、
+  TF-IDF arm 與 fake lens、logodds prototype 拒絕）與 CLI 行為；全部用 fake
+  model、無 GPU。
 - `test_baseline_trial_pipeline.py`：baseline trial workflow 行為。
 - `test_span_sensitivity.py`：header condition rendering、paired estimands、artifact lifecycle
   與 CLI。

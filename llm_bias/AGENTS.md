@@ -18,10 +18,12 @@ commands 或取代各 workflow 文件。
 - `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
   dose-matched controls、valence vocabulary readout、V1 token causal screen 與 V2
   outcome-conditioned decision flip（`prepare-outcome-flip-config`、`run-outcome-flip`）
-  及 analysis。
+  及 analysis；V2 的輔助幾何診斷 outcome direction geometric projection
+  （`run-outcome-geometry`，描述性、非 causal）也在本 package。
   詳細語意見 [`../docs/jspace-sector-intervention-interim.md`](../docs/jspace-sector-intervention-interim.md)、
-  [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)
-  與 [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口。
+  [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)、
+  [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口與
+  [`../docs/jspace-outcome-direction-geometry.md`](../docs/jspace-outcome-direction-geometry.md)。
   V2 使用獨立的 `jspace-outcome-direction-flip` slug 與
   `outcome_flip_*` artifacts（見
   [`../docs/jspace-outcome-direction-flip-v2.md`](../docs/jspace-outcome-direction-flip-v2.md)），
