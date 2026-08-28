@@ -18,7 +18,8 @@ commands 或取代各 workflow 文件。
 - `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
   dose-matched controls、valence vocabulary readout、V1 token causal screen 與 V2
   outcome-conditioned decision flip（`prepare-outcome-flip-config`、`run-outcome-flip`）
-  及 analysis。
+  及 V2 輔助診斷 direction decode（`decode-outcome-direction`，以 canonical Jacobian
+  lens 解碼 frozen $d_l$，見 V2 文件「Direction decode」節）與 analysis。
   詳細語意見 [`../docs/jspace-sector-intervention-interim.md`](../docs/jspace-sector-intervention-interim.md)、
   [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)
   與 [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口。

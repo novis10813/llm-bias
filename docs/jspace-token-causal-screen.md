@@ -46,7 +46,10 @@ Formal V2 runs（config：`config-technology-draft1.json`）：
 （`scripts/jspace_outcome_token_attribution.py`，
 `artifacts/qwen3.5-4b/jspace-outcome-token-attribution/`）顯示 evidence item-end
 的 per-token 一階敏感度集中在 L0–L14（L15–L18 斷崖），而 aggregate direction
-的跨 ticker 對齊在 L15–L26 最高，兩者不矛盾。
+的跨 ticker 對齊在 L15–L26 最高，兩者不矛盾。Direction decode（
+`jspace-intervention decode-outcome-direction`，以 canonical Jacobian lens 解碼
+frozen $d_l$ 的 transported direction logit 與完整詞彙 softmax，見 V2 文件
+「Direction decode」節）同為輔助診斷，不引入新的 estimand 或 gate。
 
 ## V2 目的
 

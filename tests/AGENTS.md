@@ -24,6 +24,14 @@
   gates、calibration selection 與 fail-closed）、pipeline lifecycle（identity
   tamper 拒絕、missing input 拒絕、frozen combination 綁定）與 CLI 行為；
   全部用 fake model、無 GPU。
+- `test_jspace_outcome_decode.py`：V2 direction decode（Jacobian lens 解碼
+  frozen $d_l$）的 fp32 tail（`fp32_next_token_logits` 與
+  `fp32_next_token_log_probs` 一致性）、transport 反對稱與非保範數、
+  per-(layer, sign) 記錄與 antisymmetry self-check fail-closed、answer token
+  解析（multi-token / 跨 record 不一致 fail-closed）、band average-before-top-k
+  聚合、pipeline lifecycle（identity/selection 綁定、band 候選集驗證、tamper
+  拒絕、artifact 不含金 raw payload 掃描）與 CLI 行為；全部用 fake
+  model/lens、無 GPU。
 - `test_baseline_trial_pipeline.py`：baseline trial workflow 行為。
 - `test_span_sensitivity.py`：header condition rendering、paired estimands、artifact lifecycle
   與 CLI。

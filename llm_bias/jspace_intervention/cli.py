@@ -225,6 +225,24 @@ def build_parser() -> argparse.ArgumentParser:
     outcome_run.add_argument("--max-seq-len", type=int, default=1024)
     outcome_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
+    outcome_decode = commands.add_parser(
+        "decode-outcome-direction",
+        help="V2 auxiliary diagnostic: decode the frozen outcome direction d_l "
+        "with the canonical Jacobian lens (prepare/forward/analyze/finalize)",
+    )
+    outcome_decode.add_argument("--input", required=True, type=Path)
+    outcome_decode.add_argument("--split-manifest", required=True, type=Path)
+    outcome_decode.add_argument("--config", required=True, type=Path)
+    outcome_decode.add_argument("--direction-identity", required=True, type=Path)
+    outcome_decode.add_argument("--calibration-selection", required=True, type=Path)
+    outcome_decode.add_argument("--model", required=True)
+    outcome_decode.add_argument("--lens", default=None)
+    outcome_decode.add_argument("--run-id", required=True)
+    outcome_decode.add_argument("--dataset", default="jspace-outcome-direction-decode")
+    outcome_decode.add_argument("--artifact-root", default="artifacts")
+    outcome_decode.add_argument("--top-k", type=int, default=30)
+    outcome_decode.add_argument("--max-seq-len", type=int, default=1024)
+
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
     analyze.add_argument("--output", required=True, type=Path)
@@ -547,6 +565,26 @@ def _run_outcome_flip(args: argparse.Namespace) -> None:
     print(run_root)
 
 
+def _decode_outcome_direction(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.outcome_decode import run_outcome_decode_pipeline
+
+    run_root = run_outcome_decode_pipeline(
+        input_path=args.input,
+        split_manifest=args.split_manifest,
+        config_path=args.config,
+        model_name=args.model,
+        run_id=args.run_id,
+        direction_identity_path=args.direction_identity,
+        calibration_selection_path=args.calibration_selection,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        lens_path=args.lens,
+        top_k=args.top_k,
+        max_seq_len=args.max_seq_len,
+    )
+    print(run_root)
+
+
 def _run_swap(args: argparse.Namespace) -> None:
     from llm_bias.jspace_intervention.pipeline import run_swap_pipeline
 
@@ -672,6 +710,8 @@ def main() -> None:
         _run_token_screen(args)
     elif args.command == "run-outcome-flip":
         _run_outcome_flip(args)
+    elif args.command == "decode-outcome-direction":
+        _decode_outcome_direction(args)
     else:
         _analyze(args)
 
