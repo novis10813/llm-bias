@@ -260,6 +260,10 @@ V2 implementation 使用獨立 identity 並遵守 shared lifecycle：
   `score_single_token_margin_fp32`（FP32 final norm + unembedding，於 prompt 最後
   position 計分）；gradient fitting 使用同一 tail 的可微分 primitive
   `fp32_next_token_log_probs`，因此 fitting target 與 outcome scorer 是同一函數。
+  `HFLensModel` wrapper 會 freeze 所有 params，frozen leaves 的 forward 本身不建
+  autograd graph；fitting 因此在第一個 fitted layer 的輸出 re-root（同 jlens
+  `ActivationRecorder.start_graph_at` 慣例），retained graph 恰為 fitted layers。
+  Fake-model 測試的 params 亦 freeze 以覆蓋此路徑。
 - **Delivered dose**：relative perturbation 報告每 position 實際 applied `‖Δh‖` 除以
   local scale；transform 按預期應用時等於 `r`，intervention 未應用時 run fail
   closed。
@@ -282,9 +286,18 @@ Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）
   calibration selection rule 與 fail-closed criterion、最低實用 flip rate 10%、
   reverse-flip gate、full-generation gates（parse success ≥ 90%、decision agreement
   ≥ 70%）與 multiplicity family（2 primary estimands，Holm）。
-- **Implementation 1（current）**：依 Draft 1 實作 V2 CLI、config schema、artifact
+- **Implementation 1**：依 Draft 1 實作 V2 CLI、config schema、artifact
   schema 與 regression tests；未修改任何 Draft 1 凍結值。Implementation clarifications：
   decision margin 重用既有 single-token FP32 scorer（於 prompt 最後 position 計分），
   fitting target 用同一 tail 的可微分版本；delivered dose 改以實際 applied
   perturbation 量測；reverse gate 對空 reverse-eligible pool 視為 rate 0。第一次正式
   discovery run 尚未執行。
+- **Implementation 2（current）**：第一次 discovery smoke run（real
+  `HFLensModel`）暴露 correctness bug：wrapper 在建構時 freeze 所有 params，frozen
+  leaves 的 forward 不建 autograd graph，`fit_prompt_layer_gradients` 因此拿到沒有
+  `grad_fn` 的 layer output 而 fail closed（`element 0 of tensors does not require
+  grad`）。修復方式是在第一個 fitted layer 的輸出 `requires_grad_(True)` re-root
+  （同 jlens `ActivationRecorder.start_graph_at` 慣例），retained graph 恰為 fitted
+  layers；fake-model 測試的 params 同步 freeze 以把此路徑鎖進 regression tests（移除
+  修復後 5 個 fitting/pipeline 測試 fail）。不修改任何 Draft 1 凍結值、estimator 或
+  artifact schema。

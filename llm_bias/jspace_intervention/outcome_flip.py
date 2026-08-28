@@ -171,6 +171,13 @@ def fit_prompt_layer_gradients(
     difference ``log P(positive) - log P(negative)`` (FP32 final norm and
     unembedding) with respect to each fitted layer's residual output.  The
     returned CPU float32 tensors must stay in memory and never be persisted.
+
+    The HFLensModel wrapper freezes every parameter, so a forward with
+    frozen leaves builds no autograd graph at all.  The first fitted
+    layer's output is therefore re-rooted as a leaf before downstream
+    layers see it (the same convention as jlens
+    ``ActivationRecorder.start_graph_at``), so the retained graph spans
+    exactly the fitted layers.
     """
     layers = sorted(set(int(layer) for layer in fitted_layers))
     if not layers:
@@ -183,10 +190,13 @@ def fit_prompt_layer_gradients(
             raise ValueError(f"fitted layer {layer} is out of range")
     captured: dict[int, torch.Tensor] = {}
     handles = []
+    root_layer = layers[0]
 
     def make_hook(layer_id: int):
         def hook(_module: Any, _inputs: Any, output: Any) -> Any:
             tensor = output if torch.is_tensor(output) else output[0]
+            if layer_id == root_layer:
+                tensor.requires_grad_(True)
             captured[layer_id] = tensor
             return output
 

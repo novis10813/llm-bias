@@ -169,6 +169,12 @@ class _FlipModel(torch.nn.Module):
             self._lm_head.weight[:8] = torch.nn.init.normal_(
                 torch.empty(8, d_model), generator=torch.Generator().manual_seed(seed)
             ) * 0.01
+        # Mimic the HFLensModel wrapper, which freezes every parameter:
+        # gradient fitting must root the autograd graph at the first fitted
+        # layer instead of relying on trainable leaves, so a fake with
+        # trainable params would hide that failure mode.
+        for param in self.parameters():
+            param.requires_grad_(False)
         self.config = SimpleNamespace(eos_token_id=None)
         self._hf_model = self
         self._buy_ctrl = BUY_CTRL_ID
