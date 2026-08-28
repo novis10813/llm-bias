@@ -9,7 +9,7 @@
 | Version | Direction source | Primary outcome | Implementation | Evidence status |
 |---|---|---|---|---|
 | [V1](jspace-token-causal-screen-v1.md) | Valence readout 提名的 vocabulary token directions | 對稱 Buy/Sell margin slope 與 matched-random specificity | `prepare-token-screen-config`、`run-token-screen` 已實作 | Completed discovery screen；shortlist 為空 |
-| [V2](jspace-outcome-direction-flip-v2.md) | Discovery prompts 上直接 fitting 的 outcome-gradient direction | Held-out Buy↔Sell decision flips；完整 generation 作必要 behavioral validation | `prepare-outcome-flip-config`、`run-outcome-flip` 已實作（Draft 1 凍結值）；尚無正式 run | Implemented，未產生 evidence |
+| [V2](jspace-outcome-direction-flip-v2.md) | Discovery prompts 上直接 fitting 的 outcome-gradient direction | Held-out Buy↔Sell decision flips；完整 generation 作必要 behavioral validation | `prepare-outcome-flip-config`、`run-outcome-flip` 已實作（Draft 1 凍結值）；第一次正式 pipeline run 已完成 | Test run 完成：`success=false`（sell 方向 Holm gate 因 n=2 結構性不可顯著；buy 方向 9/9 vs 0/9、Holm p=0.003 通過） |
 
 ## V1 結論
 
@@ -22,6 +22,31 @@ Buy/Sell decision，也不進入 calibration、gain 或 swap。
 Formal V1 run：
 
 `artifacts/qwen3.5-4b/jspace-token-screen/runs/token-screen-technology-discovery-fp32-20260827T065908Z`
+
+## V2 第一次正式 run 結果（2026-08-28）
+
+Full pipeline：discovery（deterministic mode）→ calibration（選定 L10–30、
+`evidence_item_end`、r=0.4）→ test（11 個 held-out Technology tickers）。
+Verdict：`success=false`；失敗 gate 僅 sell 方向的 Holm-adjusted specificity——
+sell-eligible 只有 2 個 tickers，exact paired test 在 n=2 時最小 p_one_sided 為
+0.25，結構性不可顯著。Buy 方向 9/9 vs matched-random 0/9（label-permutation
+reverse 9/9），Holm-adjusted p=0.003，specificity CI [1,1]，generation parse
+與 agreement 皆 100%。final-position control 在 calibration 與 test 皆雙方向
+100% flip，position specificity 不成立；解釋上限為 outcome-axis steering of
+the decision，非 evidence-position 因果。run-once 性質已消耗；sell 方向重驗
+需新版本（更大/更平衡 test split）。
+
+Formal V2 runs（config：`config-technology-draft1.json`）：
+
+- discovery：`artifacts/qwen3.5-4b/jspace-outcome-direction-flip/runs/outcome-flip-tech-discovery-det-20260828T015605Z`
+- calibration：`artifacts/qwen3.5-4b/jspace-outcome-direction-flip/runs/outcome-flip-tech-calibration-det-20260828T015659Z`
+- test：`artifacts/qwen3.5-4b/jspace-outcome-direction-flip/runs/outcome-flip-tech-test-20260828T051624Z`
+
+輔助診斷（非 V2 protocol 的一部分）：per-(layer, position) attribution screen
+（`scripts/jspace_outcome_token_attribution.py`，
+`artifacts/qwen3.5-4b/jspace-outcome-token-attribution/`）顯示 evidence item-end
+的 per-token 一階敏感度集中在 L0–L14（L15–L18 斷崖），而 aggregate direction
+的跨 ticker 對齊在 L15–L26 最高，兩者不矛盾。
 
 ## V2 目的
 

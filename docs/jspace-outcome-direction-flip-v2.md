@@ -2,10 +2,7 @@
 
 ## Status and scope
 
-**Status：Draft 1 已凍結、已實作、尚無正式 run、無 evidence。** 本文件凍結研究問題與
-版本邊界；V2 CLI、config schema、artifact schema 與 regression tests 已實作（見下方
-「Artifact and implementation boundary」），但 discovery/calibration/test 的正式 run
-尚未執行。已完成的
+**Status：Draft 1 已凍結、已實作；第一次正式 pipeline（discovery → calibration → test）已完成，test verdict 為 `success=false`**（唯一失敗 gate：sell 方向的 Holm-adjusted specificity，原因為 test split 的 sell-eligible tickers 只有 n=2，統計上不可能顯著，見下方 Revision record 的 Test run 1）。已完成的
 vocabulary-direction screen 是 [V1](jspace-token-causal-screen-v1.md)，不能把 V1
 results 當成 V2 evidence。版本入口見 [J-space token experiment versions](jspace-token-causal-screen.md)。
 
@@ -324,3 +321,26 @@ Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）
   identity 因以 non-deterministic mode 計算而不可 verify，必須以 deterministic
   mode 重跑 discovery 重新 freeze。不修改任何 Draft 1 凍結值、estimator 或
   artifact schema。
+- **Test run 1（第一次正式 full pipeline，2026-08-28）**：discovery
+  （`outcome-flip-tech-discovery-det-20260828T015605Z`）→ calibration
+  （`outcome-flip-tech-calibration-det-20260828T015659Z`，selection：L10–30、
+  `evidence_item_end`、r=0.4，24 個候選組合全部 parse 100% 且雙方向有 flip）→ test
+  （`outcome-flip-tech-test-20260828T051624Z`，11 個 held-out Technology tickers）。
+  Verdict：**`success=false`**。Buy 方向（9 個 clean-Sell tickers）outcome 9/9、
+  matched-random 0/9、label-permutation 0/9（reverse 9/9），p_one_sided=0.0015、
+  Holm-adjusted 0.003，通過；sell 方向（僅 2 個 clean-Buy tickers）outcome 2/2、
+  controls 0/2，但 n=2 時 exact paired test 的最小 p_one_sided 為 0.25，結構上
+  無法通過 0.05 gate——失敗原因為 test split 的 sell 方向 power 不足，非 effect
+  缺席。其餘 gates 全過：specificity CI [1,1]（雙方向）、min flip rate 100% ≥ 10%、
+  net specificity 正、reverse not excess、controls < 10%、generation parse 100%、
+  agreement 100%、safety max 0.402 ≤ 0.50。重要診斷發現：final-position control
+  在 calibration 與 test 皆雙方向 100% flip（買 9/9、sell 2/2），效果可被
+  answer-position injection 完全重現，position specificity 不成立；V2 的解釋上限為
+  outcome-axis steering of the decision，非 evidence-position 因果。輔助診斷：
+  per-(layer, position) attribution screen（
+  `scripts/jspace_outcome_token_attribution.py`，
+  `artifacts/qwen3.5-4b/jspace-outcome-token-attribution/`）顯示 evidence item-end
+  的 per-token 一階敏感度集中在 L0–L14、L15–L18 斷崖，與 V2 band 大部分在斷崖下方
+  一致；但 aggregate direction 的跨 ticker 對齊（pre_unit_norm）在 L15–L26 最高，
+  故 band 選擇與 attribution 圖不矛盾。run-once 性質已消耗；若要以更大或更平衡的
+  test split 重驗 sell 方向，依 experiment versioning 開新版本。
