@@ -211,6 +211,42 @@ def score_candidate(
     )
 
 
+def fp32_next_token_log_probs(model: Any, residual_final: torch.Tensor) -> torch.Tensor:
+    """FP32 final norm + unembedding + log-softmax of last-position residuals.
+
+    Accepts a ``[batch, d_model]`` residual (detached or in an autograd graph)
+    and returns ``[batch, vocab]`` next-token log probabilities. Keeping the
+    tail in FP32 preserves small intervention effects that BF16 logits would
+    quantize before the margin is formed.
+    """
+    values = residual_final.float()
+    norm = model._final_norm
+    weight = norm.weight.float().to(values.device)
+    epsilon = float(
+        getattr(norm, "variance_epsilon", getattr(norm, "eps", 1e-6))
+    )
+    norm_name = type(norm).__name__.lower()
+    if "rmsnorm" in norm_name or hasattr(norm, "variance_epsilon"):
+        normalized = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + epsilon)
+        normalized = normalized * weight
+    else:
+        bias = getattr(norm, "bias", None)
+        normalized = F.layer_norm(
+            values,
+            tuple(weight.shape),
+            weight,
+            bias.float().to(values.device) if bias is not None else None,
+            epsilon,
+        )
+    head = model._lm_head
+    logits = F.linear(
+        normalized,
+        head.weight.float().to(normalized.device),
+        head.bias.float().to(normalized.device) if getattr(head, "bias", None) is not None else None,
+    )
+    return F.log_softmax(logits, dim=-1)
+
+
 def score_single_token_margin_fp32(
     model: Any,
     tokenizer: Any,
@@ -249,32 +285,7 @@ def score_single_token_margin_fp32(
     final_layer = int(model.n_layers) - 1
     with torch.no_grad():
         residual = record_residuals(model, input_tensor, [final_layer])[final_layer]
-        values = residual[:, -1, :].float()
-        norm = model._final_norm
-        weight = norm.weight.float().to(values.device)
-        epsilon = float(
-            getattr(norm, "variance_epsilon", getattr(norm, "eps", 1e-6))
-        )
-        norm_name = type(norm).__name__.lower()
-        if "rmsnorm" in norm_name or hasattr(norm, "variance_epsilon"):
-            normalized = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + epsilon)
-            normalized = normalized * weight
-        else:
-            bias = getattr(norm, "bias", None)
-            normalized = F.layer_norm(
-                values,
-                tuple(weight.shape),
-                weight,
-                bias.float().to(values.device) if bias is not None else None,
-                epsilon,
-            )
-        head = model._lm_head
-        logits = F.linear(
-            normalized,
-            head.weight.float().to(normalized.device),
-            head.bias.float().to(normalized.device) if getattr(head, "bias", None) is not None else None,
-        )
-        log_probs = F.log_softmax(logits[0], dim=-1)
+        log_probs = fp32_next_token_log_probs(model, residual[:, -1, :])[0]
     positive_score = CandidateScore(
         candidate=positive,
         token_ids=positive_ids,

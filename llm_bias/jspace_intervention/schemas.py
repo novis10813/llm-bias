@@ -364,10 +364,137 @@ class TokenScreenConfig:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class OutcomeFlipConfig:
+    """Frozen V2 outcome-conditioned decision-flip parameters (Draft 1).
+
+    The direction source is the outcome-gradient axis fitted from discovery
+    prompts; it is never part of this config.  Calibration/test runs bind it
+    through SHA-verified direction-identity and selection artifacts.
+    """
+
+    model: str
+    source_sector: str
+    fitted_layers: tuple[int, ...]
+    candidate_bands: tuple[tuple[int, int], ...]
+    position_rules: tuple[str, ...]
+    dose_grid: tuple[float, ...]
+    split_manifest_sha256: str
+    safety_bound: float = 0.50
+    scale_floor: float = 1.0
+    tie_rule: str = "exclude_exact_zero"
+    clean_margin_edges: tuple[float, ...] = (0.5, 1.5)
+    min_flip_rate: float = 0.10
+    parse_success_gate: float = 0.90
+    agreement_gate: float = 0.70
+    max_new_tokens: int = 256
+    fitting_seed: int = 0
+    bootstrap_seed: int = 0
+    bootstrap_samples: int = 2000
+    decision_prefix: str = '{\n  "decision": "'
+    positive_candidate: str = "buy"
+    negative_candidate: str = "sell"
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "OutcomeFlipConfig":
+        result = cls(
+            model=str(value.get("model", "")),
+            source_sector=str(value["source_sector"]),
+            fitted_layers=tuple(int(layer) for layer in value["fitted_layers"]),
+            candidate_bands=tuple(
+                (int(start), int(end))
+                for start, end in value["candidate_bands"]
+            ),
+            position_rules=tuple(value["position_rules"]),
+            dose_grid=tuple(float(dose) for dose in value["dose_grid"]),
+            split_manifest_sha256=str(value.get("split_manifest_sha256", "")),
+            safety_bound=float(value.get("safety_bound", 0.50)),
+            scale_floor=float(value.get("scale_floor", 1.0)),
+            tie_rule=str(value.get("tie_rule", "exclude_exact_zero")),
+            clean_margin_edges=tuple(
+                float(edge) for edge in value.get("clean_margin_edges", (0.5, 1.5))
+            ),
+            min_flip_rate=float(value.get("min_flip_rate", 0.10)),
+            parse_success_gate=float(value.get("parse_success_gate", 0.90)),
+            agreement_gate=float(value.get("agreement_gate", 0.70)),
+            max_new_tokens=int(value.get("max_new_tokens", 256)),
+            fitting_seed=int(value.get("fitting_seed", 0)),
+            bootstrap_seed=int(value.get("bootstrap_seed", 0)),
+            bootstrap_samples=int(value.get("bootstrap_samples", 2000)),
+            decision_prefix=str(value.get('decision_prefix', '{\n  "decision": "')),
+            positive_candidate=str(value.get("positive_candidate", "buy")),
+            negative_candidate=str(value.get("negative_candidate", "sell")),
+        )
+        if not result.model:
+            raise ValueError("model is required")
+        if not result.source_sector:
+            raise ValueError("source_sector is required")
+        if not result.fitted_layers or len(result.fitted_layers) != len(set(result.fitted_layers)):
+            raise ValueError("fitted_layers must be non-empty and unique")
+        if any(layer < 0 for layer in result.fitted_layers):
+            raise ValueError("fitted_layers must be non-negative")
+        if not result.candidate_bands:
+            raise ValueError("candidate_bands must be non-empty")
+        fitted = set(result.fitted_layers)
+        for start, end in result.candidate_bands:
+            if start > end:
+                raise ValueError("candidate band start must not exceed its end")
+            if not set(range(start, end + 1)) <= fitted:
+                raise ValueError("candidate band layers must be a subset of fitted_layers")
+        if len({band for band in result.candidate_bands}) != len(result.candidate_bands):
+            raise ValueError("candidate_bands must be unique")
+        if not result.position_rules or len(result.position_rules) != len(set(result.position_rules)):
+            raise ValueError("position_rules must be a non-empty unique set")
+        if not set(result.position_rules) <= {"evidence_item_end", "evidence_span_all"}:
+            raise ValueError("unsupported outcome flip position rule")
+        if not result.dose_grid or len(result.dose_grid) != len(set(result.dose_grid)):
+            raise ValueError("dose_grid must be a non-empty unique set")
+        if any(
+            not math.isfinite(dose) or dose <= 0.0 or dose > result.safety_bound
+            for dose in result.dose_grid
+        ):
+            raise ValueError("dose_grid values must be finite, positive, and within the safety bound")
+        if not 0.0 < result.safety_bound <= 1.0:
+            raise ValueError("safety_bound must be within (0, 1]")
+        if result.scale_floor <= 0.0 or not math.isfinite(result.scale_floor):
+            raise ValueError("scale_floor must be finite and positive")
+        if result.tie_rule != "exclude_exact_zero":
+            raise ValueError("tie_rule must be the frozen 'exclude_exact_zero' rule")
+        edges = list(result.clean_margin_edges)
+        if any(not math.isfinite(edge) or edge <= 0.0 for edge in edges):
+            raise ValueError("clean_margin_edges must be finite and positive")
+        if edges != sorted(set(edges)):
+            raise ValueError("clean_margin_edges must be strictly increasing")
+        if not 0.0 < result.min_flip_rate <= 1.0:
+            raise ValueError("min_flip_rate must be within (0, 1]")
+        if not 0.0 < result.parse_success_gate <= 1.0:
+            raise ValueError("parse_success_gate must be within (0, 1]")
+        if not 0.0 < result.agreement_gate <= 1.0:
+            raise ValueError("agreement_gate must be within (0, 1]")
+        if result.max_new_tokens <= 0:
+            raise ValueError("max_new_tokens must be positive")
+        if result.bootstrap_samples < 2:
+            raise ValueError("bootstrap_samples must be at least 2")
+        if not {
+            result.positive_candidate.strip().lower(),
+            result.negative_candidate.strip().lower(),
+        } - {""}:
+            raise ValueError("answer candidates must be non-empty")
+        if len(result.split_manifest_sha256) != 64 or any(
+            char not in "0123456789abcdef" for char in result.split_manifest_sha256
+        ):
+            raise ValueError("split_manifest_sha256 must be a lowercase SHA-256 hex digest")
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 __all__ = [
     "ConceptToken",
     "GainConfig",
     "InterventionConfig",
+    "OutcomeFlipConfig",
     "PrototypeSpec",
     "TokenScreenCandidate",
     "TokenScreenConfig",

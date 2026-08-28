@@ -15,6 +15,7 @@ from llm_bias.jspace_intervention.candidates import select_prototype
 from llm_bias.jspace_intervention.schemas import (
     GainConfig,
     InterventionConfig,
+    OutcomeFlipConfig,
     PrototypeSpec,
     TokenScreenCandidate,
     TokenScreenConfig,
@@ -164,6 +165,65 @@ def build_parser() -> argparse.ArgumentParser:
     token_screen_run.add_argument("--max-records", type=int, default=None)
     token_screen_run.add_argument("--max-seq-len", type=int, default=1024)
     token_screen_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
+
+    outcome_config = commands.add_parser(
+        "prepare-outcome-flip-config",
+        help="freeze a V2 outcome-conditioned decision-flip config (Draft 1)",
+    )
+    outcome_config.add_argument("--model", required=True)
+    outcome_config.add_argument("--source-sector", required=True)
+    outcome_config.add_argument("--split-manifest", required=True, type=Path)
+    outcome_config.add_argument(
+        "--fitted-layers", default=None,
+        help="comma-separated layers; default is the union of --bands",
+    )
+    outcome_config.add_argument(
+        "--bands", default="14-26,12-28,10-30",
+        help="candidate layer bands as start-end pairs",
+    )
+    outcome_config.add_argument(
+        "--position-rules", default="evidence_item_end,evidence_span_all"
+    )
+    outcome_config.add_argument("--dose-grid", default="0.05,0.10,0.20,0.40")
+    outcome_config.add_argument("--safety-bound", type=float, default=0.50)
+    outcome_config.add_argument("--scale-floor", type=float, default=1.0)
+    outcome_config.add_argument(
+        "--clean-margin-edges", default="0.5,1.5",
+        help="clean margin |M| stratum edges, strictly increasing",
+    )
+    outcome_config.add_argument("--min-flip-rate", type=float, default=0.10)
+    outcome_config.add_argument("--parse-success-gate", type=float, default=0.90)
+    outcome_config.add_argument("--agreement-gate", type=float, default=0.70)
+    outcome_config.add_argument("--max-new-tokens", type=int, default=256)
+    outcome_config.add_argument("--fitting-seed", type=int, default=0)
+    outcome_config.add_argument("--output", required=True, type=Path)
+
+    outcome_run = commands.add_parser(
+        "run-outcome-flip",
+        help="run one V2 outcome-conditioned decision-flip split "
+        "(discovery/calibration/test)",
+    )
+    outcome_run.add_argument("--input", required=True, type=Path)
+    outcome_run.add_argument("--split-manifest", required=True, type=Path)
+    outcome_run.add_argument("--config", required=True, type=Path)
+    outcome_run.add_argument("--model", required=True)
+    outcome_run.add_argument("--run-id", required=True)
+    outcome_run.add_argument("--dataset", default="jspace-outcome-direction-flip")
+    outcome_run.add_argument("--artifact-root", default="artifacts")
+    outcome_run.add_argument(
+        "--split", choices=("discovery", "calibration", "test"), default="discovery"
+    )
+    outcome_run.add_argument(
+        "--direction-identity", type=Path, default=None,
+        help="discovery direction identity artifact (required for calibration/test)",
+    )
+    outcome_run.add_argument(
+        "--calibration-selection", type=Path, default=None,
+        help="calibration selection artifact (required for test)",
+    )
+    outcome_run.add_argument("--max-records", type=int, default=None)
+    outcome_run.add_argument("--max-seq-len", type=int, default=1024)
+    outcome_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
     analyze = commands.add_parser("analyze", help="summarize compact intervention JSONL")
     analyze.add_argument("--input", required=True, type=Path)
@@ -356,7 +416,11 @@ def _prepare_gain_config(args: argparse.Namespace) -> None:
 
 def _validate_config(args: argparse.Namespace) -> None:
     payload = json.loads(args.config.read_text())
-    if "candidates" in payload and "candidate_artifact_sha256" in payload:
+    if payload.get("artifact_type") == "outcome_flip_config" or (
+        "fitted_layers" in payload and "candidate_bands" in payload
+    ):
+        config = OutcomeFlipConfig.from_dict(payload)
+    elif "candidates" in payload and "candidate_artifact_sha256" in payload:
         config = TokenScreenConfig.from_dict(payload)
     elif "prototype" in payload:
         config = GainConfig.from_dict(payload)
@@ -404,6 +468,83 @@ def _prepare_token_screen_config(args: argparse.Namespace) -> None:
         overwrite=True,
     )
     print(args.output)
+
+
+def _prepare_outcome_flip_config(args: argparse.Namespace) -> None:
+    bands: list[list[int]] = []
+    for part in args.bands.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        start_text, end_text = part.split("-")
+        bands.append([int(start_text), int(end_text)])
+    if not bands:
+        raise ValueError("--bands must contain at least one start-end band")
+    if args.fitted_layers is None:
+        fitted = sorted(
+            {layer for band in bands for layer in range(band[0], band[1] + 1)}
+        )
+    else:
+        fitted = [int(value) for value in args.fitted_layers.split(",") if value.strip()]
+    config = OutcomeFlipConfig.from_dict(
+        {
+            "model": args.model,
+            "source_sector": args.source_sector,
+            "fitted_layers": fitted,
+            "candidate_bands": bands,
+            "position_rules": [
+                value for value in args.position_rules.split(",") if value.strip()
+            ],
+            "dose_grid": [
+                float(value) for value in args.dose_grid.split(",") if value.strip()
+            ],
+            "split_manifest_sha256": sha256_file(args.split_manifest),
+            "safety_bound": args.safety_bound,
+            "scale_floor": args.scale_floor,
+            "clean_margin_edges": [
+                float(value)
+                for value in args.clean_margin_edges.split(",")
+                if value.strip()
+            ],
+            "min_flip_rate": args.min_flip_rate,
+            "parse_success_gate": args.parse_success_gate,
+            "agreement_gate": args.agreement_gate,
+            "max_new_tokens": args.max_new_tokens,
+            "fitting_seed": args.fitting_seed,
+        }
+    )
+    write_json(
+        args.output,
+        {
+            **config.to_dict(),
+            "artifact_type": "outcome_flip_config",
+            "schema_version": 1,
+            "model": args.model,
+        },
+        overwrite=True,
+    )
+    print(args.output)
+
+
+def _run_outcome_flip(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.outcome_flip import run_outcome_flip_pipeline
+
+    run_root = run_outcome_flip_pipeline(
+        input_path=args.input,
+        split_manifest=args.split_manifest,
+        config_path=args.config,
+        model_name=args.model,
+        run_id=args.run_id,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        split_name=args.split,
+        direction_identity_path=args.direction_identity,
+        calibration_selection_path=args.calibration_selection,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+        prompt_columns=set(args.prompt_columns) if args.prompt_columns else None,
+    )
+    print(run_root)
 
 
 def _run_swap(args: argparse.Namespace) -> None:
@@ -517,6 +658,8 @@ def main() -> None:
         _prepare_gain_config(args)
     elif args.command == "prepare-token-screen-config":
         _prepare_token_screen_config(args)
+    elif args.command == "prepare-outcome-flip-config":
+        _prepare_outcome_flip_config(args)
     elif args.command == "validate-config":
         _validate_config(args)
     elif args.command == "run-swap":
@@ -527,6 +670,8 @@ def main() -> None:
         _run_valence_readout(args)
     elif args.command == "run-token-screen":
         _run_token_screen(args)
+    elif args.command == "run-outcome-flip":
+        _run_outcome_flip(args)
     else:
         _analyze(args)
 

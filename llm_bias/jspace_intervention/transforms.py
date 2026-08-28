@@ -1,7 +1,8 @@
 """Pure residual transforms used by J-space interventions."""
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
 
 import torch
 
@@ -34,6 +35,33 @@ def steer_positions(
     patched = tensor.clone()
     delta = float(coordinate_delta) * vector.to(device=tensor.device, dtype=tensor.dtype)
     patched[:, selected, :] = patched[:, selected, :] + delta
+    return patched
+
+
+def steer_positions_scaled(
+    tensor: torch.Tensor,
+    *,
+    positions: Sequence[int],
+    direction: torch.Tensor,
+    position_scales: Mapping[int, float],
+) -> torch.Tensor:
+    """Add an independent ``scales[p] * direction`` at each selected position."""
+    selected = _validated_positions(tensor, positions)
+    vector = direction.reshape(-1)
+    if vector.numel() != tensor.shape[-1]:
+        raise ValueError("direction and residual widths differ")
+    if not torch.isfinite(vector).all():
+        raise ValueError("direction contains non-finite values")
+    missing = [position for position in selected if position not in position_scales]
+    if missing:
+        raise ValueError(f"missing per-position scales for positions {missing}")
+    patched = tensor.clone()
+    for position in selected:
+        scale = float(position_scales[position])
+        if not math.isfinite(scale):
+            raise ValueError("position scales must be finite")
+        delta = scale * vector.to(device=tensor.device, dtype=tensor.dtype)
+        patched[:, position, :] = patched[:, position, :] + delta
     return patched
 
 
