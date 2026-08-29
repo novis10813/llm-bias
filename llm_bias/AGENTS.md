@@ -18,7 +18,10 @@ commands 或取代各 workflow 文件。
   dose-matched controls、valence vocabulary readout、V1 token causal screen 與 V2
   outcome-conditioned decision flip（`prepare-outcome-flip-config`、`run-outcome-flip`）
   及 analysis；V2 的輔助幾何診斷 outcome direction geometric projection
-  （`run-outcome-geometry`，描述性、非 causal）也在本 package。
+  （`run-outcome-geometry`，描述性、非 causal）、V2 輔助診斷 direction decode
+  （`decode-outcome-direction`，以 canonical Jacobian lens 解碼 frozen $d_l$，見 V2
+  文件「Direction decode」節）與 zero-evidence header-only prior probe
+  （`prepare-prior-probe-config`、`run-prior-probe`）也在本 package。
   詳細語意見 [`../docs/jspace-sector-intervention-interim.md`](../docs/jspace-sector-intervention-interim.md)、
   [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)、
   [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口與

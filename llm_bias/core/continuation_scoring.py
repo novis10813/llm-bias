@@ -211,13 +211,14 @@ def score_candidate(
     )
 
 
-def fp32_next_token_log_probs(model: Any, residual_final: torch.Tensor) -> torch.Tensor:
-    """FP32 final norm + unembedding + log-softmax of last-position residuals.
+def fp32_next_token_logits(model: Any, residual_final: torch.Tensor) -> torch.Tensor:
+    """FP32 final norm + unembedding of last-position residuals (no log-softmax).
 
     Accepts a ``[batch, d_model]`` residual (detached or in an autograd graph)
-    and returns ``[batch, vocab]`` next-token log probabilities. Keeping the
-    tail in FP32 preserves small intervention effects that BF16 logits would
-    quantize before the margin is formed.
+    and returns ``[batch, vocab]`` logits.  Keeping the tail in FP32 preserves
+    small intervention effects that BF16 logits would quantize before the
+    margin is formed.  ``fp32_next_token_log_probs`` is this tail plus
+    log-softmax; the V2 direction decode consumes this tail directly.
     """
     values = residual_final.float()
     norm = model._final_norm
@@ -239,12 +240,22 @@ def fp32_next_token_log_probs(model: Any, residual_final: torch.Tensor) -> torch
             epsilon,
         )
     head = model._lm_head
-    logits = F.linear(
+    return F.linear(
         normalized,
         head.weight.float().to(normalized.device),
         head.bias.float().to(normalized.device) if getattr(head, "bias", None) is not None else None,
     )
-    return F.log_softmax(logits, dim=-1)
+
+
+def fp32_next_token_log_probs(model: Any, residual_final: torch.Tensor) -> torch.Tensor:
+    """FP32 final norm + unembedding + log-softmax of last-position residuals.
+
+    Accepts a ``[batch, d_model]`` residual (detached or in an autograd graph)
+    and returns ``[batch, vocab]`` next-token log probabilities. Keeping the
+    tail in FP32 preserves small intervention effects that BF16 logits would
+    quantize before the margin is formed.
+    """
+    return F.log_softmax(fp32_next_token_logits(model, residual_final), dim=-1)
 
 
 def score_single_token_margin_fp32(

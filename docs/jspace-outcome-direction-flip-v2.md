@@ -459,6 +459,170 @@ entity-specific effect。本 run 不構成任何 entity 或 sector 的 causal cl
 （新 experiment version）。此 run 為 first formal probe run；重跑或改設計前
 必須先記錄於 Revision record。
 
+## Direction decode（Jacobian lens readout of d_l）
+
+**Status：已實作；第一次正式 run 已完成**（run 與結果見下方 Direction decode 結果）。Direction decode 是 V2 的輔助診斷（與 per-(layer, position) attribution screen 同類），不是 V2 protocol 的一部分：它不引入新的 estimand、control 或 gate，也不消耗 V2 的 run-once 性質。
+
+### 問題與定義
+
+Direction decode 問：calibration 凍結的 outcome direction $d_l$ 經 canonical Jacobian
+lens 運送到 final-layer basis 後，指向哪些詞彙 token？它定義三個量：
+
+- **transported direction logit**：對 layer $l$，
+  \[
+  z_l = W_U \, N(J_l d_l),
+  \]
+  其中 $J_l$ 是 canonical lens 的 layer-$l$ Jacobian（把 layer-$l$ residual 映射到
+  final-layer basis；transport operator 與 `JacobianLens.transport` 相同，即 row-vector
+  寫法 $d_l J_l^{\top}$，column 寫法 $J_l d_l$），$N$ 是 model final norm，$W_U$ 是
+  LM-head weight。$z_l$ 與 $d_l$ 的 transport、final norm 與 unembedding 一律以
+  float32 計算，與 `fp32_next_token_log_probs` 同一 tail（去掉 log-softmax）。$d_l$
+  是 unit-norm，但 $J_l d_l$ 一般不再 unit-norm；$N$ 的 scale invariance 只保留
+  方向、不保留模長，所以 $z_l$ 的模長由 $\lVert J_l d_l \rVert$ 決定，解碼結果不
+  套用任何 dose 或 $\alpha$。
+- **direction probability**：transported direction logit 的完整詞彙 softmax
+  $p_l = \mathrm{softmax}(z_l)$。
+- **direction decode**：workflow 名稱；CLI `decode-outcome-direction`，dataset slug
+  `jspace-outcome-direction-decode`。Sign convention 沿用 V2：`+d` 是 Buy steering，
+  `−d` 是 Sell steering；因 final norm 為奇函數、unembedding 為線性，
+  $z_l(-d) = -z_l(+d)$ 精確成立，run 內以 self-check 驗證。
+
+### Direction source 與 binding
+
+Direction decode 不持久化、也不接受任何 direction vector：它依 V2 no-persistence
+protocol 在記憶體中 deterministic recompute $d_l$（frozen discovery inputs、model、
+position rule 與 aggregation config，`torch.use_deterministic_algorithms` 與
+`CUBLAS_WORKSPACE_CONFIG=:4096:8` 在任何 CUDA 使用之前啟用），layer-wise direction
+hash 必須與 `outcome_flip_direction_identity` 完全一致，否則 fail closed。輸入
+binding 與 V2 test run 相同：`outcome_flip_selection` 綁定 identity SHA，identity
+綁定 discovery input / split manifest / config 的 SHA-256 與 record set；lens 只讀取
+既有 validated canonical lens，不 fitting、不修改。Decode 的 layers 與 position rule
+取自 calibration selection 凍結的 band；selection 的 `relative_dose` 只作為
+provenance 記錄，不參與解碼計算。
+
+### Answer tokens 與輸出契約
+
+Buy/Sell answer token 是 V2 的 `positive_candidate`/`negative_candidate` 在 discovery
+scoring prompt 上的 single-token continuation ID（`continuation_token_ids`，suffix
+必須恰為 1 個 token）；ID 必須在全部 discovery records 上唯一，否則 fail closed。
+
+每層、每 sign 輸出 compact top-k（預設 30）token id/text/transported direction
+logit/direction probability（依 logit 降序），以及 buy/sell token 的 rank、logit、
+probability、logit margin $z(\mathrm{buy}) - z(\mathrm{sell})$ 與 probability
+margin。Band aggregate 遵守 valence readout 的 full-softmax aggregation contract：
+先對 band 內各層的完整 direction probability 等權平均（float64），再選 top-k；band
+scope 的 buy/sell margin 以平均 probability 計算。
+
+永不持久化 direction vector、raw gradients、Jacobians、activations 或 residuals；
+artifacts 只含 compact top-k、rank、scalar scores、token id/text 與 provenance
+hashes。
+
+### Interpretation limits
+
+Direction decode 是 transported representation readout of a fitted aggregate
+axis，不是 chain-of-thought、discrete reasoning path 或 standalone causal claim。
+Top tokens 只描述「該層 axis 指向哪些詞彙」；它不證明任何 token 因果驅動 buy/sell
+偏好，也不能把 V2 的 steering 效果歸因到解碼出的詞彙。V2 Test run 1 已顯示
+position specificity 不成立；decode 結果不得用來補強或推翻任何 causal 宣稱。
+
+### Artifacts
+
+Run root：`artifacts/<model-slug>/jspace-outcome-direction-decode/runs/<run-id>/`
+
+```
+manifest.json
+prepare/
+  direction_source.json        # 輸入 binding：config/identity/selection/lens SHA、選定 band/position rule/dose、answer token ids、解碼契約
+  metadata.json                # outcome_direction_decode_prepare_metadata
+forward/
+  direction_decode.jsonl       # 每 (layer, sign) 一筆：top-k + answer token stats + direction hash
+  metadata.json                # outcome_direction_decode_metadata（deterministic mode、recompute 計數、transport/unembed 契約）
+analyze/
+  direction_decode_summary.json  # band scope（average-before-top-k）+ per-layer answer margin 表 + interpretation label
+  metadata.json                # outcome_direction_decode_analysis_metadata
+```
+
+Artifact types：`outcome_direction_decode_source`、`outcome_direction_decode_prepare_metadata`、`outcome_direction_decode`、`outcome_direction_decode_metadata`、`outcome_direction_decode_summary`、`outcome_direction_decode_analysis_metadata`。Manifest 分 `prepare`/`forward`/`analyze` 三個 stage 註冊，finalize 要求三者全部 complete。
+
+### CLI
+
+```bash
+uv run jspace-intervention decode-outcome-direction \
+  --input data/baseline/paper-local-qwen36-27b/trial_plan_prompts.csv \
+  --split-manifest artifacts/qwen3.5-4b/jspace-intervention/splits.json \
+  --config artifacts/qwen3.5-4b/jspace-outcome-direction-flip/config-technology-draft1.json \
+  --direction-identity artifacts/qwen3.5-4b/jspace-outcome-direction-flip/runs/outcome-flip-tech-discovery-det-20260828T015605Z/forward/direction_identity.json \
+  --calibration-selection artifacts/qwen3.5-4b/jspace-outcome-direction-flip/runs/outcome-flip-tech-calibration-det-20260828T015659Z/analyze/outcome_flip_selection.json \
+  --model .cache/models/qwen3.5-4b \
+  --run-id outcome-decode-tech-<timestamp>Z \
+  [--lens artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt] \
+  [--dataset jspace-outcome-direction-decode] [--artifact-root artifacts] \
+  [--top-k 30] [--max-seq-len 1024]
+```
+
+單一指令完成 prepare → forward → analyze → finalize。
+
+### Direction decode 結果
+
+**Run**：`outcome-decode-tech-20260828T113010Z`（diagnostic status；run root：
+`artifacts/qwen3.5-4b/jspace-outcome-direction-decode/runs/outcome-decode-tech-20260828T113010Z/`，
+本 worktree 的 ignored `artifacts/`）。模型 `.cache/models/qwen3.5-4b`
+（`CUDA_VISIBLE_DEVICES=0`），canonical lens 以絕對路徑唯讀載入（主 repo
+`artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt`）。
+
+**Binding 與 recompute**：direction 依 V2 no-persistence protocol 在記憶體
+deterministic recompute（35 個 discovery tickers、21 個 fitted layers、雙
+position rule），layer-wise direction hash 與
+`outcome-flip-tech-discovery-det-20260828T015605Z` 的 identity 全部 21 層 × 2
+rules 一致（fail-closed 未觸發）；`z(-d) = -z(d)` self-check max abs deviation
+= 0.0（bit-exact）。Selection：L10–30、`evidence_item_end`、r=0.4（dose 只
+記錄於 provenance，不參與解碼）。Buy/Sell answer token：`buy`=19180、
+`sell`=33680。
+
+**逐層 buy/sell 軌跡**（`+d` = Buy steering；logit margin = z(buy)−z(sell)）：
+
+| layer | +d logit margin | +d buy rank | −d sell rank | −d sell probability |
+|---|---|---|---|---|
+| 10 | −0.16 | 67660 | 190822 | 8.8e-07 |
+| 15 | 2.89 | 65513 | 13162 | 2.5e-06 |
+| 18 | 4.66 | 47679 | 3411 | 2.4e-05 |
+| 21 | 11.84 | 118 | 13 | 1.6e-03 |
+| 24 | 21.84 | 1 | 1 | 0.658 |
+| 26 | 23.37 | 5 | 1 | 0.822 |
+| 28 | 19.48 | 36 | 1 | 0.265 |
+| 30 | 7.94 | 3108 | 17 | 3.1e-04 |
+
+（完整 21 層 × 雙 sign 的 top-k、rank、logit、probability 在
+`forward/direction_decode.jsonl`；band scope 在
+`analyze/direction_decode_summary.json`。）
+
+**代表性 top tokens**：
+
+- `+d`：L15「驚喜 / inspiring / seamlessly」、L18「uplifting / positive /
+  boost」、L24「buy / Life」、L26「 life / Life / Life」；band（L10–30 等權
+  full-softmax 平均）top-6 為「 life / 「 / positive / Life / _card / buy」，
+  buy 平均 probability 1.05e-3（rank 6）、sell 2.8e-7。
+- `−d`：L15「failed / fails / worse」、L18「枯萎 / 凋零 / 负面」、L24
+  「sell / Sell / sell」（sell probability 0.66）、L26「sell / Sell / Sell」
+  （0.82）；band top-1 即「sell」（平均 probability 0.202，rank 1），其次
+  failed / doomed / fails / worse / futile / failure / fatal。
+
+**觀察（非結論）**：answer token 在 L21–L29 中層帶進入 top-30（buy 於 `+d`
+L23–27、L29；sell 於 `−d` L21–30），L24–26 最尖銳；L10–12 與 L30 以
+format/低資訊 token 為主，margin 明顯較小。`−d` 的 sell 解碼強度（峰
+probability ≈0.82）遠高於 `+d` 的 buy（峰 ≈0.005），與 V2 calibration 中 sell
+方向 flip 數（8）高於 buy（4）的觀察同向。全 21 層中 sell 從未進入任何 `+d`
+top-30、buy 從未進入任何 `−d` top-30（sign separation）。
+
+**解讀限制**：Direction decode 是 transported representation readout of a
+fitted aggregate axis，不是 chain-of-thought、discrete reasoning path 或
+standalone causal claim；top tokens 只描述該層 axis 指向哪些詞彙，不證明任何
+token 因果驅動 buy/sell 偏好，也不能把 V2 的 steering 效果歸因到解碼出的詞彙。
+V2 Test run 1 已顯示 position specificity 不成立；本 decode 不補強、不推翻
+任何 causal 宣稱，也不消耗 V2 的 run-once 性質。
+
+Regression tests：`tests/test_jspace_outcome_decode.py`（fake model/lens、無 GPU）。
+
 ## Revision record
 
 - **Probe protocol（Zero-Evidence Header-Only Prior Probe）**：在 V2 文件新增
@@ -544,3 +708,11 @@ entity-specific effect。本 run 不構成任何 entity 或 sector 的 causal cl
   一致；但 aggregate direction 的跨 ticker 對齊（pre_unit_norm）在 L15–L26 最高，
   故 band 選擇與 attribution 圖不矛盾。run-once 性質已消耗；若要以更大或更平衡的
   test split 重驗 sell 方向，依 experiment versioning 開新版本。
+- **Direction decode 1（2026-08-28）**：新增輔助診斷 workflow
+  `decode-outcome-direction`（dataset slug `jspace-outcome-direction-decode`）：以
+  canonical Jacobian lens 把 frozen $d_l$ 運送到 final-layer basis，FP32 final norm +
+  unembedding 解出 transported direction logit 與完整詞彙 softmax，逐層輸出 ±d 的
+  compact top-k 與 buy/sell rank/margin；direction 依 V2 no-persistence protocol
+  deterministic recompute 並驗證 direction identity，lens 只讀。不修改任何 Draft 1
+  凍結值、V2 estimator、gate 或 artifact schema；第一次正式 run 見
+  「Direction decode 結果」。

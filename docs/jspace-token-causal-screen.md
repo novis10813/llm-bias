@@ -53,7 +53,10 @@ frozen outcome directions 上的 dot projection 與 parallel/perpendicular 分�
 [outcome direction 幾何投影分解](jspace-outcome-direction-geometry.md)；第一次
 正式 run（2026-08-28）顯示 sector state difference 在 L10–30 幾乎全部
 orthogonal 於 outcome direction（angle 82°–92°、parallel energy fraction ≤
-0.019），TF-IDF sector prototypes 亦然（|coefficient| ≤ 0.036）。
+0.019），TF-IDF sector prototypes 亦然（|coefficient| ≤ 0.036）。Direction
+decode（`jspace-intervention decode-outcome-direction`，以 canonical Jacobian
+lens 解碼 frozen $d_l$ 的 transported direction logit 與完整詞彙 softmax，見 V2
+文件「Direction decode」節）同為輔助診斷，不引入新的 estimand 或 gate。
 
 ## V2 目的
 
