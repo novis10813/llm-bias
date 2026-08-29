@@ -58,6 +58,7 @@ family 或 success gate，建立新的 version 文件，不在舊文件中把新
 - Active CLI：`pyproject.toml` 的 `[project.scripts]` 與各 package 的 CLI parser。
 - Python 與 workspace 依賴：`pyproject.toml`、`uv.lock`、`.python-version`。
 - Runtime/data 忽略規則：`.gitignore`。
+- Shared workflow core ownership：[`shared-experiment-core.md`](shared-experiment-core.md)。
 - Artifact lifecycle：[`artifact-contract.md`](artifact-contract.md) 與各 workflow
   文件。
 - Canonical lens 選擇與 candidate checkpoint 例外：

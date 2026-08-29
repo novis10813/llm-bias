@@ -277,8 +277,9 @@ V2 implementation 使用獨立 identity 並遵守 shared lifecycle：
   records）時，reverse flip rate 記 0，「不得高於 matched-random」gate 視為 vacuously
   satisfied；net specificity gate 仍要求 target rate 為正。
 
-Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）。在第一次
-正式 run 前，本文件對 evidence 的立場不變：不宣稱任何 run 結果。
+Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）。正式
+結果只採用 Revision record 綁定的 run IDs 與 artifacts；smoke 或失敗的舊 identity
+不算 V2 evidence。
 
 ## Revision record
 

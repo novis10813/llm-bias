@@ -19,7 +19,7 @@ target entity activation 是否會改變答案分布。主要 workflow 是：
   `baseline-trial` 的執行基礎。
 - `jspace-intervention`：執行 sector swap/gain、valence vocabulary readout、
   matched-random V1 token causal screen 與 outcome-conditioned decision-flip V2
-  （Draft 1 已實作，尚無正式 run）。
+  （Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`，詳見 V2 文件）。
 - `span-sensitivity`：對 explicit ticker/name header spans 執行單一產業 behavioral
   screen。
 - `jacobian-lens fit`：獨立的 lens fitting 工具；experiment workflow 只消費
@@ -58,6 +58,7 @@ canonical workflow 文件；不要在本文件複製完整 command blocks。
 - [J-space token experiment versions](docs/jspace-token-causal-screen.md)
   - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md)
   - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)
+- [Shared experiment core](docs/shared-experiment-core.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 - [Research scripts reference](docs/research-scripts.md)
 - [Research proposals and roadmap](docs/proposal/README.md)
@@ -87,7 +88,7 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
   使用 pinned pretrained registry 中 exact identity 相符且通過完整驗證的 artifact；
   `docs/qwen-jacobian-lens-selection.md` 的本地 bilingual 候選選擇是研究替代流程。
   不要用小型 smoke corpus 覆寫 canonical lens。
-- `langextract[openai]` 這個 optional extra 是給已 archive 的
+- `extraction` optional extra（含 `langextract[openai]`）是給已 archive 的
   `prepare-counterfactual-data annotate` 用的（預期本地 OpenAI-compatible
   llama.cpp endpoint）；為了還原時免重新安裝，extra 仍保留在 `pyproject.toml`。
 
@@ -97,6 +98,8 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
   lens artifact metadata/validation；只放與研究語意無關的共用基礎設施。
 - `llm_bias/lens_fitting/`：calibration corpus、fit/evaluation/promotion 與
   checkpoint recovery；不 import 任一 experiment package。
+- `llm_bias/lens_install/`：依 pinned registry 下載、驗證與安裝 canonical lens；
+  不 import 任一 experiment package。
 - `llm_bias/prompt_analysis/`：CSV prompt readout、完整 vocabulary aggregation、
   generated-token gradient attribution、zero-vector ablation validation、plots
   與 standalone/interactive dashboard。

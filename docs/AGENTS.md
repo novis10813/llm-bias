@@ -20,8 +20,9 @@
 - 圖表放 `assets/` 時，在來源 workflow 文件記錄 renderer、input run 與可重建方式。
 - Markdown 連結使用相對路徑；修改或搬移文件後，檢查所有 inbound links。
 
-Research operators 與 renderers 的詳細對照見
-[`research-scripts.md`](research-scripts.md)；artifact lifecycle 見
+Shared core 的 ownership 與 compatibility map 見
+[`shared-experiment-core.md`](shared-experiment-core.md)；research operators 與 renderers
+的詳細對照見 [`research-scripts.md`](research-scripts.md)；artifact lifecycle 見
 [`artifact-contract.md`](artifact-contract.md)。
 
 ## Instruction Index

@@ -15,7 +15,8 @@ target entity activation causally changes the answer distribution.
 - `jspace-intervention`: sector-coordinate swap/gain, valence vocabulary readout,
   and matched-random V1 token causal screening over a validated canonical lens.
   Outcome-conditioned decision-flip V2 is implemented against the frozen Draft 1
-  protocol; the first formal run has not been made yet.
+  protocol. Its first formal pipeline completed with `success=false`: Buy steering
+  passed, but the sell-direction Holm gate lacked enough eligible test tickers.
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -30,6 +31,7 @@ chain-of-thought or discrete reasoning paths.
 ## Documentation map
 
 - [Documentation and instruction system](docs/documentation-system.md)
+- [Shared experiment core](docs/shared-experiment-core.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 - [Research scripts reference](docs/research-scripts.md)
 
@@ -56,8 +58,9 @@ chain-of-thought or discrete reasoning paths.
   - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md) —
     completed discovery screen; no candidate passed the frozen shortlist gate
   - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
-    Draft 1 protocol frozen and implemented; Buy/Sell flips are primary and full
-    generation is required validation; no formal run and no evidence yet
+    Draft 1 protocol frozen and implemented; the first formal pipeline returned
+    `success=false` because the sell-direction Holm gate had only two eligible test
+    tickers; final-position control also reproduced the steering effect
 
 ### Workflow operations
 

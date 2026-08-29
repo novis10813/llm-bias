@@ -8,11 +8,10 @@ commands 或取代各 workflow 文件。
 
 ## Package 邊界
 
-- `core/prompt_input/`、`core/inference/`、`core/analysis/`、`core/artifacts/`：承接
-  shared experiment workflow 的 prepare、forward、analyze、finalize mechanics。
-- `core/` 其他模組：只放 model loading、prompt formatting、token alignment、
-  continuation scoring、artifact paths 與 lens artifact metadata/validation
-  等模型無關的共用基礎設施。
+- `core/`：承接 shared experiment workflow mechanics，以及 model loading、
+  continuation scoring、artifact identity 與 validated lens loading。修改時先讀
+  [`core/AGENTS.md`](core/AGENTS.md)；完整 ownership 與 compatibility map 見
+  [`../docs/shared-experiment-core.md`](../docs/shared-experiment-core.md)。
 - `lens_fitting/` / `lens_install/`：lens fitting 與安裝；不可 import 任一 experiment。
 - `baseline_trial/`：擁有 baseline trial prompt 準備、forward 與 artifact pipeline。
 - `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
@@ -43,10 +42,13 @@ CLI 入口是 `jacobian-lens`、`prompt-analysis`、`baseline-trial`、
 
 ## Instruction Index
 
-目前 `llm_bias/` 的直接子目錄沒有 `AGENTS.md`。`core/` 是未來優先候選：shared
-infrastructure 若再增加獨立 lifecycle 或 compatibility 規則，於 `core/` 新增
-`AGENTS.md` 並只更新本節。Experiment package 只有在出現無法由 canonical workflow
-文件覆蓋的局部架構時才新增。
+以下只列 `llm_bias/` 直接子目錄中的 instruction files：
+
+- [`core/AGENTS.md`](core/AGENTS.md)：shared workflow mechanics、compatibility facades、
+  artifact 與 lens boundaries。
+
+Experiment package 只有在出現無法由 canonical workflow 文件覆蓋的局部架構時才新增
+`AGENTS.md`。新增後，只更新本節，不在上層枚舉更深入口。
 
 ## 修改與驗證原則
 

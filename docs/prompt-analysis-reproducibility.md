@@ -21,8 +21,14 @@ uv sync
 test -d third_party/jacobian-lens
 test -d third_party/jspace-viz
 test -d .cache/models/qwen3.5-4b
-test -f sp500_r1k_r2k_entityBiasPrompt.csv
+test -f data/sp500_r1k_r2k_entityBiasPrompt.csv
 ```
+
+Repository 內的 input 慣例放在 `data/`。Prompt-analysis CLI 與兩支 shell runner 為了
+保留 public compatibility，未指定 input 時仍使用 root-relative
+`sp500_r1k_r2k_entityBiasPrompt.csv`。依 repository 慣例執行時，請明確傳入
+`--input data/sp500_r1k_r2k_entityBiasPrompt.csv`，或設定
+`INPUT_CSV=data/sp500_r1k_r2k_entityBiasPrompt.csv`。
 
 ## 1. 準備 model-specific canonical Jacobian lens
 
@@ -88,7 +94,7 @@ Runner 不會 fitting lens。完整 MAG7 8-K return-pairs runner 的固定設定
 |---|---|
 | `MODEL` | `.cache/models/qwen3.5-4b` |
 | `LENS` | `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt` |
-| `INPUT_CSV` | `sp500_r1k_r2k_entityBiasPrompt.csv` |
+| `INPUT_CSV` | `sp500_r1k_r2k_entityBiasPrompt.csv`（compatibility default；repository-local run 應設為 `data/sp500_r1k_r2k_entityBiasPrompt.csv`） |
 | `DATASET_FORMAT` | `auto` |
 | `DATASET_SLUG` | input filename 的安全 slug |
 | `RUN_ID` | UTC timestamp |
@@ -171,7 +177,7 @@ Multi-run price sampling 是獨立的 forward artifact family，不是單一 `Ru
 ```bash
 uv run prompt-analysis generate \
   --model .cache/models/qwen3.5-4b \
-  --input sp500_r1k_r2k_entityBiasPrompt.csv \
+  --input data/sp500_r1k_r2k_entityBiasPrompt.csv \
   --output artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30 \
   --runs 30 \
   --temperature 0.7 \
@@ -184,7 +190,7 @@ uv run prompt-analysis generate \
 ```bash
 uv run prompt-analysis plot-price-distributions \
   --sampling-root artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30 \
-  --prices sp500_r1k_r2k_entityBiasPrompt.csv \
+  --prices data/sp500_r1k_r2k_entityBiasPrompt.csv \
   --output-dir artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30/price_distribution
 ```
 

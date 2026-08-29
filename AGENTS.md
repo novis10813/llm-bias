@@ -26,7 +26,8 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 - [J-space valence vocabulary readout](docs/jspace-valence-vocabulary-readout.md)
 - [J-space token experiment versions](docs/jspace-token-causal-screen.md)
   - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md)（completed；shortlist empty）
-  - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)（Draft 1 已實作；尚無正式 run）
+  - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)（Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`）
+- [Shared experiment core](docs/shared-experiment-core.md)
 - [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
@@ -65,6 +66,8 @@ compatibility exception；不要新增同類依賴。新 shared mechanics 必須
 - Input/provenance 放 `data/`；模型與 Hugging Face cache 放 `.cache/`；run outputs 與
   lens artifacts 放 `artifacts/`。這些大型或 generated 內容遵守 `.gitignore`，不要
   加入 root Git。
+- `.pi/` 保存本地 agent runtime，`graphify-out/` 保存 generated repository diagrams，
+  `.worktrees/` 保存本地 Git worktrees；它們不是 main source tree，也不要加入 root Git。
 - `third_party/jacobian-lens` 與 `third_party/jspace-viz` 是 editable workspace members，但整個 `third_party/` 被 `.gitignore` 忽略。
 - 新環境請依照 `README.md` clone 兩個外部 repo 後再執行 `uv sync`。
 - 每個 model 只有一個 active、完整逐層的 canonical lens：
