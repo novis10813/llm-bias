@@ -18,6 +18,7 @@ third_party/*
 .pi/
 artifacts/*
 !artifacts/.gitkeep
+.worktrees/
 
 # Local research inputs and exports
 *.csv
