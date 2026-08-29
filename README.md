@@ -17,6 +17,8 @@ target entity activation causally changes the answer distribution.
   Outcome-conditioned decision-flip V2 is implemented against the frozen Draft 1
   protocol. Its first formal pipeline completed with `success=false`: Buy steering
   passed, but the sell-direction Holm gate lacked enough eligible test tickers.
+  The V2 doc also defines a readout-only zero-evidence header-only prior probe
+  (first formal run recorded).
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -60,7 +62,8 @@ chain-of-thought or discrete reasoning paths.
   - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
     Draft 1 protocol frozen and implemented; the first formal pipeline returned
     `success=false` because the sell-direction Holm gate had only two eligible test
-    tickers; final-position control also reproduced the steering effect
+    tickers; final-position control also reproduced the steering effect; includes
+    the zero-evidence header-only prior probe readout with its first formal run
   - [V2 outcome direction geometric projection](docs/jspace-outcome-direction-geometry.md) —
     auxiliary descriptive geometry: per-layer Technology minus Financial Services
     sector state difference projected onto the frozen V2 outcome directions

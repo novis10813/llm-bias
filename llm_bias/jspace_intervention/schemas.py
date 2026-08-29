@@ -490,11 +490,166 @@ class OutcomeFlipConfig:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class PriorProbeCondition:
+    """One frozen (ticker, sector-label) cell of the prior probe design."""
+
+    ticker: str
+    sector: str
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "PriorProbeCondition":
+        result = cls(ticker=str(value["ticker"]), sector=str(value["sector"]))
+        if not result.ticker or not result.sector:
+            raise ValueError("prior probe condition requires ticker and sector")
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PriorProbeConfig:
+    """Frozen zero-evidence header-only prior probe parameters (V2 readout).
+
+    The probe reuses the frozen V2 direction: it binds the discovery
+    direction identity and the `outcome_flip_config` that defines its fitting
+    by path + SHA-256, and only the header (ticker, sector) varies across
+    conditions.  No intervention, no gate; see the V2 canonical doc.
+    """
+
+    model: str
+    input: str
+    input_sha256: str
+    split_manifest: str
+    split_manifest_sha256: str
+    outcome_flip_config: str
+    outcome_flip_config_sha256: str
+    direction_identity: str
+    direction_identity_sha256: str
+    position_rule: str
+    conditions: tuple[PriorProbeCondition, ...]
+    contrast_tickers: tuple[str, str] = ("NVDA", "JPM")
+    contrast_sectors: tuple[str, str] = ("Technology", "Financial Services")
+    neutral_evidence_item: str = "No evidence provided."
+    decision_prefix: str = '{\n  "decision": "'
+    positive_candidate: str = "buy"
+    negative_candidate: str = "sell"
+    scale_floor: float = 1.0
+    max_seq_len: int = 1024
+    bootstrap_seed: int = 0
+    bootstrap_samples: int = 2000
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "PriorProbeConfig":
+        result = cls(
+            model=str(value.get("model", "")),
+            input=str(value.get("input", "")),
+            input_sha256=str(value.get("input_sha256", "")),
+            split_manifest=str(value.get("split_manifest", "")),
+            split_manifest_sha256=str(value.get("split_manifest_sha256", "")),
+            outcome_flip_config=str(value.get("outcome_flip_config", "")),
+            outcome_flip_config_sha256=str(
+                value.get("outcome_flip_config_sha256", "")
+            ),
+            direction_identity=str(value.get("direction_identity", "")),
+            direction_identity_sha256=str(value.get("direction_identity_sha256", "")),
+            position_rule=str(value["position_rule"]),
+            conditions=tuple(
+                PriorProbeCondition.from_dict(row) for row in value["conditions"]
+            ),
+            contrast_tickers=tuple(
+                str(ticker) for ticker in value.get("contrast_tickers", ("NVDA", "JPM"))
+            ),
+            contrast_sectors=tuple(
+                str(sector)
+                for sector in value.get(
+                    "contrast_sectors", ("Technology", "Financial Services")
+                )
+            ),
+            neutral_evidence_item=str(
+                value.get("neutral_evidence_item", "No evidence provided.")
+            ),
+            decision_prefix=str(value.get('decision_prefix', '{\n  "decision": "')),
+            positive_candidate=str(value.get("positive_candidate", "buy")),
+            negative_candidate=str(value.get("negative_candidate", "sell")),
+            scale_floor=float(value.get("scale_floor", 1.0)),
+            max_seq_len=int(value.get("max_seq_len", 1024)),
+            bootstrap_seed=int(value.get("bootstrap_seed", 0)),
+            bootstrap_samples=int(value.get("bootstrap_samples", 2000)),
+        )
+        if not result.model:
+            raise ValueError("model is required")
+        for label in (
+            "input",
+            "split_manifest",
+            "outcome_flip_config",
+            "direction_identity",
+        ):
+            if not getattr(result, label):
+                raise ValueError(f"{label} path is required")
+        for label in (
+            "input_sha256",
+            "split_manifest_sha256",
+            "outcome_flip_config_sha256",
+            "direction_identity_sha256",
+        ):
+            sha = getattr(result, label)
+            if len(sha) != 64 or any(
+                char not in "0123456789abcdef" for char in sha
+            ):
+                raise ValueError(f"{label} must be a lowercase SHA-256 hex digest")
+        if result.position_rule not in {"evidence_item_end", "evidence_span_all"}:
+            raise ValueError("unsupported prior probe position rule")
+        if not result.conditions:
+            raise ValueError("prior probe requires at least one condition")
+        cells = [
+            (condition.ticker, condition.sector) for condition in result.conditions
+        ]
+        if len(set(cells)) != len(cells):
+            raise ValueError("prior probe conditions must be unique (ticker, sector) pairs")
+        if len({condition.ticker for condition in result.conditions}) < 2:
+            raise ValueError("prior probe requires at least two tickers")
+        if len({condition.sector for condition in result.conditions}) < 2:
+            raise ValueError("prior probe requires at least two sector labels")
+        if len(result.contrast_tickers) != 2 or not all(
+            str(ticker).strip() for ticker in result.contrast_tickers
+        ) or result.contrast_tickers[0] == result.contrast_tickers[1]:
+            raise ValueError("contrast_tickers must be two distinct tickers")
+        condition_sectors = {condition.sector for condition in result.conditions}
+        if set(result.contrast_sectors) != condition_sectors or len(
+            set(result.contrast_sectors)
+        ) != 2:
+            raise ValueError(
+                "contrast_sectors must be exactly the two probed sector labels"
+            )
+        if not result.neutral_evidence_item or "\n" in result.neutral_evidence_item:
+            raise ValueError("neutral evidence item must be a non-empty single line")
+        neutral = result.neutral_evidence_item.lower()
+        for candidate in (result.positive_candidate, result.negative_candidate):
+            if candidate.lower() in neutral:
+                raise ValueError(
+                    "neutral evidence item must not contain the answer candidates"
+                )
+        if result.scale_floor <= 0.0 or not math.isfinite(result.scale_floor):
+            raise ValueError("scale_floor must be finite and positive")
+        if result.max_seq_len <= 0:
+            raise ValueError("max_seq_len must be positive")
+        if result.bootstrap_samples < 2:
+            raise ValueError("bootstrap_samples must be at least 2")
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 __all__ = [
     "ConceptToken",
     "GainConfig",
     "InterventionConfig",
     "OutcomeFlipConfig",
+    "PriorProbeCondition",
+    "PriorProbeConfig",
     "PrototypeSpec",
     "TokenScreenCandidate",
     "TokenScreenConfig",
