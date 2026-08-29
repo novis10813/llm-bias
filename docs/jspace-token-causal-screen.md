@@ -46,7 +46,14 @@ Formal V2 runs（config：`config-technology-draft1.json`）：
 （`scripts/jspace_outcome_token_attribution.py`，
 `artifacts/qwen3.5-4b/jspace-outcome-token-attribution/`）顯示 evidence item-end
 的 per-token 一階敏感度集中在 L0–L14（L15–L18 斷崖），而 aggregate direction
-的跨 ticker 對齊在 L15–L26 最高，兩者不矛盾。
+的跨 ticker 對齊在 L15–L26 最高，兩者不矛盾。outcome direction geometric
+projection（逐層 Technology−Financial Services sector state difference 在
+frozen outcome directions 上的 dot projection 與 parallel/perpendicular 分解；
+描述性幾何、非 causal）見
+[outcome direction 幾何投影分解](jspace-outcome-direction-geometry.md)；第一次
+正式 run（2026-08-28）顯示 sector state difference 在 L10–30 幾乎全部
+orthogonal 於 outcome direction（angle 82°–92°、parallel energy fraction ≤
+0.019），TF-IDF sector prototypes 亦然（|coefficient| ≤ 0.036）。
 
 ## V2 目的
 

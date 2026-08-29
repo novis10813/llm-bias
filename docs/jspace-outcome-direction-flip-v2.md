@@ -281,6 +281,12 @@ Regression tests：`tests/test_jspace_outcome_flip.py`（fake model、無 GPU）
 結果只採用 Revision record 綁定的 run IDs 與 artifacts；smoke 或失敗的舊 identity
 不算 V2 evidence。
 
+輔助診斷：基於本版本 frozen direction identity 的 outcome direction geometric
+projection（逐層 sector state difference 在 outcome direction 上的 dot projection
+與 parallel/perpendicular 分解；描述性幾何、非 causal、無 gate）另見
+[J-space outcome direction 幾何投影分解](jspace-outcome-direction-geometry.md)；
+它不改變本版本的 direction source、primary outcome、controls 或 gate。
+
 ## Revision record
 
 - **Draft 0**：將 V1 vocabulary-direction screen 與 V2 outcome-gradient decision-flip

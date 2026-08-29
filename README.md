@@ -61,6 +61,10 @@ chain-of-thought or discrete reasoning paths.
     Draft 1 protocol frozen and implemented; the first formal pipeline returned
     `success=false` because the sell-direction Holm gate had only two eligible test
     tickers; final-position control also reproduced the steering effect
+  - [V2 outcome direction geometric projection](docs/jspace-outcome-direction-geometry.md) —
+    auxiliary descriptive geometry: per-layer Technology minus Financial Services
+    sector state difference projected onto the frozen V2 outcome directions
+    (parallel/perpendicular decomposition; not causal evidence)
 
 ### Workflow operations
 

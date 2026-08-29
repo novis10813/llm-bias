@@ -27,6 +27,7 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 - [J-space token experiment versions](docs/jspace-token-causal-screen.md)
   - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md)（completed；shortlist empty）
   - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)（Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`）
+  - [V2 outcome direction 幾何投影分解](docs/jspace-outcome-direction-geometry.md)（輔助診斷；描述性幾何，非 causal）
 - [Shared experiment core](docs/shared-experiment-core.md)
 - [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
