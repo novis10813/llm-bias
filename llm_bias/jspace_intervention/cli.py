@@ -107,6 +107,30 @@ def build_parser() -> argparse.ArgumentParser:
     gain_run.add_argument("--max-seq-len", type=int, default=1024)
     gain_run.add_argument("--prompt-column", action="append", dest="prompt_columns")
 
+    context_config = commands.add_parser(
+        "prepare-l16-context-readout-config",
+        help="freeze Direction C V1 vocabulary families for L16 context readout",
+    )
+    context_config.add_argument("--frozen-candidates", "--candidates", dest="frozen_candidates", required=True, type=Path)
+    context_config.add_argument("--tfidf-config", required=True, type=Path)
+    context_config.add_argument("--model", required=True)
+    context_config.add_argument("--output", required=True, type=Path)
+
+    context_run = commands.add_parser(
+        "run-l16-context-readout",
+        help="run the frozen Direction C V1 L16 instruction-context readout",
+    )
+    context_run.add_argument("--pairs", "--input", dest="pairs", required=True, type=Path)
+    context_run.add_argument("--config", required=True, type=Path)
+    context_run.add_argument("--model", required=True)
+    context_run.add_argument("--run-id", required=True)
+    context_run.add_argument("--split", default="test", choices=("discovery", "calibration", "test"))
+    context_run.add_argument("--dataset", default="l16-context-readout")
+    context_run.add_argument("--artifact-root", default="artifacts")
+    context_run.add_argument("--lens", default=None)
+    context_run.add_argument("--max-records", type=int, default=None)
+    context_run.add_argument("--max-seq-len", type=int, default=1024)
+
     valence = commands.add_parser(
         "run-valence-readout",
         help="positive-vs-negative J-space vocabulary readout (prepare/forward/analyze/finalize)",
@@ -125,6 +149,119 @@ def build_parser() -> argparse.ArgumentParser:
     valence.add_argument("--top-k", type=int, default=30)
     valence.add_argument("--max-seq-len", type=int, default=1024)
     valence.add_argument("--seed", type=int, default=0)
+
+    cross_prepare = commands.add_parser(
+        "prepare-cross-sector-patching",
+        help="prepare deterministic A V1 cross-sector header pairs",
+    )
+    cross_prepare.add_argument("--raw-trials", "--input", dest="raw_trials", required=True, type=Path)
+    cross_prepare.add_argument("--split-manifest", required=True, type=Path)
+    cross_prepare.add_argument("--split", required=True, choices=("discovery", "calibration", "test"))
+    cross_prepare.add_argument("--output", required=True, type=Path)
+    cross_prepare.add_argument("--seed", type=int, default=0)
+    cross_prepare.add_argument("--max-pairs", type=int, default=None)
+    cross_prepare.add_argument("--max-records", type=int, default=None)
+    cross_prepare.add_argument("--source-ticker", default=None)
+    cross_prepare.add_argument("--target-ticker", default=None)
+    cross_prepare.add_argument("--allow-cross-split-smoke", action="store_true")
+
+    cross_run = commands.add_parser(
+        "run-cross-sector-header-patching",
+        help="run A V1 cross-sector header residual patching",
+    )
+    cross_run.add_argument("--prepared-pairs", "--pairs", dest="prepared_pairs", required=True, type=Path)
+    cross_run.add_argument("--model", required=True)
+    cross_run.add_argument("--run-id", required=True)
+    cross_run.add_argument("--dataset", default="cross-sector-header-patching")
+    cross_run.add_argument("--artifact-root", default="artifacts")
+    cross_run.add_argument("--layers", default="0-30")
+    cross_run.add_argument("--decision-prefix", default='{\n  "decision": "')
+    cross_run.add_argument("--positive-candidate", default="buy")
+    cross_run.add_argument("--negative-candidate", default="sell")
+    cross_run.add_argument("--max-records", type=int, default=None)
+    cross_run.add_argument("--max-seq-len", type=int, default=1024)
+
+    context_overriding = commands.add_parser(
+        "run-cross-sector-context-overriding",
+        help="run B V1 cross-sector context overriding under negative evidence",
+    )
+    context_overriding.add_argument(
+        "--prepared-pairs", "--pairs", dest="prepared_pairs", required=True, type=Path
+    )
+    context_overriding.add_argument("--model", required=True)
+    context_overriding.add_argument("--run-id", required=True)
+    context_overriding.add_argument("--dataset", default="cross-sector-context-overriding")
+    context_overriding.add_argument("--artifact-root", default="artifacts")
+    context_overriding.add_argument("--layers", default="14-21")
+    context_overriding.add_argument(
+        "--span", "--spans", "--span-condition", dest="spans", action="append",
+        default=None,
+        help="repeatable span condition (comma-separated values accepted); defaults to instruction_context, header, final_position",
+    )
+    context_overriding.add_argument("--decision-prefix", default='{\n  "decision": "')
+    context_overriding.add_argument("--positive-candidate", default="buy")
+    context_overriding.add_argument("--negative-candidate", default="sell")
+    context_overriding.add_argument("--max-records", type=int, default=None)
+    context_overriding.add_argument("--max-seq-len", type=int, default=1024)
+
+    activation_patching = commands.add_parser(
+        "run-activation-patching",
+        help="run hierarchical activation patching on prepared valence pairs",
+    )
+    activation_patching.add_argument("--pairs", required=True, type=Path)
+    activation_patching.add_argument("--model", required=True)
+    activation_patching.add_argument("--run-id", required=True)
+    activation_patching.add_argument("--dataset", default="jspace-causal-tracing")
+    activation_patching.add_argument("--artifact-root", default="artifacts")
+    activation_patching.add_argument(
+        "--phase",
+        choices=("phase0", "phase1", "phase2", "phase3"),
+        default="phase1",
+    )
+    activation_patching.add_argument(
+        "--layer-condition",
+        action="append",
+        dest="layer_conditions",
+        help="repeatable NAME=LAYER_SPEC; e.g. single_L18=18 or band_L14-L26=14-26",
+    )
+    activation_patching.add_argument(
+        "--span-condition",
+        action="append",
+        dest="span_conditions",
+        choices=(
+            "all_positions",
+            "all_evidence",
+            "evidence_qual",
+            "evidence_quant",
+            "header",
+            "instruction_context",
+            "instruction",
+            "final_position",
+        ),
+    )
+    activation_patching.add_argument(
+        "--direction",
+        action="append",
+        dest="directions",
+        choices=("positive_to_negative", "negative_to_positive"),
+    )
+    activation_patching.add_argument(
+        "--decision-prefix", default='{\n  "decision": "'
+    )
+    activation_patching.add_argument("--positive-candidate", default="buy")
+    activation_patching.add_argument("--negative-candidate", default="sell")
+    activation_patching.add_argument("--max-records", type=int, default=None)
+    activation_patching.add_argument("--max-seq-len", type=int, default=1024)
+
+    confirmation = commands.add_parser(
+        "analyze-activation-patching-confirmation",
+        help="evaluate a frozen activation-patching confirmation matrix",
+    )
+    confirmation.add_argument("--records", required=True, type=Path)
+    confirmation.add_argument("--baseline", required=True, type=Path)
+    confirmation.add_argument("--config", required=True, type=Path)
+    confirmation.add_argument("--output", required=True, type=Path)
+    confirmation.add_argument("--split", required=True, choices=("calibration", "test"))
 
     token_screen_config = commands.add_parser(
         "prepare-token-screen-config",
@@ -852,6 +989,36 @@ def _run_gain(args: argparse.Namespace) -> None:
     print(run_root)
 
 
+def _prepare_l16_context_readout_config(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.context_readout import prepare_context_readout_config
+
+    output = prepare_context_readout_config(
+        frozen_candidates_path=args.frozen_candidates,
+        tfidf_config_path=args.tfidf_config,
+        model=args.model,
+        output_path=args.output,
+    )
+    print(output)
+
+
+def _run_l16_context_readout(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.context_readout import run_context_readout_pipeline
+
+    run_root = run_context_readout_pipeline(
+        pairs_path=args.pairs,
+        config_path=args.config,
+        model_name=args.model,
+        run_id=args.run_id,
+        split_name=args.split,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        lens_path=args.lens,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+    )
+    print(run_root)
+
+
 def _run_valence_readout(args: argparse.Namespace) -> None:
     from llm_bias.jspace_intervention.valence_readout import run_valence_readout_pipeline
 
@@ -872,6 +1039,163 @@ def _run_valence_readout(args: argparse.Namespace) -> None:
         seed=args.seed,
     )
     print(run_root)
+
+
+def _parse_activation_layer_conditions(
+    specs: list[str] | None,
+) -> dict[str, tuple[int, ...]] | None:
+    if not specs:
+        return None
+    result = {}
+    for spec in specs:
+        name, separator, values = spec.partition("=")
+        if not separator or not name.strip() or not values.strip():
+            raise ValueError(
+                "layer conditions must use NAME=LAYER_SPEC, e.g. band_L14-L26=14-26"
+            )
+        layers = []
+        for part in values.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                start_text, end_text = part.split("-", 1)
+                start, end = int(start_text), int(end_text)
+                if end < start:
+                    raise ValueError(f"descending layer range in {spec!r}")
+                layers.extend(range(start, end + 1))
+            else:
+                layers.append(int(part))
+        if not layers:
+            raise ValueError(f"layer condition {name!r} is empty")
+        if name in result:
+            raise ValueError(f"duplicate layer condition name: {name!r}")
+        result[name] = tuple(sorted(set(layers)))
+    return result
+
+
+def _parse_layer_list(spec: str) -> list[int]:
+    values: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start, end = (int(value) for value in part.split("-", 1))
+            if end < start:
+                raise ValueError(f"descending layer range in {spec!r}")
+            values.extend(range(start, end + 1))
+        else:
+            values.append(int(part))
+    result = sorted(set(values))
+    if not result:
+        raise ValueError("layer specification is empty")
+    return result
+
+
+def _prepare_cross_sector_patching(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.cross_sector_patching import (
+        load_raw_trial_jsonl, load_split_assignments, prepare_cross_sector_pairs,
+    )
+    rows = load_raw_trial_jsonl(args.raw_trials)
+    assignments = load_split_assignments(args.split_manifest)
+    pairs = prepare_cross_sector_pairs(
+        rows, assignments, split_name=args.split, seed=args.seed,
+        max_pairs=args.max_pairs, max_records=args.max_records,
+        source_ticker=args.source_ticker, target_ticker=args.target_ticker,
+        allow_cross_split_smoke=args.allow_cross_split_smoke,
+        input_sha256=sha256_file(args.raw_trials),
+        split_manifest_sha256=sha256_file(args.split_manifest),
+    )
+    from llm_bias.core.artifacts.io import write_jsonl
+    write_jsonl(args.output, pairs, overwrite=True)
+    print(args.output)
+
+
+def _run_cross_sector_header_patching(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.cross_sector_patching import (
+        run_cross_sector_header_patching_pipeline,
+    )
+    run_root = run_cross_sector_header_patching_pipeline(
+        prepared_pairs=args.prepared_pairs,
+        model_name=args.model,
+        run_id=args.run_id,
+        layers=_parse_layer_list(args.layers),
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        decision_prefix=args.decision_prefix,
+        positive_candidate=args.positive_candidate,
+        negative_candidate=args.negative_candidate,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+    )
+    print(run_root)
+
+
+def _run_cross_sector_context_overriding(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.context_overriding import (
+        run_cross_sector_context_overriding_pipeline,
+    )
+    spans = (
+        tuple(value for spec in args.spans for value in spec.split(",") if value.strip())
+        if args.spans
+        else ("instruction_context", "header", "final_position")
+    )
+    run_root = run_cross_sector_context_overriding_pipeline(
+        prepared_pairs=args.prepared_pairs,
+        model_name=args.model,
+        run_id=args.run_id,
+        layers=_parse_layer_list(args.layers),
+        spans=spans,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        decision_prefix=args.decision_prefix,
+        positive_candidate=args.positive_candidate,
+        negative_candidate=args.negative_candidate,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+    )
+    print(run_root)
+
+
+def _run_activation_patching(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.activation_patching import (
+        run_activation_patching_pipeline,
+    )
+
+    run_root = run_activation_patching_pipeline(
+        pairs_path=args.pairs,
+        model_name=args.model,
+        run_id=args.run_id,
+        phase=args.phase,
+        layer_conditions=_parse_activation_layer_conditions(args.layer_conditions),
+        span_conditions=args.span_conditions,
+        directions=args.directions
+        or ("positive_to_negative", "negative_to_positive"),
+        decision_prefix=args.decision_prefix,
+        positive_candidate=args.positive_candidate,
+        negative_candidate=args.negative_candidate,
+        dataset=args.dataset,
+        artifact_root=args.artifact_root,
+        max_records=args.max_records,
+        max_seq_len=args.max_seq_len,
+    )
+    print(run_root)
+
+
+def _analyze_activation_patching_confirmation(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.activation_patching import (
+        evaluate_activation_patching_confirmation_artifacts,
+    )
+
+    evaluate_activation_patching_confirmation_artifacts(
+        records_path=args.records,
+        baseline_path=args.baseline,
+        config_path=args.config,
+        output_path=args.output,
+        split=args.split,
+    )
+    print(args.output)
 
 
 def _run_token_screen(args: argparse.Namespace) -> None:
@@ -917,6 +1241,12 @@ def main() -> None:
     args = build_parser().parse_args()
     if args.command == "prepare-splits":
         _prepare_splits(args)
+    elif args.command == "prepare-cross-sector-patching":
+        _prepare_cross_sector_patching(args)
+    elif args.command == "run-cross-sector-header-patching":
+        _run_cross_sector_header_patching(args)
+    elif args.command == "run-cross-sector-context-overriding":
+        _run_cross_sector_context_overriding(args)
     elif args.command == "prepare-config":
         _prepare_config(args)
     elif args.command == "prepare-gain-config":
@@ -933,6 +1263,14 @@ def main() -> None:
         _run_gain(args)
     elif args.command == "run-valence-readout":
         _run_valence_readout(args)
+    elif args.command == "prepare-l16-context-readout-config":
+        _prepare_l16_context_readout_config(args)
+    elif args.command == "run-l16-context-readout":
+        _run_l16_context_readout(args)
+    elif args.command == "run-activation-patching":
+        _run_activation_patching(args)
+    elif args.command == "analyze-activation-patching-confirmation":
+        _analyze_activation_patching_confirmation(args)
     elif args.command == "run-token-screen":
         _run_token_screen(args)
     elif args.command == "run-outcome-flip":
