@@ -18,7 +18,7 @@
 - 只有 `promote_qwen_lens_candidate.py` 可在完成 hash、shape、metadata 驗證並 archive
   舊 artifact 後寫入 active canonical lens。
 - `render_jspace_intervention_report_figures.py` 綁定既有 report runs。加入新 run 前先在
-  `docs/jspace-sector-intervention-interim.md` 記錄 provenance。
+  `docs/jspace-sector-intervention/report.md` 記錄 provenance。
 
 `promote_qwen_lens_candidate.py`、`jspace_tfidf_analysis.py` 與 shell runners 有直接
 regression-test coupling；重命名 script、public symbol、env variable 或 path contract

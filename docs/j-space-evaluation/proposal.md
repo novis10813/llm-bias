@@ -11,7 +11,7 @@ suite currently exists in this repository. Every package layout, command, and
 artifact described below is conceptual and non-runnable until implemented.
 
 The design may inform the later cross-model phase of the
-[entity-bias roadmap](proposal/entity-bias-roadmap.md) as an optional preflight.
+[entity-bias roadmap](../proposal/entity-bias-roadmap.md) as an optional preflight.
 It does not establish entity bias, identify a global workspace, replace
 domain-specific counterfactual patching, or turn a transported J-lens readout
 into standalone causal evidence. It is not a prerequisite, completion gate, or

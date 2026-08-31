@@ -19,7 +19,13 @@ target entity activation 是否會改變答案分布。主要 workflow 是：
   `baseline-trial` 的執行基礎。
 - `jspace-intervention`：執行 sector swap/gain、valence vocabulary readout、
   matched-random V1 token causal screen 與 outcome-conditioned decision-flip V2
-  （Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`，詳見 V2 文件）。
+  （Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`），以及 V2 的
+  geometric projection、zero-evidence header-only prior probe 與 direction decode
+  輔助診斷。此 package 也執行 hierarchical activation patching causal tracing；該
+  workflow 的 Draft 1 held-out confirmation verdict 為 `success=true`。Sector/context
+  follow-up experiments（A cross-sector header patching、B negative-evidence context
+  overriding、C L16 context readout）也在本 package；三者皆已完成 discovery runs，
+  calibration/test gates 尚未凍結。各實驗狀態與限制見對應 canonical 文件。
 - `span-sensitivity`：對 explicit ticker/name header spans 執行單一產業 behavioral
   screen。
 - `jacobian-lens fit`：獨立的 lens fitting 工具；experiment workflow 只消費
@@ -41,23 +47,26 @@ J-space evaluation 是從 Jacobian-lens working-space literature 延伸出的
 **optional、proposed、non-runnable auxiliary preflight**，只評估 synthetic
 task-local J-space-candidate evidence；它不建立 global workspace 結論、不 gate
 entity-bias milestones，也不取代每個模型自己的 entity-only causal protocol。
-文件位於 [`docs/j-space-evaluation.md`](docs/j-space-evaluation.md)。
+文件位於 [`docs/j-space-evaluation/proposal.md`](docs/j-space-evaluation/proposal.md)。
 
 ## Operational documentation
 
 完整 CLI、參數、artifact、schema、runner 與 dashboard 操作只維護在各自的
 canonical workflow 文件；不要在本文件複製完整 command blocks。
 
-- [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
-- [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
-- [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
+- [Baseline trial proposal](docs/baseline-trial/proposal.md) / [reproducibility report](docs/baseline-trial/report-reproducibility.md)
+- [Qwen Jacobian-lens selection proposal](docs/jacobian-lens-selection/proposal.md) / [report](docs/jacobian-lens-selection/report.md)
+
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
-- [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
-- [J-space sector intervention](docs/jspace-sector-intervention-interim.md)
-- [J-space valence vocabulary readout](docs/jspace-valence-vocabulary-readout.md)
-- [J-space token experiment versions](docs/jspace-token-causal-screen.md)
-  - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md)
-  - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)
+- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) / [report status](docs/span-sensitivity/report-status.md)
+- [J-space sector intervention proposal](docs/jspace-sector-intervention/proposal.md) / [report](docs/jspace-sector-intervention/report.md)
+- [J-space valence vocabulary readout proposal](docs/jspace-valence-readout/proposal.md) / [report](docs/jspace-valence-readout/report-technology-discovery.md)
+- [J-space token experiment versions](docs/jspace-token-experiments/README.md)
+  - [V1 proposal](docs/jspace-token-experiments/proposal-v1.md) / [report](docs/jspace-token-experiments/report-v1.md)
+  - [V2 proposal](docs/jspace-token-experiments/proposal-v2.md) / [report](docs/jspace-token-experiments/report-v2.md)
+  - [V2 outcome direction geometric projection](docs/jspace-token-experiments/report-v2-geometry.md)
+- [Activation patching proposal](docs/activation-patching-causal-tracing/proposal.md) / [report](docs/activation-patching-causal-tracing/report.md)
+- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) / [report](docs/sector-context-followup/report-discovery.md)
 - [Shared experiment core](docs/shared-experiment-core.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 - [Research scripts reference](docs/research-scripts.md)
@@ -81,12 +90,12 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
 - 每個模型只能有一個 active、完整逐層的 canonical lens：
   `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt`。一般 partial/stride fitting
   checkpoint 放在 `artifacts/archive/<model-slug>/jacobian-lens/checkpoints/`。受控
-  candidate selection 可依 `docs/qwen-jacobian-lens-selection.md` 使用 active model
+  candidate selection 可依 `docs/jacobian-lens-selection/proposal.md` 使用 active model
   folder 下的 `candidates/` 與 candidate-adjacent digest checkpoints，但 candidate
   不得冒充 canonical lens。
 - Qwen3.5-4B 使用不同 residual width/layer count 的 model-specific lens。優先
   使用 pinned pretrained registry 中 exact identity 相符且通過完整驗證的 artifact；
-  `docs/qwen-jacobian-lens-selection.md` 的本地 bilingual 候選選擇是研究替代流程。
+  `docs/jacobian-lens-selection/proposal.md` 的本地 bilingual 候選選擇是研究替代流程。
   不要用小型 smoke corpus 覆寫 canonical lens。
 - `extraction` optional extra（含 `langextract[openai]`）是給已 archive 的
   `prepare-counterfactual-data annotate` 用的（預期本地 OpenAI-compatible
@@ -106,8 +115,10 @@ README 保留 fresh-checkout setup 與 public quickstart；不要把 future
 - `llm_bias/baseline_trial/`：baseline trial-plan CSV 的 stage runner
   （含 lens-forward 逐層 readout 擴展）；建立在 `prompt_analysis` 之上。
 - `llm_bias/jspace_intervention/`：J-space sector swap/gain、dose-matched controls、
-  valence vocabulary readout、V1 token causal screen 與 V2 outcome-conditioned
-  decision flip（Draft 1 已實作）及 paired analysis。
+  valence vocabulary readout、V1 token causal screen、V2 outcome-conditioned
+  decision flip（Draft 1 已實作）、hierarchical activation patching causal tracing 與
+  sector/context follow-up experiments（A/B/C）；詳細 workflow 與結果由各 canonical
+  文件維護。
 - `llm_bias/span_sensitivity/`：單一產業 identity-header conditions、固定 Buy/Sell
   continuation margin 與 ticker-level paired analysis。
 - `llm_bias/static/`：prompt readout serve dashboard 與 generated-attribution template

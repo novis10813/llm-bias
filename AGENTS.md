@@ -18,22 +18,23 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 
 主要 workflow 的完整操作文件如下：
 
-- [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
-- [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
-- [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
+- [Baseline trial proposal](docs/baseline-trial/proposal.md) / [prompt-analysis reproducibility report](docs/baseline-trial/report-reproducibility.md)
+- [Qwen Jacobian-lens selection proposal](docs/jacobian-lens-selection/proposal.md) / [selection report](docs/jacobian-lens-selection/report.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
-- [J-space sector intervention: methods, calibration, results](docs/jspace-sector-intervention-interim.md)
-- [J-space valence vocabulary readout](docs/jspace-valence-vocabulary-readout.md)
-- [J-space token experiment versions](docs/jspace-token-causal-screen.md)
-  - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md)（completed；shortlist empty）
-  - [V2: outcome-conditioned Buy/Sell decision flips](docs/jspace-outcome-direction-flip-v2.md)（Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`；另含 zero-evidence header-only prior probe 及其 first formal run）
-  - [V2 outcome direction 幾何投影分解](docs/jspace-outcome-direction-geometry.md)（輔助診斷；描述性幾何，非 causal）
+- [J-space sector intervention proposal](docs/jspace-sector-intervention/proposal.md) / [held-out report](docs/jspace-sector-intervention/report.md)
+- [J-space valence vocabulary readout proposal](docs/jspace-valence-readout/proposal.md) / [Technology discovery report](docs/jspace-valence-readout/report-technology-discovery.md)
+- [J-space token experiment versions](docs/jspace-token-experiments/README.md)
+  - [V1 proposal](docs/jspace-token-experiments/proposal-v1.md) / [report](docs/jspace-token-experiments/report-v1.md)（completed；shortlist empty）
+  - [V2 proposal](docs/jspace-token-experiments/proposal-v2.md) / [report](docs/jspace-token-experiments/report-v2.md)（Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`；另含 zero-evidence header-only prior probe 與 direction decode，兩者皆有 first formal run）
+  - [V2 outcome direction 幾何投影分解](docs/jspace-token-experiments/report-v2-geometry.md)（輔助診斷；描述性幾何，非 causal）
+- [Activation patching proposal](docs/activation-patching-causal-tracing/proposal.md) / [report](docs/activation-patching-causal-tracing/report.md)（Draft 1 completed；discovery 找到 evidence→instruction context→final position 的 layer-dependent sufficiency 轉移；unchanged held-out confirmation `success=true`）
+- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) / [discovery report](docs/sector-context-followup/report-discovery.md)（A cross-sector header-state patching、B negative-evidence context overriding、C L16 instruction-context readout；protocol frozen；A/B/C 皆已有 discovery runs，calibration/test gates 未凍結）
 - [Shared experiment core](docs/shared-experiment-core.md)
-- [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
+- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) / [report status](docs/span-sensitivity/report-status.md)
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 
-J-space evaluation 位於 [`docs/j-space-evaluation.md`](docs/j-space-evaluation.md)。它是
+J-space evaluation 位於 [`docs/j-space-evaluation/proposal.md`](docs/j-space-evaluation/proposal.md)。它是
 optional、proposed、non-runnable auxiliary preflight，只評估 synthetic task-local
 J-space-candidate evidence；它不建立 global workspace 結論，也不 gate active
 experiment milestones。可執行的 sector intervention 位於
@@ -60,7 +61,7 @@ compatibility exception；不要新增同類依賴。新 shared mechanics 必須
 - Python 3.13 與 workspace 依賴由 `.python-version`、`pyproject.toml`、`uv.lock`
   定義；使用 `uv sync` 建環境，新增套件使用 `uv add`。
 - Pinned lens registry 放在 `config/pretrained_lenses.json`；修改 model identity、revision
-  或 SHA-256 時，依 [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
+  或 SHA-256 時，依 [Qwen Jacobian-lens selection](docs/jacobian-lens-selection/proposal.md)
   重新驗證。
 - 可追蹤的詳細政策與 workflow 放 `docs/`；script ownership map 見
   [Research scripts reference](docs/research-scripts.md)。
@@ -75,7 +76,7 @@ compatibility exception；不要新增同類依賴。新 shared mechanics 必須
   `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt`。一般 partial/stride fitting
   checkpoint 放 `artifacts/archive/<model-slug>/jacobian-lens/checkpoints/`；受控
   candidate-selection workflow 可依
-  [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md) 使用
+  [Qwen Jacobian-lens selection](docs/jacobian-lens-selection/proposal.md) 使用
   `artifacts/<model-slug>/jacobian-lens/candidates/` 的 candidate-adjacent digest
   checkpoints，但不得把 candidate 當 active lens。
 

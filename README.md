@@ -18,7 +18,15 @@ target entity activation causally changes the answer distribution.
   protocol. Its first formal pipeline completed with `success=false`: Buy steering
   passed, but the sell-direction Holm gate lacked enough eligible test tickers.
   The V2 doc also defines a readout-only zero-evidence header-only prior probe
-  (first formal run recorded).
+  and a Jacobian-lens direction decode; both have a recorded first formal run.
+  The same package implements hierarchical activation patching over prepared
+  positive/negative valence pairs; discovery found a layer-wise sufficiency
+  shift from evidence positions to post-evidence context and then the final
+  position. The unchanged held-out confirmation passed every frozen gate with
+  `success=true`. The package also implements three sector/context follow-ups:
+  A V1 cross-sector header-state patching, B V1 negative-evidence context
+  overriding, and C V1 L16 instruction-context readout. Their discovery runs
+  are recorded, but calibration/test gates are not frozen.
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -42,39 +50,48 @@ chain-of-thought or discrete reasoning paths.
 - [Research proposals and planning](docs/proposal/README.md)
 - [Entity-bias research proposal](docs/proposal/entity-bias-research-proposal.md)
 - [Entity-bias roadmap](docs/proposal/entity-bias-roadmap.md)
-- [J-space evaluation design](docs/j-space-evaluation.md) — optional,
+- [J-space evaluation design](docs/j-space-evaluation/proposal.md) — optional,
   proposed, non-runnable synthetic task-local J-space-candidate preflight for
   comparing compatible local models; not a proposal component or entity-bias
   evidence gate.
 
-### Experiment reports
+### Experiment proposals and reports
 
-- [J-space sector intervention: methods, calibration, and preliminary findings](docs/jspace-sector-intervention-interim.md)
-- [J-space valence vocabulary readout](docs/jspace-valence-vocabulary-readout.md) —
-  Technology positive-vs-negative J-space vocabulary readout that nominates
-  representation candidates for later signed steering/gain/swap; transported-
-  representation evidence, not causal evidence
-- [J-space token experiment versions](docs/jspace-token-causal-screen.md) —
+- [J-space sector intervention proposal](docs/jspace-sector-intervention/proposal.md) and [held-out report](docs/jspace-sector-intervention/report.md)
+- [J-space valence vocabulary readout proposal](docs/jspace-valence-readout/proposal.md) and [Technology discovery report](docs/jspace-valence-readout/report-technology-discovery.md) —
+  positive-vs-negative J-space vocabulary readout that nominates representation
+  candidates for later signed steering/gain/swap; transported-representation
+  evidence, not causal evidence
+- [J-space token experiment versions](docs/jspace-token-experiments/README.md) —
   separates completed V1 vocabulary-direction margin screening from the
   implemented (Draft 1) V2 outcome-gradient Buy/Sell decision-flip testing
-  - [V1: representation-nominated token directions](docs/jspace-token-causal-screen-v1.md) —
+  - [V1 proposal](docs/jspace-token-experiments/proposal-v1.md) and [report](docs/jspace-token-experiments/report-v1.md) —
     completed discovery screen; no candidate passed the frozen shortlist gate
-  - [V2: outcome-conditioned decision flip](docs/jspace-outcome-direction-flip-v2.md) —
+  - [V2 proposal](docs/jspace-token-experiments/proposal-v2.md) and [report](docs/jspace-token-experiments/report-v2.md) —
     Draft 1 protocol frozen and implemented; the first formal pipeline returned
     `success=false` because the sell-direction Holm gate had only two eligible test
     tickers; final-position control also reproduced the steering effect; includes
-    the zero-evidence header-only prior probe readout with its first formal run
-  - [V2 outcome direction geometric projection](docs/jspace-outcome-direction-geometry.md) —
+    first formal runs for the zero-evidence header-only prior probe and the
+    Jacobian-lens decode of the frozen V2 outcome direction
+  - [V2 outcome direction geometric projection](docs/jspace-token-experiments/report-v2-geometry.md) —
     auxiliary descriptive geometry: per-layer Technology minus Financial Services
     sector state difference projected onto the frozen V2 outcome directions
     (parallel/perpendicular decomposition; not causal evidence)
+- [Activation patching proposal](docs/activation-patching-causal-tracing/proposal.md) and [experiment report](docs/activation-patching-causal-tracing/report.md) —
+  implemented Draft 1 workflow that patches model-produced residual states between
+  positive and negative valence prompts to scan layer and prompt-span sufficiency;
+  completed evidence-to-context-to-final layer localization; frozen
+  calibration and unchanged held-out confirmation both returned `success=true`
+- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) and [discovery report](docs/sector-context-followup/report-discovery.md) —
+  A: cross-sector identity-header state patching, B: cross-sector context overriding
+  under negative evidence, C: L16 instruction-context Jacobian-lens readout; protocols
+  frozen with discovery runs recorded for all three; no calibration or test verdict yet
 
 ### Workflow operations
 
-- [Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md)
-- [Technology header-span sensitivity](docs/technology-header-span-sensitivity.md)
-- [Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md)
-- [Prompt-analysis reproducibility](docs/prompt-analysis-reproducibility.md)
+- [Baseline trial proposal](docs/baseline-trial/proposal.md) and [prompt-analysis reproducibility report](docs/baseline-trial/report-reproducibility.md)
+- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) and [report status](docs/span-sensitivity/report-status.md)
+- [Qwen Jacobian-lens selection proposal](docs/jacobian-lens-selection/proposal.md) and [selection report](docs/jacobian-lens-selection/report.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
 - [Archived workflow operations](docs/archive/README.md) — counterfactual patching,
   8-K/10-K dataset preparation, synthetic entity-bias pilot, and easy-bias feasibility
@@ -121,7 +138,7 @@ metadata, then installs an offline canonical artifact. It never downloads at
 experiment runtime and does not fuzzy-match instruct or differently shaped
 checkpoints. If no exact registry entry exists, use `jacobian-lens fit` or the
 controlled local candidate-selection alternative in
-[Qwen Jacobian-lens selection](docs/qwen-jacobian-lens-selection.md); do not
+[Qwen Jacobian-lens selection](docs/jacobian-lens-selection/proposal.md); do not
 replace a canonical lens with a small smoke fit.
 
 ## Minimal smoke workflow
@@ -137,7 +154,7 @@ uv run baseline-trial inspect-input \
 ```
 
 For the complete baseline-trial stage sequence, see
-[Baseline trial plan prompts](docs/baseline-trial-plan-prompts.md). The
+[Baseline trial plan prompts](docs/baseline-trial/proposal.md). The
 archived counterfactual-patching quickstart remains in
 [docs/archive/counterfactual-patching.md](docs/archive/counterfactual-patching.md).
 

@@ -34,7 +34,7 @@ Repository 內的 input 慣例放在 `data/`。Prompt-analysis CLI 與兩支 she
 
 Canonical lens 必須保留每個 intermediate layer。Qwen3.5-4B 使用 model-specific
 residual width/layer count；完整設計、候選選擇與 promotion 流程見
-[Qwen3.5-4B Jacobian-lens calibration 與候選選擇](qwen-jacobian-lens-selection.md)。
+[Qwen3.5-4B Jacobian-lens calibration 與候選選擇](../jacobian-lens-selection/proposal.md)。
 
 一般新模型可以先使用 standalone fitter 建立 experimental lens，輸出到候選目錄；
 active canonical lens 的位置固定為：

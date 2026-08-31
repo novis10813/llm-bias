@@ -21,7 +21,7 @@ reviewed counterfactual data
   -> cross-model and cross-task evaluation
 ```
 
-The separate [J-space evaluation design](../j-space-evaluation.md) is an
+The separate [J-space evaluation design](../j-space-evaluation/proposal.md) is an
 optional auxiliary preflight derived from the working-space concept in the
 Jacobian-lens literature. It evaluates synthetic task-local J-space-candidate
 evidence and may make compatibility checks and cross-model protocol diagnostics
@@ -59,6 +59,9 @@ model-specific rendering are both part of the dataset-construction window.
 | Causal controls/statistics | Basic non-entity control and exploratory summaries exist; the entity-only patching protocol and code paths are available | Reviewed/promoted pairs, full entity-only patching runs, bidirectional and unrelated/random controls, independent sampling, paired uncertainty, and correction are pending |
 | Entity-specific selective intervention | Research design only | Not implemented or evaluated |
 | J-space sector intervention | Active `jspace-intervention` workflow implements swap/gain, dose-matched controls, valence readout, V1 token causal screening, and V2 outcome-conditioned decision-flip (Draft 1 frozen and implemented; first formal pipeline completed 2026-08-28) | Qwen3.5-4B sector held-out specificity was not supported; V1 token shortlist is empty; V2 Test run 1 returned `success=false`: Buy steering passed, while the sell-direction Holm gate could not pass with only two eligible test tickers; final-position control reproduced both directions, so evidence-position specificity was not established |
+| Activation patching causal tracing | Draft 1 hierarchical residual resample patching and frozen confirmation analysis are implemented in `jspace-intervention` | Discovery localized an evidence → instruction-context → final-position sufficiency shift; the unchanged Qwen3.5-4B held-out confirmation returned `success=true` |
+| Sector and context follow-up | A V1 cross-sector header-state patching, B V1 negative-evidence context overriding, and C V1 L16 instruction-context readout are implemented with separate artifacts | A/B/C discovery runs are recorded; calibration/test gates are not frozen, so no formal sector-conditioned claim is established |
+| Technology header-span sensitivity | V1 header-only condition preparation, fixed Buy/Sell margin scoring, paired analysis, artifact lifecycle, and CLI are implemented | The repository records the proposal and run contract but no completed discovery, calibration, or held-out report |
 | Cross-model/task evaluation | Model loaders and model-specific lens paths exist | No standardised cross-model/task result exists |
 | Optional J-space-candidate preflight | Proposed non-runnable design exists | `jspace_eval` package and CLI are not implemented |
 
@@ -172,7 +175,7 @@ data→patch→statistics results for the selected model/task set.
 
 ## Optional analysis design: J-space-candidate preflight
 
-The separate [J-space evaluation design](../j-space-evaluation.md) describes a
+The separate [J-space evaluation design](../j-space-evaluation/proposal.md) describes a
 future, non-runnable `jspace_eval` tool that may:
 
 - check whether a local decoder exposes the residual, unembedding, gradient, and
@@ -217,12 +220,18 @@ or draft rather than validated evidence of harmful entity bias.
 
 - [Counterfactual patching (archived)](../archive/counterfactual-patching.md)
 - [8-K counterfactual entity dataset (archived)](../archive/counterfactual-dataset-generation.md)
-- [Qwen Jacobian-lens selection](../qwen-jacobian-lens-selection.md)
+- [Qwen Jacobian-lens selection](../jacobian-lens-selection/proposal.md)
 - [EDGAR 8-K preparation (archived)](../archive/edgar-8k-preparation.md)
-- [J-space sector intervention](../jspace-sector-intervention-interim.md)
-- [J-space valence vocabulary readout](../jspace-valence-vocabulary-readout.md)
-- [J-space token experiment versions](../jspace-token-causal-screen.md)
-- [J-space token causal screen V1](../jspace-token-causal-screen-v1.md)
-- [J-space outcome-conditioned decision-flip V2](../jspace-outcome-direction-flip-v2.md)
-- [Prompt-analysis reproducibility](../prompt-analysis-reproducibility.md)
+- [J-space sector intervention proposal](../jspace-sector-intervention/proposal.md) and [report](../jspace-sector-intervention/report.md)
+- [J-space valence vocabulary readout proposal](../jspace-valence-readout/proposal.md) and [report](../jspace-valence-readout/report-technology-discovery.md)
+- [J-space token experiment versions](../jspace-token-experiments/README.md)
+- [J-space token causal screen V1 proposal](../jspace-token-experiments/proposal-v1.md) and [report](../jspace-token-experiments/report-v1.md)
+- [J-space outcome-conditioned decision-flip V2 proposal](../jspace-token-experiments/proposal-v2.md) and [report](../jspace-token-experiments/report-v2.md)
+- [Activation patching causal tracing proposal](../activation-patching-causal-tracing/proposal.md) and [report](../activation-patching-causal-tracing/report.md)
+- [Sector and context follow-up proposal](../sector-context-followup/proposal.md) and [discovery report](../sector-context-followup/report-discovery.md)
+- [Technology header-span sensitivity proposal](../span-sensitivity/proposal.md) and [report status](../span-sensitivity/report-status.md)
+- [Prompt-analysis reproducibility](../baseline-trial/report-reproducibility.md)
+- [Shared experiment core](../shared-experiment-core.md)
+- [Artifact identity and run manifest contract](../artifact-contract.md)
+- [Research scripts reference](../research-scripts.md)
 - [Repository constraints and verification commands](../../CLAUDE.md)

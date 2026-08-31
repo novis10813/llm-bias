@@ -1,4 +1,4 @@
-# Technology identity-header span sensitivity
+# Technology identity-header span sensitivity: proposal
 
 ## 目的
 

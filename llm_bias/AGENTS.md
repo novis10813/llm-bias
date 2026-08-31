@@ -14,27 +14,15 @@ commands 或取代各 workflow 文件。
   [`../docs/shared-experiment-core.md`](../docs/shared-experiment-core.md)。
 - `lens_fitting/` / `lens_install/`：lens fitting 與安裝；不可 import 任一 experiment。
 - `baseline_trial/`：擁有 baseline trial prompt 準備、forward 與 artifact pipeline。
-- `jspace_intervention/`：擁有 J-space sector 座標 swap/gain intervention、
-  dose-matched controls、valence vocabulary readout、V1 token causal screen 與 V2
-  outcome-conditioned decision flip（`prepare-outcome-flip-config`、`run-outcome-flip`）
-  及 analysis；V2 的輔助幾何診斷 outcome direction geometric projection
-  （`run-outcome-geometry`，描述性、非 causal）、V2 輔助診斷 direction decode
-  （`decode-outcome-direction`，以 canonical Jacobian lens 解碼 frozen $d_l$，見 V2
-  文件「Direction decode」節）與 zero-evidence header-only prior probe
-  （`prepare-prior-probe-config`、`run-prior-probe`）也在本 package。
-  詳細語意見 [`../docs/jspace-sector-intervention-interim.md`](../docs/jspace-sector-intervention-interim.md)、
-  [`../docs/jspace-valence-vocabulary-readout.md`](../docs/jspace-valence-vocabulary-readout.md)、
-  [`../docs/jspace-token-causal-screen.md`](../docs/jspace-token-causal-screen.md) 的版本入口與
-  [`../docs/jspace-outcome-direction-geometry.md`](../docs/jspace-outcome-direction-geometry.md)。
-  V2 使用獨立的 `jspace-outcome-direction-flip` slug 與
-  `outcome_flip_*` artifacts（見
-  [`../docs/jspace-outcome-direction-flip-v2.md`](../docs/jspace-outcome-direction-flip-v2.md)），
-  不可把 V1 CLI/schema 當成 V2 implementation。
+- `jspace_intervention/`：擁有 sector coordinate intervention、valence readout、J-space
+  token V1/V2、activation patching，以及 sector/context follow-up A/B/C。修改時先讀
+  [`jspace_intervention/AGENTS.md`](jspace_intervention/AGENTS.md)；各 protocol、artifact
+  identity 與 evidence status 由該檔連結的 experiment proposal/report 定義。
 - `prompt_analysis/`：擁有 CSV prompt readout、generated-token attribution、
   attribution validation 與結果視覺化。
 - `span_sensitivity/`：擁有單一產業 identity-header conditions、固定 Buy/Sell
   continuation margin 與 ticker-clustered paired analysis；workflow 見
-  [`../docs/technology-header-span-sensitivity.md`](../docs/technology-header-span-sensitivity.md)。
+  [`../docs/span-sensitivity/proposal.md`](../docs/span-sensitivity/proposal.md)。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
   `edgar_preparation/`：已隨程式移至 `archive/llm_bias/`（frozen），操作文件在
   `docs/archive/`。
@@ -51,6 +39,8 @@ CLI 入口是 `jacobian-lens`、`prompt-analysis`、`baseline-trial`、
 
 - [`core/AGENTS.md`](core/AGENTS.md)：shared workflow mechanics、compatibility facades、
   artifact 與 lens boundaries。
+- [`jspace_intervention/AGENTS.md`](jspace_intervention/AGENTS.md)：J-space V1/V2、activation
+  patching、sector/context A/B/C 的 package 分工與局部驗證。
 
 Experiment package 只有在出現無法由 canonical workflow 文件覆蓋的局部架構時才新增
 `AGENTS.md`。新增後，只更新本節，不在上層枚舉更深入口。

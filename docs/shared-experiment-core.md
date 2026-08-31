@@ -75,7 +75,10 @@ artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
 
 - `model.py`：tokenizer/model loading、diagnostics 與 Qwen 27B multi-GPU device maps。
 - `continuation_scoring.py`：teacher-forced continuation likelihood、fixed-choice margin、
-  categorical KL 與 FP32 single-token margin。
+  categorical KL 與 FP32 single-token margin。`fp32_next_token_logits` 提供 final norm 加
+  unembedding 的 FP32 logits tail；`fp32_next_token_log_probs` 在同一 tail 後套用
+  log-softmax。V2 direction decode 重用前者，確保 fitting target 與 vocabulary
+  decode 使用相同 unembedding convention。
 - `artifact_paths.py` / `artifact_manifest.py`：run identity、hash、atomic path helpers 與
   schema-version 1 manifest。
 - `lens_artifacts.py`：canonical/candidate/archive path、schema-version 2 metadata 與 model
@@ -99,7 +102,7 @@ Core 只負責 lens identity、path、metadata、registry lookup 與 validated l
   或覆寫 lens。
 
 Canonical lens、candidate-selection 例外與 promotion 條件見
-[Qwen Jacobian-lens selection](qwen-jacobian-lens-selection.md)。
+[Qwen Jacobian-lens selection](jacobian-lens-selection/proposal.md)。
 
 ## Compatibility facades
 

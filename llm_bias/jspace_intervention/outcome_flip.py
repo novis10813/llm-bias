@@ -1,6 +1,6 @@
 """V2 outcome-conditioned decision-flip workflow (protocol Draft 1).
 
-Implements the frozen protocol in ``docs/jspace-outcome-direction-flip-v2.md``:
+Implements the frozen protocol in ``docs/jspace-token-experiments/proposal-v2.md``:
 an antisymmetric outcome-gradient axis fitted on discovery prompts, paired
 dose-matched controls, held-out Buy/Sell decision flips as the primary
 outcome, and deterministic full JSON generation as the required behavioral

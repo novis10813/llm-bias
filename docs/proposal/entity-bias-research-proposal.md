@@ -266,7 +266,7 @@ that have not passed the review and promotion gates.
 - guidance-inspired selective intervention and risk gating;
 - systematic layer-by-strength intervention evaluation;
 - cross-model and cross-task generalisation; and
-- the separate [J-space evaluation design](../j-space-evaluation.md), which is
+- the separate [J-space evaluation design](../j-space-evaluation/proposal.md), which is
   an optional auxiliary preflight for synthetic task-local J-space-candidate
   comparison rather than part of this proposal.
 
@@ -321,6 +321,6 @@ before they are presented as official submission deadlines.
   in Language Models*. arXiv:2607.15495. This reference motivates the Jacobian
   lens readout and the working-space concept; it is not a claim that this
   project directly establishes a global workspace. A separate, optional,
-  non-runnable [J-space evaluation design](../j-space-evaluation.md) proposes a
+  non-runnable [J-space evaluation design](../j-space-evaluation/proposal.md) proposes a
   synthetic task-local preflight for comparing candidate evidence across local
   models; it does not gate or replace the entity-only causal protocol.

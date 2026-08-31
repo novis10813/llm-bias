@@ -34,7 +34,7 @@ return contract 不同。新增 caller 時使用完整 module path，並以測�
 - `ArtifactRun.finalize()` 是 required-stage postcheck，不是獨立 stage。
 - Runtime lens loading 經 `lens_loader.load_validated_lens` 驗證 identity、shape、layer
   coverage 與 metadata。Canonical lens 規則見
-  [`../../docs/qwen-jacobian-lens-selection.md`](../../docs/qwen-jacobian-lens-selection.md)。
+  [`../../docs/jacobian-lens-selection/proposal.md`](../../docs/jacobian-lens-selection/proposal.md)。
 - Artifact path、hash 與 lifecycle 契約見
   [`../../docs/artifact-contract.md`](../../docs/artifact-contract.md)。
 

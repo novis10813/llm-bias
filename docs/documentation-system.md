@@ -20,7 +20,7 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 |---|---|---|---|
 | root `AGENTS.md` | 所有 coding agents | 專案 scope、全域規則、檔案放置、直接子層入口、常用驗證 | 完整 CLI 操作手冊、整棵目錄樹 |
 | 子目錄 `AGENTS.md` | 修改該目錄的 agents | 該目錄特有的 ownership、慣例、局部驗證、直接子層入口 | root 已定義的通用規則 |
-| `docs/*.md` | 維護者與實驗執行者 | 詳細 workflow、artifact schema、研究語意、操作步驟、結果與限制 | 無 code 或 artifact 依據的推測 |
+| `docs/<experiment-name>/*.md` | 維護者與實驗執行者 | 實驗 proposal、report、artifact schema、研究語意、操作步驟與限制 | 無 code 或 artifact 依據的推測 |
 | `README.md` | 新使用者 | setup、active workflows、quickstart、文件地圖 | 重複 canonical workflow 的完整參數表 |
 | `CLAUDE.md` | Claude Code 相容入口 | root 規則的工具特定摘要與必要相容內容 | 與 root `AGENTS.md` 衝突的第二套政策 |
 
@@ -29,16 +29,22 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 
 ## 詳細文件分類
 
-- `docs/proposal/`：研究提案與 roadmap。狀態表必須區分 active、proposed 與
-  archived workstreams。
+- `docs/<experiment-name>/`：active experiment 的 canonical 目錄。每個目錄至少包含
+  `proposal.md` 與一份 `report*.md`。Proposal 保存問題、protocol、controls、estimands、
+  gates、artifact contract 與 CLI；report 保存 dated runs、數值、verdict 與限制。
+- 版本化研究線可用 `proposal-v1.md`、`report-v1.md` 等檔名，並以 `README.md` 作
+  index/router。版本號必須同時出現在 run/config/report identity。
+- `docs/proposal/`：跨實驗研究計畫與 roadmap，不保存單一 active experiment 的完整
+  protocol 或 dated results。
 - `docs/archive/`：已移至 `archive/` 的 frozen workflow 文件。文件保留還原與
   historical artifact 語意，但不可把 archived CLI 寫成 active entry point。
 - `docs/assets/`：文件引用的可重建圖表。產生圖表的 script 與來源 run 應在對應
-  workflow 文件中記錄。
-- 其餘 `docs/*.md`：active workflow、artifact contract、實驗方法與結果。
+  report 中記錄。
+- `docs/*.md`：只保留 shared policy、operations、contracts、dashboard 或跨實驗索引；
+  不再新增單一實驗的 proposal/report 到 docs root。
 
-點時間的實驗數字應附 run ID、artifact path 或日期。後續實驗不覆寫舊結果；新增
-結果段落並說明哪個 run 是正式結果、哪個只作 diagnostic。
+點時間的實驗數字應附 run ID、artifact path 或日期。後續實驗不覆寫舊結果；新增或
+延伸 report，並說明哪個 run 是正式結果、哪個只作 diagnostic。
 
 ## Experiment versioning
 
@@ -62,7 +68,7 @@ family 或 success gate，建立新的 version 文件，不在舊文件中把新
 - Artifact lifecycle：[`artifact-contract.md`](artifact-contract.md) 與各 workflow
   文件。
 - Canonical lens 選擇與 candidate checkpoint 例外：
-  [`qwen-jacobian-lens-selection.md`](qwen-jacobian-lens-selection.md)。
+  [`jacobian-lens-selection/proposal.md`](jacobian-lens-selection/proposal.md)。
 - Active 與 frozen code 邊界：root `README.md`、`archive/README.md`。
 - Research scripts map：[`research-scripts.md`](research-scripts.md)。
 

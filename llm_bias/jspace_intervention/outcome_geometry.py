@@ -1,7 +1,7 @@
 """V2 outcome direction geometric projection workflow (auxiliary diagnostic).
 
 Implements the frozen protocol in
-``docs/jspace-outcome-direction-geometry.md``: per-layer sector state
+``docs/jspace-token-experiments/report-v2-geometry.md``: per-layer sector state
 differences between the V2 source sector and a contrast sector on the
 discovery split, dot-projected onto the frozen V2 outcome directions, with a
 parallel/perpendicular decomposition for every position set.  Optionally the
@@ -623,7 +623,7 @@ def run_outcome_geometry_pipeline(
     Consumes a frozen V2 direction identity (SHA-verified by recomputation in
     deterministic mode), streams clean discovery forwards for the source and
     contrast sectors, and emits compact per-layer projection metrics.  See
-    ``docs/jspace-outcome-direction-geometry.md`` for the protocol and
+    ``docs/jspace-token-experiments/report-v2-geometry.md`` for the protocol and
     interpretation limits.
     """
     _enable_deterministic_gpu()

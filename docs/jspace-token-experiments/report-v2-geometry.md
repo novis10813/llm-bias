@@ -8,7 +8,7 @@
 它是一個 **輔助、描述性、非 causal 的幾何診斷**，綁定 V2 的 frozen direction
 identity，不改變 V2 protocol 的任何 direction source、primary outcome、split/freeze
 sequence、control family 或 success gate，因此不是 V2 的新版本（版本入口見
-[J-space token experiment versions](jspace-token-causal-screen.md)）。它的地位與
+[J-space token experiment versions](README.md)）。它的地位與
 V2 文件記載的 per-(layer, position) attribution screen 相同：讀取既有 frozen
 artifacts 與 model/lens，只輸出 compact derived metrics。
 

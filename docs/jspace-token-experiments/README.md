@@ -8,8 +8,8 @@
 
 | Version | Direction source | Primary outcome | Implementation | Evidence status |
 |---|---|---|---|---|
-| [V1](jspace-token-causal-screen-v1.md) | Valence readout 提名的 vocabulary token directions | 對稱 Buy/Sell margin slope 與 matched-random specificity | `prepare-token-screen-config`、`run-token-screen` 已實作 | Completed discovery screen；shortlist 為空 |
-| [V2](jspace-outcome-direction-flip-v2.md) | Discovery prompts 上直接 fitting 的 outcome-gradient direction | Held-out Buy↔Sell decision flips；完整 generation 作必要 behavioral validation | `prepare-outcome-flip-config`、`run-outcome-flip` 已實作（Draft 1 凍結值）；第一次正式 pipeline run 已完成 | Test run 完成：`success=false`（sell 方向 Holm gate 因 n=2 結構性不可顯著；buy 方向 9/9 vs 0/9、Holm p=0.003 通過） |
+| [V1](proposal-v1.md) | Valence readout 提名的 vocabulary token directions | 對稱 Buy/Sell margin slope 與 matched-random specificity | `prepare-token-screen-config`、`run-token-screen` 已實作 | Completed discovery screen；shortlist 為空 |
+| [V2](proposal-v2.md) | Discovery prompts 上直接 fitting 的 outcome-gradient direction | Held-out Buy↔Sell decision flips；完整 generation 作必要 behavioral validation | `prepare-outcome-flip-config`、`run-outcome-flip` 已實作（Draft 1 凍結值）；第一次正式 pipeline run 已完成 | Test run 完成：`success=false`（sell 方向 Holm gate 因 n=2 結構性不可顯著；buy 方向 9/9 vs 0/9、Holm p=0.003 通過） |
 
 ## V1 結論
 
@@ -50,7 +50,7 @@ Formal V2 runs（config：`config-technology-draft1.json`）：
 projection（逐層 Technology−Financial Services sector state difference 在
 frozen outcome directions 上的 dot projection 與 parallel/perpendicular 分解；
 描述性幾何、非 causal）見
-[outcome direction 幾何投影分解](jspace-outcome-direction-geometry.md)；第一次
+[outcome direction 幾何投影分解](report-v2-geometry.md)；第一次
 正式 run（2026-08-28）顯示 sector state difference 在 L10–30 幾乎全部
 orthogonal 於 outcome direction（angle 82°–92°、parallel energy fraction ≤
 0.019），TF-IDF sector prototypes 亦然（|coefficient| ≤ 0.036）。Direction
@@ -70,9 +70,20 @@ gradient fitting 一條 antisymmetric axis，並以 held-out decision flip 作�
   behavioral steering。
 
 V2 的詳細 split、fitting、controls、estimands 與 freeze gates 見
-[J-space outcome-conditioned decision-flip V2](jspace-outcome-direction-flip-v2.md)。
+[J-space outcome-conditioned decision-flip V2](proposal-v2.md)。
 V2 有自己的 CLI（`run-outcome-flip`）、config schema 與 artifact identity；永遠不得用
 V1 的 `run-token-screen` command 或 `jspace-token-screen` artifacts 冒充 V2。
+
+## Separate activation-patching experiment
+
+[Activation patching causal tracing](../activation-patching-causal-tracing/proposal.md) 不屬於
+V1 或 V2。它不使用 vocabulary-nominated direction，也不 fit outcome gradient；它把
+同一 ticker 的 positive/negative valence prompt 所產生的完整 residual state 做
+resample patching，以掃描 layer 與 prompt span 的 sufficient state transfer。Draft 1
+已完成；discovery 找到 evidence positions → post-evidence instruction context → final
+position 的 layer-dependent sufficiency 轉移，且 unchanged held-out confirmation 的
+verdict 為 `success=true`。這些結果不能回填為 V1/V2 gate 或 position-specificity
+結果。
 
 ## Versioning rules
 
