@@ -449,6 +449,7 @@ def _prepare_header_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]
                     "final_company_name_content_token_id": groups["company_name_content_token_span"]["final_content_token_id"],
                     "final_query_position": groups["final_query_position"],
                     "token_count": groups["token_count"],
+                    "input_ids": groups["input_ids"],
                 }
             )
     return rows
@@ -486,6 +487,7 @@ def _prepare_financial_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, A
                     "final_company_name_content_token": groups["company_name_content_token_span"]["final_content_token"],
                     "final_company_name_content_token_id": groups["company_name_content_token_span"]["final_content_token_id"],
                     "source_groups": groups["source_groups"],
+                    "input_ids": groups["input_ids"],
                 }
             )
     return rows

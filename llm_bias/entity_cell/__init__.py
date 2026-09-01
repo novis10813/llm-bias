@@ -1,5 +1,29 @@
-"""Preparation contracts for the entity-cell localization experiment."""
+"""Preparation and E1 entity-cell localization contracts."""
 
+from .analysis import (
+    anonymous_progress,
+    collision_selectivity_summary,
+    denominator_eligibility,
+    held_variant_metrics,
+    summarize_amnesia,
+    surface_control_summary,
+    trusted_candidate_eligibility,
+)
+from .mlp_cells import (
+    ALPHA_GRID,
+    CANDIDATE_LAYERS,
+    EPSILON,
+    MLPHookSession,
+    OnlineVectorStats,
+    collect_generic_stats,
+    mlp_hooks,
+    rank_stability_scores,
+    record_post_swiglu,
+    run_amnesia_curve,
+    select_matched_random_neuron,
+    surface_form_controls,
+)
+from .pipeline import DATASET, STAGES, run_e1
 from .preparation import (
     BASELINE_RECORD_COUNT,
     FINANCIAL_PROMPT_COLUMNS,
@@ -26,4 +50,26 @@ __all__ = [
     "render_header_variants",
     "validate_baseline_contract",
     "validate_prepared_inputs",
+    "ALPHA_GRID",
+    "CANDIDATE_LAYERS",
+    "EPSILON",
+    "MLPHookSession",
+    "OnlineVectorStats",
+    "anonymous_progress",
+    "collision_selectivity_summary",
+    "collect_generic_stats",
+    "denominator_eligibility",
+    "held_variant_metrics",
+    "mlp_hooks",
+    "rank_stability_scores",
+    "record_post_swiglu",
+    "run_amnesia_curve",
+    "run_e1",
+    "select_matched_random_neuron",
+    "surface_control_summary",
+    "surface_form_controls",
+    "summarize_amnesia",
+    "trusted_candidate_eligibility",
+    "DATASET",
+    "STAGES",
 ]
