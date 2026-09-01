@@ -24,6 +24,24 @@ from .mlp_cells import (
     surface_form_controls,
 )
 from .pipeline import DATASET, STAGES, run_e1
+from .e2 import E2_STAGES, analyze_e2, run_e2
+from .attention_attribution import (
+    FULL_ATTENTION_LAYERS,
+    PRIMARY_ATTENTION_LAYERS,
+    SOURCE_GROUPS,
+    AttentionReconstruction,
+    compact_attribution_record,
+    contract_dla,
+    direct_logit_attribution,
+    frozen_margin_direction,
+    patch_head_output,
+    rank_attention_heads,
+    reconstruct_attention_components,
+    resolve_single_token_pair,
+    routing_label,
+    selected_head_output_patch,
+    validate_attention_layers,
+)
 from .preparation import (
     BASELINE_RECORD_COUNT,
     FINANCIAL_PROMPT_COLUMNS,
@@ -72,4 +90,22 @@ __all__ = [
     "trusted_candidate_eligibility",
     "DATASET",
     "STAGES",
+    "E2_STAGES",
+    "run_e2",
+    "analyze_e2",
+    "FULL_ATTENTION_LAYERS",
+    "PRIMARY_ATTENTION_LAYERS",
+    "SOURCE_GROUPS",
+    "AttentionReconstruction",
+    "compact_attribution_record",
+    "contract_dla",
+    "direct_logit_attribution",
+    "frozen_margin_direction",
+    "patch_head_output",
+    "rank_attention_heads",
+    "reconstruct_attention_components",
+    "resolve_single_token_pair",
+    "routing_label",
+    "selected_head_output_patch",
+    "validate_attention_layers",
 ]
