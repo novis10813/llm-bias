@@ -288,21 +288,40 @@ The current planning target is **NAACL 2027**, with the following backward-plann
 phases:
 
 1. **Scope alignment:** finalise metrics, evidence roles, and the position of
-   Henry's entity-swap findings as motivation and an unguided baseline.
+   Henry's entity-swap findings as motivation and an unguided baseline. Related
+   documents: [baseline trial proposal](../baseline-trial/proposal.md),
+   [prompt-analysis reproducibility report](../baseline-trial/report-reproducibility.md),
+   and [artifact identity contract](../artifact-contract.md).
 2. **Dataset construction:** complete entity pairs, no-context/with-context
    probing, specificity holdouts, and external outcome data where required.
+   Related documents: [archived counterfactual dataset protocol](../archive/counterfactual-dataset-generation.md),
+   [archived EDGAR preparation protocol](../archive/edgar-8k-preparation.md), and
+   [Technology header-span sensitivity proposal](../span-sensitivity/proposal.md).
 3. **Mechanistic analysis:** run baseline probing, extract Jacobian signals,
-   localise causal layers, and establish controls.
+   localise causal layers, and establish controls. Related experiments:
+   [Jacobian-lens selection](../jacobian-lens-selection/proposal.md),
+   [valence readout](../jspace-valence-readout/proposal.md),
+   [activation patching causal tracing](../activation-patching-causal-tracing/proposal.md),
+   and [sector/context follow-up](../sector-context-followup/proposal.md).
 4. **Intervention pipeline:** implement the selected direction and layer logic,
-   then run strength sweeps.
+   then run strength sweeps. Related experiments: [J-space sector intervention](../jspace-sector-intervention/proposal.md)
+   and [J-space token experiment versions](../jspace-token-experiments/README.md).
 5. **Full evaluation:** measure steering efficacy, dose response, specificity,
-   layer-by-strength interactions, and baseline comparisons.
+   layer-by-strength interactions, and baseline comparisons. Related reports:
+   [J-space sector intervention held-out report](../jspace-sector-intervention/report.md),
+   [J-space token V2 report](../jspace-token-experiments/report-v2.md), and
+   [B V1 confirmation report](../sector-context-followup/report-confirmation.md).
 6. **Analysis and consolidation:** perform statistical analysis, error analysis,
-   and figure consolidation.
+   and figure consolidation. Related reports: [activation patching report](../activation-patching-causal-tracing/report.md),
+   [sector/context discovery report](../sector-context-followup/report-discovery.md),
+   and [header-span sensitivity discovery report](../span-sensitivity/report-status.md).
 7. **Draft and advisor review:** prepare the full paper and complete feedback
-   cycles.
+   cycles. Status and evidence-readiness are tracked in the
+   [entity-bias roadmap](entity-bias-roadmap.md).
 8. **Revision and submission:** finalise the paper and confirm the applicable ARR
-   cycle and commitment deadline from the official conference sources.
+   cycle and commitment deadline from the official conference sources. The
+   [research-ready gate](entity-bias-roadmap.md#research-ready-gate) determines
+   which results may support the primary claim.
 
 The dates in the planning notes are scheduling assumptions and must be verified
 before they are presented as official submission deadlines.
