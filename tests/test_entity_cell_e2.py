@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 import torch
@@ -134,4 +135,6 @@ def test_e2_cli_preserves_e1_parse_contract():
     assert parser.parse_args(["run", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--stage", "e1-baseline"]).stages == ["e1-baseline"]
     args = parser.parse_args(["run", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--stage", "e2-attribution", "--e2-layers", "11", "15"])
     assert args.stages == ["e2-attribution"] and args.e2_layers == [11, 15]
+    readout_args = parser.parse_args(["run", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--stage", "e2-readout", "--lens-path", "lens.pt", "--expected-lens-sha256", "a" * 64])
+    assert readout_args.stages == ["e2-readout"] and readout_args.lens_path == Path("lens.pt")
     assert parser.parse_args(["analyze", "--run-root", "r", "--experiment", "e2"]).experiment == "e2"

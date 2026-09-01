@@ -24,7 +24,16 @@ from .mlp_cells import (
     surface_form_controls,
 )
 from .pipeline import DATASET, STAGES, run_e1
-from .e2 import E2_STAGES, analyze_e2, run_e2
+from .e2 import E2_ALL_STAGES, E2_READOUT_STAGE, E2_STAGES, analyze_e2, run_e2
+from .readout import (
+    ARTIFACT_TYPE as E2_READOUT_ARTIFACT_TYPE,
+    DEFAULT_READOUT_CONFIG,
+    DEFAULT_SECTOR_VOCABULARY,
+    compact_selected_component_readout,
+    readout_component,
+    readout_selected_component,
+    unavailable_component_readout,
+)
 from .attention_attribution import (
     FULL_ATTENTION_LAYERS,
     PRIMARY_ATTENTION_LAYERS,
@@ -91,6 +100,8 @@ __all__ = [
     "DATASET",
     "STAGES",
     "E2_STAGES",
+    "E2_READOUT_STAGE",
+    "E2_ALL_STAGES",
     "run_e2",
     "analyze_e2",
     "FULL_ATTENTION_LAYERS",
@@ -108,4 +119,11 @@ __all__ = [
     "routing_label",
     "selected_head_output_patch",
     "validate_attention_layers",
+    "E2_READOUT_ARTIFACT_TYPE",
+    "DEFAULT_READOUT_CONFIG",
+    "DEFAULT_SECTOR_VOCABULARY",
+    "compact_selected_component_readout",
+    "readout_component",
+    "readout_selected_component",
+    "unavailable_component_readout",
 ]
