@@ -204,3 +204,174 @@ Run 遵循 `prepare → forward → analyze` stages 與 manifest finalization。
 records，因此 `cross-sector-context-overriding/` 沒有 slug-level prepared 目錄。
 
 Discovery run records 見 [實驗報告](report-discovery.md)。
+
+## B V1: Frozen Confirmation Design
+
+本節定義 B V1 cross-sector context overriding 的 calibration 與 held-out test gate。
+Discovery 結果見 [report-discovery.md](report-discovery.md) §3。
+
+本節在讀取 calibration 或 test outputs 前凍結，凍結後不修改 primary contrast、
+thresholds、layers、spans 或統計方法。若需修改，建立 B V2。
+
+### Discovery Summary（gate 設計依據）
+
+Discovery（29 個 identity pairs、301 條 negative-evidence prepared records）在 L14–L21
+找到以下 cross-sector `instruction_context` 效應：
+
+| Layer | Toward-Source ΔM | 95% CI | Positive-fraction |
+|---:|---:|---:|---:|
+| 14 | +0.1732 | [+0.1152, +0.2336] | 86.2% |
+| 15 | +0.3028 | [+0.2049, +0.4015] | 89.7% |
+| **16** | **+0.3181** | **[+0.2256, +0.4106]** | **89.7%** |
+| 17 | +0.3011 | [+0.2331, +0.3713] | 100% |
+| 18 | +0.2414 | [+0.1845, +0.3000] | 100% |
+| 19 | +0.2406 | [+0.1820, +0.3007] | 96.6% |
+| 20 | +0.2133 | [+0.1617, +0.2700] | 96.6% |
+| 21 | +0.2061 | [+0.1555, +0.2600] | 96.6% |
+
+L16 Context 顯著超過同層 Header control（差 +0.3209）與 Final Position control
+（差 +0.2795）。Same-sector peer context |ΔM| 為 0.2144，ROT13 name-form context
+|ΔM| 為 0.5714。
+
+### Primary Estimand
+
+Context-Header Contrast at L16：
+
+$$
+C_{\mathrm{B}} = \overline{\Delta M}_{\mathrm{L16,\,context}}^{\mathrm{toward}} - \overline{\Delta M}_{\mathrm{L16,\,header}}^{\mathrm{toward}}
+$$
+
+其中 $\overline{\Delta M}^{\mathrm{toward}}$ 是 equal-pair mean Toward-Source margin
+change，計算方式為：先在 identity pair 內平均兩個方向與兩個 evidence-origin strata，
+再於 pairs 間等權平均。
+
+### Confirmation Gates
+
+Calibration 與 test 使用相同 gate。Test 只在 calibration 通過後執行。
+
+#### 資料品質 gate
+
+1. 至少 8 個 identity pairs 通過 clean-outcome gate（兩個 sector 的 clean margin
+   符號均與 negative evidence 一致）。
+2. Self-source patch 的 |ΔM| 對所有 records 均等於 0（FP64 exact no-op）。
+
+#### Effect gate
+
+3. L16 cross-sector context Toward-Source ΔM 的 equal-pair mean 大於 `0.10`。
+4. L16 Context-Header Contrast $C_{\mathrm{B}} > 0.10$。
+5. L16 cross-sector context Toward-Source ΔM 的 pair-bootstrap 95% CI 下界大於 0。
+6. L16 Context-Header Contrast $C_{\mathrm{B}}$ 的 pair-bootstrap 95% CI 下界大於 0。
+
+#### Specificity gate
+
+7. L16 cross-sector context |ΔM| 大於 same-sector peer context |ΔM|。
+8. Evidence-origin strata 一致性：Technology-origin 與 Financial-Services-origin
+   evidence 的 L16 Toward-Source ΔM 均為正。
+
+#### Statistical gate
+
+9. L16 Toward-Source ΔM 的 one-sided exact pair sign-flip test $p < 0.05$。
+10. L16 $C_{\mathrm{B}}$ 的 one-sided exact pair sign-flip test $p < 0.05$。
+11. Gates 9–10 的兩個 p-values 經 Holm correction（$\alpha = 0.05$，$k = 2$）後
+    仍通過。
+
+Bootstrap 使用 10,000 次 pair-level resampling，seed `20260901`。
+
+### Threshold 選擇依據
+
+- `0.10` 的 effect threshold 約為 discovery peak（0.318）的 31%。Discovery 中
+  最弱的層（L14）Toward-Source ΔM 為 0.173，仍超過此 threshold。設為 0.10 允許
+  calibration/test 因 pair 組成不同而自然衰減，但仍排除 noise-level 效應。
+- 不使用 discovery 的 threshold 值（0.318）作為 gate，因為 calibration/test 的
+  pair 數少於 discovery（calibration 預期 ~10 pairs vs. discovery 29 pairs），
+  point estimate 會有更大的抽樣變異。
+
+### Aggregation
+
+Pairs 內平均兩個方向（Tech→FS 與 FS→Tech）與兩個 evidence-origin strata；pairs
+間等權平均。不對 pairs 按 clean margin gap 加權。
+
+### Layers 與 Spans
+
+Primary layer 固定為 L16。Calibration/test 同時執行 L14–L21 作為 descriptive
+layer profile，但只有 L16 進入 formal gate。
+
+每層執行三個 span conditions：`instruction_context`（primary）、`header`（control）、
+`final_position`（control）。
+
+### Input Preparation
+
+Calibration 使用 split manifest 的 calibration tickers（Technology 12 + Financial
+Services 12），test 使用 test tickers（Technology 11 + Financial Services 12）。
+Prepare 命令重用既有 `prepare-cross-sector-patching` CLI，只改 `--split` 參數。
+B 重用 A 的 prepared records，只在 forward 階段篩選 negative evidence。
+
+### Artifact Layout
+
+```text
+artifacts/qwen3.5-4b/cross-sector-context-overriding/
+├── configs/
+│   └── b-v1-confirmation-v1.json          ← frozen gate config
+├── runs/
+│   ├── cross-sector-context-calibration-<date>/
+│   │   ├── prepare/
+│   │   ├── forward/
+│   │   ├── analyze/
+│   │   └── manifest.json
+│   └── cross-sector-context-test-<date>/
+│       ├── prepare/
+│       ├── forward/
+│       ├── analyze/
+│       └── manifest.json
+```
+
+### Calibration Rule
+
+Calibration 只檢查 frozen gates 是否通過。不修改 thresholds、layers、spans 或
+contrasts。若 calibration 未通過，不執行 test，B V1 的 confirmation verdict 為
+`success=false`。
+
+### Test Rule
+
+所有 gates（3–11）通過時 verdict 為 `success=true`。任何 gate 未通過時 verdict
+為 `success=false`。Verdict 與逐條 gate 結果記錄於 confirmation report。
+
+### Interpretation Limits
+
+B V1 confirmation 測量 fixed negative evidence 下 sector-conditioned context state
+對 fixed margin 的 resample-patching sufficiency。Confirmation 不證明模型忽略
+evidence、不把 L16 稱為唯一 decision computation、也不建立 attention-based 因果
+機制。Effect 與 specificity 結合只支持「sector identity 透過 L16 context 表徵調節
+fixed-evidence 下的 decision margin」這一因果充分性聲明。
+
+### Execution Commands
+
+```bash
+# 1. Prepare calibration pairs
+uv run jspace-intervention prepare-cross-sector-patching \
+  --input ../baseline/runs/paper-local-qwen36-27b/trial_plan.jsonl \
+  --split-manifest artifacts/qwen3.5-4b/jspace-intervention/splits.json \
+  --split calibration \
+  --output artifacts/qwen3.5-4b/cross-sector-header-patching/prepared/calibration_pairs_v1.jsonl
+
+# 2. Run B V1 context overriding on calibration
+uv run jspace-intervention run-cross-sector-context-overriding \
+  --prepared-pairs artifacts/qwen3.5-4b/cross-sector-header-patching/prepared/calibration_pairs_v1.jsonl \
+  --model .cache/models/qwen3.5-4b \
+  --run-id cross-sector-context-calibration-$(date -u +%Y%m%d) \
+  --layers 14-21
+
+# 3. If calibration passes, prepare test pairs
+uv run jspace-intervention prepare-cross-sector-patching \
+  --input ../baseline/runs/paper-local-qwen36-27b/trial_plan.jsonl \
+  --split-manifest artifacts/qwen3.5-4b/jspace-intervention/splits.json \
+  --split test \
+  --output artifacts/qwen3.5-4b/cross-sector-header-patching/prepared/test_pairs_v1.jsonl
+
+# 4. Run B V1 context overriding on test
+uv run jspace-intervention run-cross-sector-context-overriding \
+  --prepared-pairs artifacts/qwen3.5-4b/cross-sector-header-patching/prepared/test_pairs_v1.jsonl \
+  --model .cache/models/qwen3.5-4b \
+  --run-id cross-sector-context-test-$(date -u +%Y%m%d) \
+  --layers 14-21
+```

@@ -257,3 +257,118 @@ def test_pipeline_and_cli_fake_model(tmp_path: Path, monkeypatch) -> None:
     assert captured["layers"] == [14, 15, 16, 20]
     assert captured["spans"] == ("instruction_context", "header")
     assert captured["dataset"] == "cross-sector-context-overriding"
+
+
+def _confirmation_config() -> dict:
+    return json.loads(
+        Path("artifacts/qwen3.5-4b/cross-sector-context-overriding/configs/b-v1-confirmation-v1.json").read_text()
+    )
+
+
+def _confirmation_records(pair_count: int = 8) -> list[dict]:
+    records: list[dict] = []
+    layers = range(14, 22)
+    spans = ("instruction_context", "header", "final_position")
+    directions = (
+        ("Technology_to_Financial Services", "Technology", "Financial Services"),
+        ("Financial Services_to_Technology", "Financial Services", "Technology"),
+    )
+    for pair_number in range(pair_count):
+        pair_id = f"pair-{pair_number}"
+        for layer in layers:
+            for span in spans:
+                for direction, source_sector, target_sector in directions:
+                    context_delta = 0.4 if span == "instruction_context" else 0.1 if span == "header" else 0.0
+                    source_margin, target_margin = (-2.0, -1.0) if source_sector == "Technology" else (-1.0, -2.0)
+                    base = {
+                        "artifact_type": context.RECORD_ARTIFACT_TYPE,
+                        "evidence_valence": "negative",
+                        "pair_id": pair_id, "control_type": "cross_sector", "layer": layer,
+                        "span_condition": span, "patching_direction": direction,
+                        "source_identity": {"sector": source_sector, "ticker": f"{source_sector[:2]}{pair_number}"},
+                        "target_identity": {"sector": target_sector, "ticker": f"{target_sector[:2]}{pair_number}"},
+                        "source_clean_margin": source_margin, "target_clean_margin": target_margin,
+                        "delta_margin": -context_delta if source_sector == "Technology" else context_delta,
+                    }
+                    for origin in ("Technology", "Financial Services"):
+                        records.append({**base, "evidence_origin_sector": origin})
+        for layer in layers:
+            for span in spans:
+                for origin in ("Technology", "Financial Services"):
+                    for sector in ("Technology", "Financial Services"):
+                        records.append({
+                            "artifact_type": context.RECORD_ARTIFACT_TYPE, "evidence_valence": "negative", "pair_id": pair_id,
+                            "control_type": "self_source", "layer": layer, "span_condition": span,
+                            "patching_direction": f"{sector}_to_{sector}", "evidence_origin_sector": origin,
+                            "source_identity": {"sector": sector, "ticker": f"{sector[:2]}{pair_number}"},
+                            "target_identity": {"sector": sector, "ticker": f"{sector[:2]}{pair_number}"},
+                            "source_clean_margin": -1.0, "target_clean_margin": -1.0, "delta_margin": 0.0,
+                        })
+        for origin in ("Technology", "Financial Services"):
+            records.append({
+                "artifact_type": context.RECORD_ARTIFACT_TYPE, "evidence_valence": "negative", "pair_id": pair_id,
+                "control_type": "same_sector_peer", "layer": 16,
+                "span_condition": "instruction_context", "patching_direction": "Technology_to_Technology",
+                "evidence_origin_sector": origin,
+                "source_identity": {"sector": "Technology", "ticker": f"T{pair_number}"},
+                "target_identity": {"sector": "Technology", "ticker": f"P{pair_number}"},
+                "source_clean_margin": -1.0, "target_clean_margin": -1.0, "delta_margin": 0.05,
+            })
+    return records
+
+
+def test_confirmation_uses_toward_source_pair_aggregation_and_all_gates() -> None:
+    result = context.evaluate_context_overriding_confirmation(
+        _confirmation_records(), _confirmation_config(), split="test"
+    )
+    assert result["artifact_type"] == context.CONFIRMATION_ARTIFACT_TYPE
+    assert result["eligible_pair_count"] == 8
+    assert result["estimates"]["L16_context_toward_source"]["mean"] == pytest.approx(0.4)
+    assert result["estimates"]["C_B"]["mean"] == pytest.approx(0.3)
+    assert result["success"] is True
+    assert all(gate["pass"] for gate in result["gate_checks"])
+    assert len(result["pair_values"]) == 8
+
+
+def test_confirmation_fails_closed_on_config_and_required_matrix_mismatch() -> None:
+    records = _confirmation_records()
+    config = _confirmation_config()
+    config["primary_layer"] = 15
+    with pytest.raises(ValueError, match="primary_layer"):
+        context.evaluate_context_overriding_confirmation(records, config, split="calibration")
+    incomplete = records.copy()
+    incomplete.pop(next(i for i, record in enumerate(incomplete) if record["control_type"] == "cross_sector"))
+    with pytest.raises(ValueError, match="incomplete"):
+        context.evaluate_context_overriding_confirmation(incomplete, _confirmation_config(), split="test")
+    broken = [dict(record) for record in records]
+    next(record for record in broken if record["control_type"] == "self_source")["delta_margin"] = 1e-12
+    result = context.evaluate_context_overriding_confirmation(
+        broken, _confirmation_config(), split="test"
+    )
+    assert result["success"] is False
+    assert next(gate for gate in result["gate_checks"] if gate["gate"] == "self_source_exact_noop")["pass"] is False
+
+
+def test_confirmation_artifact_writer_and_cli_dispatch(tmp_path: Path, monkeypatch) -> None:
+    records_path = tmp_path / "context_overriding_records.jsonl"
+    write_jsonl(records_path, _confirmation_records(), overwrite=False)
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(_confirmation_config()), encoding="utf-8")
+    output_path = tmp_path / "confirmation.json"
+    result = context.evaluate_context_overriding_confirmation_artifacts(
+        records_path, config_path, output_path, "calibration"
+    )
+    assert result["test_authorized"] is True
+    assert json.loads(output_path.read_text())["parent_sha256"]
+
+    captured = {}
+    monkeypatch.setattr(context, "evaluate_context_overriding_confirmation_artifacts", lambda **kwargs: captured.update(kwargs) or {})
+    monkeypatch.setattr(sys, "argv", [
+        "jspace-intervention", "analyze-cross-sector-context-confirmation",
+        "--records", str(records_path), "--config", str(config_path),
+        "--output", str(output_path), "--split", "test",
+    ])
+    cli.main()
+    assert captured["records_path"] == records_path
+    assert captured["config_path"] == config_path
+    assert captured["split"] == "test"

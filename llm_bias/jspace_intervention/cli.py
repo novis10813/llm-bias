@@ -263,6 +263,15 @@ def build_parser() -> argparse.ArgumentParser:
     confirmation.add_argument("--output", required=True, type=Path)
     confirmation.add_argument("--split", required=True, choices=("calibration", "test"))
 
+    context_confirmation = commands.add_parser(
+        "analyze-cross-sector-context-confirmation",
+        help="evaluate the frozen B V1 cross-sector context confirmation gates",
+    )
+    context_confirmation.add_argument("--records", required=True, type=Path)
+    context_confirmation.add_argument("--config", required=True, type=Path)
+    context_confirmation.add_argument("--output", required=True, type=Path)
+    context_confirmation.add_argument("--split", required=True, choices=("calibration", "test"))
+
     token_screen_config = commands.add_parser(
         "prepare-token-screen-config",
         help="freeze a token screen config from a completed valence candidate artifact",
@@ -1198,6 +1207,20 @@ def _analyze_activation_patching_confirmation(args: argparse.Namespace) -> None:
     print(args.output)
 
 
+def _analyze_cross_sector_context_confirmation(args: argparse.Namespace) -> None:
+    from llm_bias.jspace_intervention.context_overriding import (
+        evaluate_context_overriding_confirmation_artifacts,
+    )
+
+    evaluate_context_overriding_confirmation_artifacts(
+        records_path=args.records,
+        config_path=args.config,
+        output_path=args.output,
+        split=args.split,
+    )
+    print(args.output)
+
+
 def _run_token_screen(args: argparse.Namespace) -> None:
     from llm_bias.jspace_intervention.pipeline import run_token_screen_pipeline
 
@@ -1271,6 +1294,8 @@ def main() -> None:
         _run_activation_patching(args)
     elif args.command == "analyze-activation-patching-confirmation":
         _analyze_activation_patching_confirmation(args)
+    elif args.command == "analyze-cross-sector-context-confirmation":
+        _analyze_cross_sector_context_confirmation(args)
     elif args.command == "run-token-screen":
         _run_token_screen(args)
     elif args.command == "run-outcome-flip":

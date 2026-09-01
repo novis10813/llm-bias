@@ -8,7 +8,10 @@ artifacts.
 """
 from __future__ import annotations
 
+import bisect
+import json
 import math
+import random
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -37,6 +40,7 @@ from llm_bias.jspace_intervention.valence import PROMPT_TEMPLATE_VERSION
 ARTIFACT_SCHEMA_VERSION = 1
 RECORD_ARTIFACT_TYPE = "cross_sector_context_overriding_record"
 ANALYSIS_ARTIFACT_TYPE = "cross_sector_context_overriding_analysis"
+CONFIRMATION_ARTIFACT_TYPE = "cross_sector_context_overriding_confirmation_evaluation"
 PREPARE_ARTIFACT_TYPE = "cross_sector_context_overriding_prepare_metadata"
 DEFAULT_DATASET = "cross-sector-context-overriding"
 DEFAULT_DECISION_PREFIX = '{\n  "decision": "'
@@ -286,6 +290,376 @@ def analyze_context_overriding_records(
     return {"equal_pair_means": _pair_means(grouped), "paired_contrasts": contrasts}
 
 
+def _confirmation_quantile(values: Sequence[float], probability: float) -> float:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        raise ValueError("cannot compute a quantile of an empty sequence")
+    position = (len(ordered) - 1) * probability
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
+
+
+def _confirmation_bootstrap_ci(
+    values: Sequence[float], *, seed: int, samples: int, confidence: float
+) -> list[float]:
+    if not values or samples < 1 or not 0.0 < confidence < 1.0:
+        raise ValueError("invalid confirmation bootstrap inputs")
+    rng = random.Random(seed)
+    count = len(values)
+    means = [
+        sum(values[rng.randrange(count)] for _ in range(count)) / count
+        for _ in range(samples)
+    ]
+    alpha = (1.0 - confidence) / 2.0
+    return [
+        _confirmation_quantile(means, alpha),
+        _confirmation_quantile(means, 1.0 - alpha),
+    ]
+
+
+def _confirmation_exact_sign_flip_p(values: Sequence[float]) -> float:
+    """Return the exact one-sided sign-flip p-value using meet-in-the-middle."""
+    if not values:
+        raise ValueError("cannot sign-flip an empty sequence")
+    signed_values = [float(value) for value in values]
+    observed = sum(signed_values)
+    midpoint = len(signed_values) // 2
+
+    def signed_sums(items: Sequence[float]) -> list[float]:
+        result = [0.0]
+        for item in items:
+            result = [value + sign * item for value in result for sign in (-1.0, 1.0)]
+        return result
+
+    left = signed_sums(signed_values[:midpoint])
+    right = sorted(signed_sums(signed_values[midpoint:]))
+    count = sum(
+        len(right) - bisect.bisect_left(right, observed - value - 1e-15)
+        for value in left
+    )
+    return count / (2 ** len(values))
+
+
+def _confirmation_float(value: Any, *, field: str) -> float:
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"{field} must be finite")
+    return result
+
+
+def _validate_confirmation_config(config: Mapping[str, Any]) -> tuple[tuple[int, ...], tuple[str, ...], tuple[str, ...]]:
+    if config.get("artifact_type") != "cross_sector_context_overriding_confirmation_config":
+        raise ValueError("confirmation config artifact_type does not match B V1")
+    if config.get("schema_version") != 1 or config.get("protocol") != "sector-context-followup-b-v1":
+        raise ValueError("confirmation config schema or protocol mismatch")
+    layers_value = config.get("layer_range")
+    if layers_value != [14, 21]:
+        raise ValueError("confirmation config layer_range must be [14, 21]")
+    layers = tuple(range(int(layers_value[0]), int(layers_value[1]) + 1))
+    if config.get("primary_layer") != 16:
+        raise ValueError("confirmation config primary_layer must be 16")
+    spans = tuple(config.get("span_conditions", ()))
+    if spans != ("instruction_context", "header", "final_position"):
+        raise ValueError("confirmation config span_conditions mismatch")
+    if config.get("primary_span") != "instruction_context" or config.get("control_span") != "header":
+        raise ValueError("confirmation config primary/control span mismatch")
+    directions = tuple(config.get("directions", ()))
+    if directions != ("Technology_to_Financial Services", "Financial Services_to_Technology"):
+        raise ValueError("confirmation config directions mismatch")
+    if config.get("aggregation") != "within_pair_average_over_directions_and_evidence_origin_strata->equal_pair_mean":
+        raise ValueError("confirmation config aggregation mismatch")
+    if config.get("primary_metric") != "toward_source_delta_margin=sign(source_clean_margin-target_clean_margin)*delta_margin":
+        raise ValueError("confirmation config primary_metric mismatch")
+    if config.get("primary_contrast") != "C_B=L16_context_toward_source_minus_L16_header_toward_source":
+        raise ValueError("confirmation config primary_contrast mismatch")
+    if config.get("bootstrap_samples") != 10000 or config.get("bootstrap_seed") != 20260901:
+        raise ValueError("confirmation config bootstrap mismatch")
+    if config.get("ci_level") != 0.95:
+        raise ValueError("confirmation config ci_level mismatch")
+    if config.get("data_quality_gates") != {
+        "minimum_eligible_pairs": 8,
+        "self_source_exact_noop": True,
+    }:
+        raise ValueError("confirmation config data-quality gates mismatch")
+    if config.get("effect_gates") != {
+        "minimum_L16_context_toward_source_mean": 0.10,
+        "minimum_C_B_mean": 0.10,
+        "L16_context_toward_source_bootstrap_ci_lower_gt_0": True,
+        "C_B_bootstrap_ci_lower_gt_0": True,
+    }:
+        raise ValueError("confirmation config effect gates mismatch")
+    if config.get("specificity_gates") != {
+        "L16_cross_sector_context_abs_gt_same_sector_peer_context_abs": True,
+        "evidence_origin_strata_both_positive": True,
+    }:
+        raise ValueError("confirmation config specificity gates mismatch")
+    statistical = config.get("statistical_gates")
+    if not isinstance(statistical, Mapping) or statistical.get("sign_flip_test") != "one_sided_exact_on_pair_toward_source":
+        raise ValueError("confirmation config statistical gates mismatch")
+    if statistical.get("sign_flip_alpha") != 0.05 or statistical.get("multiple_comparison") != "holm_two_contrasts_alpha_0.05":
+        raise ValueError("confirmation config multiple-comparison settings mismatch")
+    if statistical.get("contrasts_under_correction") != ["L16_context_toward_source", "C_B"]:
+        raise ValueError("confirmation config contrast list mismatch")
+    return layers, spans, directions
+
+
+def _confirmation_record_key(record: Mapping[str, Any]) -> tuple[str, str, int, str, str, str]:
+    return (
+        str(record.get("pair_id", "")),
+        str(record.get("control_type", "")),
+        int(record.get("layer")),
+        str(record.get("span_condition", "")),
+        str(record.get("patching_direction", "")),
+        str(record.get("evidence_origin_sector", "")),
+    )
+
+
+def evaluate_context_overriding_confirmation(
+    records: Sequence[Mapping[str, Any]],
+    config: Mapping[str, Any],
+    *,
+    split: str,
+) -> dict[str, Any]:
+    """Evaluate the frozen B V1 calibration/test gates from compact records."""
+    if split not in {"calibration", "test"}:
+        raise ValueError("split must be calibration or test")
+    layers, spans, directions = _validate_confirmation_config(config)
+    if not records:
+        raise ValueError("confirmation records are empty")
+
+    seen: set[tuple[str, str, int, str, str, str]] = set()
+    by_key: dict[tuple[str, str, int, str, str, str], Mapping[str, Any]] = {}
+    cross_records: list[Mapping[str, Any]] = []
+    peer_records: list[Mapping[str, Any]] = []
+    self_source_exact_noop = True
+    for record in records:
+        if record.get("artifact_type") != RECORD_ARTIFACT_TYPE:
+            raise ValueError("confirmation records contain an unexpected artifact_type")
+        pair_id = str(record.get("pair_id", ""))
+        if not pair_id:
+            raise ValueError("confirmation record is missing pair_id")
+        control = str(record.get("control_type", ""))
+        if control == "name_form":
+            continue
+        key = _confirmation_record_key(record)
+        if control != "same_sector_peer":
+            if key in seen:
+                raise ValueError(f"duplicate confirmation record: {key}")
+            seen.add(key)
+            by_key[key] = record
+        layer = int(record.get("layer"))
+        span = str(record.get("span_condition", ""))
+        direction = str(record.get("patching_direction", ""))
+        origin = str(record.get("evidence_origin_sector", ""))
+        if layer not in layers or span not in spans:
+            raise ValueError("confirmation records contain a layer/span outside the frozen config")
+        if origin not in {"Technology", "Financial Services"}:
+            raise ValueError("confirmation record has an unknown evidence-origin sector")
+        if record.get("evidence_valence") != "negative":
+            raise ValueError("confirmation records must contain negative evidence only")
+        source = record.get("source_identity")
+        target = record.get("target_identity")
+        if not isinstance(source, Mapping) or not isinstance(target, Mapping):
+            raise ValueError("confirmation record is missing source/target identity")
+        source_sector = str(source.get("sector", ""))
+        target_sector = str(target.get("sector", ""))
+        if control == "cross_sector":
+            if direction not in directions or {source_sector, target_sector} != {"Technology", "Financial Services"}:
+                raise ValueError("cross-sector confirmation record direction or sectors mismatch")
+            cross_records.append(record)
+        elif control == "self_source":
+            if source_sector != target_sector or direction != f"{source_sector}_to_{target_sector}":
+                raise ValueError("self-source confirmation record direction or sectors mismatch")
+        elif control == "same_sector_peer":
+            if source_sector != target_sector or direction != f"{source_sector}_to_{target_sector}":
+                raise ValueError("same-sector peer confirmation record direction or sectors mismatch")
+            peer_records.append(record)
+        elif control == "name_form":
+            pass
+        else:
+            raise ValueError(f"unsupported confirmation control_type: {control!r}")
+        for field in ("source_clean_margin", "target_clean_margin", "delta_margin"):
+            _confirmation_float(record.get(field), field=field)
+        if control == "self_source" and record.get("delta_margin") != 0.0:
+            self_source_exact_noop = False
+
+    if not cross_records:
+        raise ValueError("confirmation records contain no cross-sector observations")
+    all_pair_ids = {str(record["pair_id"]) for record in cross_records}
+    origins = ("Technology", "Financial Services")
+    expected_cross = {
+        (pair_id, "cross_sector", layer, span, direction, origin)
+        for pair_id in all_pair_ids for layer in layers for span in spans
+        for direction in directions for origin in origins
+    }
+    missing_cross = expected_cross - set(by_key)
+    if missing_cross:
+        raise ValueError(f"confirmation records are incomplete: {len(missing_cross)} cross-sector records missing")
+    expected_self = {
+        (pair_id, "self_source", layer, span, direction, origin)
+        for pair_id in all_pair_ids for layer in layers for span in spans
+        for direction in ("Technology_to_Technology", "Financial Services_to_Financial Services")
+        for origin in origins
+    }
+    missing_self = expected_self - set(by_key)
+    if missing_self:
+        raise ValueError(f"confirmation records are incomplete: {len(missing_self)} self-source records missing")
+
+    def toward(record: Mapping[str, Any]) -> float:
+        gap = _confirmation_float(record["source_clean_margin"], field="source_clean_margin") - _confirmation_float(record["target_clean_margin"], field="target_clean_margin")
+        delta = _confirmation_float(record["delta_margin"], field="delta_margin")
+        return (1.0 if gap > 0 else -1.0 if gap < 0 else 0.0) * delta
+
+    def clean_eligible(pair_id: str) -> bool:
+        pair_records = [record for record in cross_records if str(record["pair_id"]) == pair_id]
+        return all(
+            _confirmation_float(record["source_clean_margin"], field="source_clean_margin") < 0.0
+            and _confirmation_float(record["target_clean_margin"], field="target_clean_margin") < 0.0
+            for record in pair_records
+        )
+
+    eligible_pair_ids = sorted(pair_id for pair_id in all_pair_ids if clean_eligible(pair_id))
+    if not eligible_pair_ids:
+        raise ValueError("no identity pairs pass the clean-outcome gate")
+
+    def pair_observations(control: str, layer: int, span: str, pair_id: str) -> dict[tuple[str, str], Mapping[str, Any]]:
+        return {
+            (str(record["patching_direction"]), str(record["evidence_origin_sector"])): record
+            for record in records
+            if str(record["pair_id"]) == pair_id and str(record["control_type"]) == control
+            and int(record["layer"]) == layer and str(record["span_condition"]) == span
+        }
+
+    pair_values: list[dict[str, Any]] = []
+    context_values: list[float] = []
+    contrast_values: list[float] = []
+    peer_abs_values: list[float] = []
+    stratum_values: dict[str, list[float]] = defaultdict(list)
+    for pair_id in eligible_pair_ids:
+        context = pair_observations("cross_sector", 16, "instruction_context", pair_id)
+        header = pair_observations("cross_sector", 16, "header", pair_id)
+        if set(context) != set(header):
+            raise ValueError(f"confirmation records are incomplete for matched context/header pair {pair_id}")
+        context_pair = sum(toward(record) for record in context.values()) / len(context)
+        contrast_pair = sum(toward(context[key]) - toward(header[key]) for key in context) / len(context)
+        peer = [
+            record for record in peer_records
+            if str(record["pair_id"]) == pair_id
+            and int(record["layer"]) == 16
+            and str(record["span_condition"]) == "instruction_context"
+        ]
+        if not peer:
+            raise ValueError(f"confirmation records have no same-sector peer context for pair {pair_id}")
+        peer_pair = sum(abs(_confirmation_float(record["delta_margin"], field="delta_margin")) for record in peer) / len(peer)
+        context_abs_pair = sum(abs(_confirmation_float(record["delta_margin"], field="delta_margin")) for record in context.values()) / len(context)
+        context_values.append(context_pair)
+        contrast_values.append(contrast_pair)
+        peer_abs_values.append(peer_pair)
+        for key, record in context.items():
+            stratum_values[key[1]].append(toward(record))
+        header_pair = sum(toward(record) for record in header.values()) / len(header)
+        pair_values.append({
+            "pair_id": pair_id,
+            "context_toward_source": context_pair,
+            "context_abs_delta": context_abs_pair,
+            "header_toward_source": header_pair,
+            "C_B": contrast_pair,
+            "same_sector_peer_context_abs_delta": peer_pair,
+            "context_by_direction_and_origin": {
+                f"{direction}|{origin}": toward(record)
+                for (direction, origin), record in sorted(context.items())
+            },
+            "header_by_direction_and_origin": {
+                f"{direction}|{origin}": toward(record)
+                for (direction, origin), record in sorted(header.items())
+            },
+        })
+
+    from llm_bias.core.analysis.statistics import holm_bonferroni
+
+    seed = int(config["bootstrap_seed"])
+    samples = int(config["bootstrap_samples"])
+    confidence = float(config["ci_level"])
+    raw_p_values = [_confirmation_exact_sign_flip_p(context_values), _confirmation_exact_sign_flip_p(contrast_values)]
+    adjusted_p_values = holm_bonferroni(raw_p_values)
+    estimates = {
+        "L16_context_toward_source": {
+            "pair_count": len(context_values), "mean": sum(context_values) / len(context_values),
+            "bootstrap_95_ci": _confirmation_bootstrap_ci(context_values, seed=seed, samples=samples, confidence=confidence),
+            "one_sided_exact_sign_flip_p": raw_p_values[0], "holm_adjusted_p": adjusted_p_values[0],
+        },
+        "C_B": {
+            "pair_count": len(contrast_values), "mean": sum(contrast_values) / len(contrast_values),
+            "bootstrap_95_ci": _confirmation_bootstrap_ci(contrast_values, seed=seed, samples=samples, confidence=confidence),
+            "one_sided_exact_sign_flip_p": raw_p_values[1], "holm_adjusted_p": adjusted_p_values[1],
+        },
+        "L16_cross_sector_context_abs_delta": {"pair_count": len(context_values), "mean": sum(row["context_abs_delta"] for row in pair_values) / len(pair_values)},
+        "L16_same_sector_peer_context_abs_delta": {"pair_count": len(peer_abs_values), "mean": sum(peer_abs_values) / len(peer_abs_values)},
+        "evidence_origin_strata": {
+            origin: {"pair_observation_count": len(values), "mean_toward_source": sum(values) / len(values)}
+            for origin, values in sorted(stratum_values.items())
+        },
+    }
+    data_gates = config["data_quality_gates"]
+    effect_gates = config["effect_gates"]
+    specificity_gates = config["specificity_gates"]
+    statistical_gates = config["statistical_gates"]
+    gates = [
+        {"gate": "minimum_eligible_pairs", "observed": len(eligible_pair_ids), "threshold": int(data_gates["minimum_eligible_pairs"]), "pass": len(eligible_pair_ids) >= int(data_gates["minimum_eligible_pairs"])},
+        {"gate": "self_source_exact_noop", "observed": self_source_exact_noop, "pass": self_source_exact_noop},
+        {"gate": "L16_context_toward_source_mean", "observed": estimates["L16_context_toward_source"]["mean"], "threshold": float(effect_gates["minimum_L16_context_toward_source_mean"]), "pass": estimates["L16_context_toward_source"]["mean"] > float(effect_gates["minimum_L16_context_toward_source_mean"])},
+        {"gate": "C_B_mean", "observed": estimates["C_B"]["mean"], "threshold": float(effect_gates["minimum_C_B_mean"]), "pass": estimates["C_B"]["mean"] > float(effect_gates["minimum_C_B_mean"])},
+        {"gate": "L16_context_toward_source_bootstrap_ci_lower_gt_0", "observed": estimates["L16_context_toward_source"]["bootstrap_95_ci"][0], "pass": estimates["L16_context_toward_source"]["bootstrap_95_ci"][0] > 0.0},
+        {"gate": "C_B_bootstrap_ci_lower_gt_0", "observed": estimates["C_B"]["bootstrap_95_ci"][0], "pass": estimates["C_B"]["bootstrap_95_ci"][0] > 0.0},
+        {"gate": "cross_sector_context_abs_gt_same_sector_peer_context_abs", "observed": [estimates["L16_cross_sector_context_abs_delta"]["mean"], estimates["L16_same_sector_peer_context_abs_delta"]["mean"]], "pass": estimates["L16_cross_sector_context_abs_delta"]["mean"] > estimates["L16_same_sector_peer_context_abs_delta"]["mean"]},
+        {"gate": "evidence_origin_strata_both_positive", "observed": estimates["evidence_origin_strata"], "pass": all(value["mean_toward_source"] > 0.0 for value in estimates["evidence_origin_strata"].values()) and set(estimates["evidence_origin_strata"]) == set(origins)},
+        {"gate": "L16_context_toward_source_sign_flip", "observed": estimates["L16_context_toward_source"]["one_sided_exact_sign_flip_p"], "threshold": float(statistical_gates["sign_flip_alpha"]), "pass": estimates["L16_context_toward_source"]["one_sided_exact_sign_flip_p"] < float(statistical_gates["sign_flip_alpha"])},
+        {"gate": "C_B_sign_flip", "observed": estimates["C_B"]["one_sided_exact_sign_flip_p"], "threshold": float(statistical_gates["sign_flip_alpha"]), "pass": estimates["C_B"]["one_sided_exact_sign_flip_p"] < float(statistical_gates["sign_flip_alpha"])},
+        {"gate": "holm_two_contrasts", "observed": {"L16_context_toward_source": adjusted_p_values[0], "C_B": adjusted_p_values[1]}, "threshold": float(statistical_gates["sign_flip_alpha"]), "pass": all(value < float(statistical_gates["sign_flip_alpha"]) for value in adjusted_p_values)},
+    ]
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "artifact_type": CONFIRMATION_ARTIFACT_TYPE,
+        "protocol": "sector-context-followup-b-v1",
+        "split": split,
+        "eligible_pair_count": len(eligible_pair_ids),
+        "pair_values": pair_values,
+        "estimates": estimates,
+        "gate_checks": gates,
+        "success": all(bool(gate["pass"]) for gate in gates),
+        "interpretation_limit": "B V1 fixed-negative-evidence context resample-patching sufficiency; not necessity, a unique decision route, or an attention claim",
+    }
+    if split == "calibration":
+        result["test_authorized"] = result["success"]
+    else:
+        result["formal"] = True
+    return result
+
+
+def evaluate_context_overriding_confirmation_artifacts(
+    records_path: str | Path,
+    config_path: str | Path,
+    output_path: str | Path,
+    split: str,
+) -> dict[str, Any]:
+    """Evaluate compact B V1 records and write a provenance-bound JSON artifact."""
+    records_path = Path(records_path)
+    config_path = Path(config_path)
+    output_path = Path(output_path)
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(config, Mapping):
+        raise ValueError("confirmation config must be a JSON object")
+    result = evaluate_context_overriding_confirmation(read_jsonl(records_path), config, split=split)
+    result.update({
+        "config": str(config_path), "config_sha256": sha256_file(config_path),
+        "parent_records": str(records_path), "parent_sha256": sha256_file(records_path),
+    })
+    write_json(output_path, result, overwrite=False)
+    return result
+
+
 def _formatted_records(
     tokenizer: Any,
     prepared: Sequence[Mapping[str, Any]],
@@ -513,7 +887,10 @@ def run_cross_sector_context_overriding_pipeline(
 
 __all__ = [
     "ANALYSIS_ARTIFACT_TYPE",
+    "CONFIRMATION_ARTIFACT_TYPE",
     "ARTIFACT_SCHEMA_VERSION",
+    "evaluate_context_overriding_confirmation",
+    "evaluate_context_overriding_confirmation_artifacts",
     "DEFAULT_DATASET",
     "DEFAULT_LAYERS",
     "DEFAULT_SPANS",

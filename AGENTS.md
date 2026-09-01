@@ -28,9 +28,9 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
   - [V2 proposal](docs/jspace-token-experiments/proposal-v2.md) / [report](docs/jspace-token-experiments/report-v2.md)（Draft 1 已實作；第一次正式 pipeline 的 verdict 為 `success=false`；另含 zero-evidence header-only prior probe 與 direction decode，兩者皆有 first formal run）
   - [V2 outcome direction 幾何投影分解](docs/jspace-token-experiments/report-v2-geometry.md)（輔助診斷；描述性幾何，非 causal）
 - [Activation patching proposal](docs/activation-patching-causal-tracing/proposal.md) / [report](docs/activation-patching-causal-tracing/report.md)（Draft 1 completed；discovery 找到 evidence→instruction context→final position 的 layer-dependent sufficiency 轉移；unchanged held-out confirmation `success=true`）
-- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) / [discovery report](docs/sector-context-followup/report-discovery.md)（A cross-sector header-state patching、B negative-evidence context overriding、C L16 instruction-context readout；protocol frozen；A/B/C 皆已有 discovery runs，calibration/test gates 未凍結）
+- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) / [discovery report](docs/sector-context-followup/report-discovery.md) / [B V1 confirmation report](docs/sector-context-followup/report-confirmation.md)（A cross-sector header-state patching、B negative-evidence context overriding、C L16 instruction-context readout；A/B/C discovery 完成；B V1 calibration `success=false`，same-sector peer specificity gate 未通過，held-out test 未執行）
 - [Shared experiment core](docs/shared-experiment-core.md)
-- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) / [report status](docs/span-sensitivity/report-status.md)
+- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) / [discovery report](docs/span-sensitivity/report-status.md)（V1 discovery completed；`same_sector_swap` 為 calibration primary condition，calibration/test protocol 未凍結）
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 
