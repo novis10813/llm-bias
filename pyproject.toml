@@ -30,6 +30,7 @@ prompt-analysis = "llm_bias.prompt_analysis.cli:main"
 baseline-trial = "llm_bias.baseline_trial.cli:main"
 jspace-intervention = "llm_bias.jspace_intervention.cli:main"
 span-sensitivity = "llm_bias.span_sensitivity.cli:main"
+entity-cell = "llm_bias.entity_cell.cli:main"
 
 [project.optional-dependencies]
 extraction = [

@@ -23,6 +23,9 @@ commands 或取代各 workflow 文件。
 - `span_sensitivity/`：擁有單一產業 identity-header conditions、固定 Buy/Sell
   continuation margin 與 ticker-clustered paired analysis；workflow 見
   [`../docs/span-sensitivity/proposal.md`](../docs/span-sensitivity/proposal.md)。
+- `entity_cell/`：擁有 entity-cell localization 的 tokenizer-only input preparation，
+  包含 split isolation、header-prefix variants、E1 baseline contract 與 E2 source spans；
+  model execution 與 downstream phases 尚未實作。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
   `edgar_preparation/`：已隨程式移至 `archive/llm_bias/`（frozen），操作文件在
   `docs/archive/`。
