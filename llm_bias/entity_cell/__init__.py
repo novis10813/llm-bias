@@ -25,6 +25,16 @@ from .mlp_cells import (
 )
 from .pipeline import DATASET, STAGES, run_e1
 from .e2 import E2_ALL_STAGES, E2_READOUT_STAGE, E2_STAGES, analyze_e2, run_e2
+from .e3 import E3_ANALYZE_STAGE, E3_STAGES, analyze_e3, analyze_e3_records, run_downstream_suppression_record, run_e3, run_upstream_suppression_record
+from .suppression import (
+    E3_ALPHA_GRID, E3_BETA_GRID, SOURCE_NORM_EPSILON, AttenuationControl,
+    SourceAttenuationSession, attenuate_identity_sources,
+    compute_source_attenuation_deltas, deterministic_source_subset,
+    e3_compact_record, e3_progress, matched_perturbation_norm,
+    norm_matched_source_delta, preservation_metrics,
+    reconstruct_source_components, source_resolved_head_inputs,
+    validate_dose_grid, whole_head_upper_bound_beta,
+)
 from .readout import (
     ARTIFACT_TYPE as E2_READOUT_ARTIFACT_TYPE,
     DEFAULT_READOUT_CONFIG,
@@ -103,6 +113,8 @@ __all__ = [
     "E2_READOUT_STAGE",
     "E2_ALL_STAGES",
     "run_e2",
+    "E3_ANALYZE_STAGE", "E3_STAGES", "analyze_e3", "analyze_e3_records", "run_downstream_suppression_record", "run_e3", "run_upstream_suppression_record",
+    "E3_ALPHA_GRID", "E3_BETA_GRID", "SOURCE_NORM_EPSILON", "AttenuationControl", "SourceAttenuationSession", "attenuate_identity_sources", "compute_source_attenuation_deltas", "deterministic_source_subset", "e3_compact_record", "e3_progress", "matched_perturbation_norm", "norm_matched_source_delta", "preservation_metrics", "reconstruct_source_components", "source_resolved_head_inputs", "validate_dose_grid", "whole_head_upper_bound_beta",
     "analyze_e2",
     "FULL_ATTENTION_LAYERS",
     "PRIMARY_ATTENTION_LAYERS",
