@@ -1,6 +1,7 @@
 """Frozen, tokenizer-only input preparation for entity-cell experiments."""
 from __future__ import annotations
 
+import codecs
 import csv
 import json
 import re
@@ -27,6 +28,8 @@ FINANCIAL_PROMPT_COLUMNS = (
 BASELINE_SCHEMA_VERSION = 1
 PREPARATION_SCHEMA_VERSION = 1
 BASELINE_EXACT_IDENTITY = "paper-appendix-a-v1"
+E2_DONOR_CONDITIONS = ("original", "anonymous_identity", "same_sector_swap", "name_form_control")
+E2_DONOR_SCHEMA_VERSION = 1
 
 # These strings are the frozen V1 prefix family. The canonical two-line header and
 # every character after it stay byte-for-byte unchanged.
@@ -455,6 +458,88 @@ def _prepare_header_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]
     return rows
 
 
+def _replace_identity(prompt: str, *, ticker: str, name: str) -> str:
+    ticker_match = _match_one(_TICKER_RE, prompt, "ticker")
+    prompt = prompt[: ticker_match.start("value")] + ticker + prompt[ticker_match.end("value") :]
+    name_match = _match_one(_NAME_RE, prompt, "name")
+    return prompt[: name_match.start("value")] + name + prompt[name_match.end("value") :]
+
+
+def _donor_identity_rows(source_rows: Sequence[Mapping[str, Any]], *, seed: int = 0) -> dict[str, tuple[str, str] | None]:
+    """Choose one deterministic same-sector identity without importing another experiment."""
+    ordered = sorted(
+        (str(row["ticker"]) for row in source_rows),
+        key=lambda ticker: stable_record_id("entity-cell-e2-donor", seed, ticker),
+    )
+    identities = {str(row["ticker"]): (str(row["ticker"]), str(row["name"])) for row in source_rows}
+    if len(ordered) < 2:
+        return {ticker: None for ticker in ordered}
+    return {ticker: identities[ordered[(index + 1) % len(ordered)]] for index, ticker in enumerate(ordered)}
+
+
+def _prepare_donor_rows(
+    tokenizer: Any,
+    source_rows: Sequence[Mapping[str, Any]],
+    financial_rows: Sequence[Mapping[str, Any]],
+    *,
+    split: str,
+    seed: int = 0,
+) -> list[dict[str, Any]]:
+    """Materialize E2 head-patch donor inputs and their identity provenance."""
+    peers = _donor_identity_rows(source_rows, seed=seed)
+    result: list[dict[str, Any]] = []
+    for row in financial_rows:
+        ticker, name = str(row["ticker"]), str(row["name"])
+        peer = peers.get(ticker)
+        identities: dict[str, tuple[str, str] | None] = {
+            "original": (ticker, name),
+            "anonymous_identity": ("ANON", "Anonymous Company"),
+            "same_sector_swap": peer,
+            "name_form_control": (codecs.decode(ticker, "rot_13"), codecs.decode(name, "rot_13")),
+        }
+        for condition in E2_DONOR_CONDITIONS:
+            identity = identities[condition]
+            eligible = identity is not None
+            donor_prompt = None if identity is None else _replace_identity(
+                str(row["prompt"]), ticker=identity[0], name=identity[1]
+            )
+            donor_formatted = None
+            donor_groups = None
+            donor_ids: list[int] = []
+            reason = None if eligible else "same_sector_donor_requires_two_selected_tickers"
+            if donor_prompt is not None:
+                donor_formatted, donor_offset = _formatted_prompt(tokenizer, donor_prompt)
+                donor_groups = _source_groups(tokenizer, donor_prompt, donor_formatted, donor_offset)
+                donor_ids = donor_groups["input_ids"]
+            result.append({
+                "schema_version": E2_DONOR_SCHEMA_VERSION,
+                "artifact_type": "entity_cell_e2_donor_contract",
+                "contract_id": stable_record_id("entity-cell-e2-donor", ticker, row["prompt_column"], split, condition),
+                "prompt_id": row["prompt_id"],
+                "ticker": ticker,
+                "name": name,
+                "sector": row["sector"],
+                "split": split,
+                "prompt_column": row["prompt_column"],
+                "condition": condition,
+                "eligible": eligible,
+                "exclusion_reason": reason,
+                "source_identity": {"ticker": ticker, "name": name},
+                "donor_identity": None if identity is None else {"ticker": identity[0], "name": identity[1]},
+                "source_prompt_sha256": row["source_prompt_sha256"],
+                "source_formatted_prompt_sha256": row["formatted_prompt_sha256"],
+                "donor_prompt_sha256": None if donor_prompt is None else sha256_bytes(donor_prompt.encode("utf-8")),
+                "donor_formatted_prompt_sha256": None if donor_formatted is None else sha256_bytes(donor_formatted.encode("utf-8")),
+                "target_input_ids": list(row["input_ids"]),
+                "donor_input_ids": donor_ids,
+                "target_final_query_position": int(row["final_query_position"]),
+                "donor_final_query_position": None if donor_groups is None else int(donor_groups["final_query_position"]),
+                "target_source_groups_sha256": sha256_json(row["source_groups"]),
+                "donor_source_groups_sha256": None if donor_groups is None else sha256_json(donor_groups["source_groups"]),
+            })
+    return result
+
+
 def _prepare_financial_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]], *, split: str) -> list[dict[str, Any]]:
     rows = []
     for source in source_rows:
@@ -511,6 +596,7 @@ def prepare_inputs(
     )
     header_variants = _prepare_header_rows(tokenizer, source_rows, split=split)
     financial_prompts = _prepare_financial_rows(tokenizer, source_rows, split=split)
+    donor_contracts = _prepare_donor_rows(tokenizer, source_rows, financial_prompts, split=split)
     if len(header_variants) != len(source_rows) * HEADER_VARIANT_COUNT:
         raise AssertionError("each selected ticker must have exactly twelve header variants")
     if len(financial_prompts) != len(source_rows) * len(FINANCIAL_PROMPT_COLUMNS):
@@ -525,6 +611,8 @@ def prepare_inputs(
         "localization_variant_ids": list(LOCALIZATION_VARIANT_IDS),
         "held_variant_ids": list(HELD_VARIANT_IDS),
         "financial_prompt_columns": list(FINANCIAL_PROMPT_COLUMNS),
+        "e2_donor_conditions": list(E2_DONOR_CONDITIONS),
+        "e2_donor_schema_version": E2_DONOR_SCHEMA_VERSION,
         "baseline_expected_count": baseline_expected_count,
         "baseline_identity": baseline_identity,
     }
@@ -532,6 +620,7 @@ def prepare_inputs(
         "header_variants": header_variants,
         "generic_baseline": baseline,
         "financial_prompts": financial_prompts,
+        "e2_donor_contracts": donor_contracts,
         "config": config,
         "ticker_count": len(source_rows),
     }
@@ -542,6 +631,7 @@ def validate_prepared_inputs(prepared: Mapping[str, Any]) -> None:
     headers = list(prepared.get("header_variants", ()))
     financial = list(prepared.get("financial_prompts", ()))
     baseline = list(prepared.get("generic_baseline", ()))
+    donor_contracts = list(prepared.get("e2_donor_contracts", ()))
     config = prepared.get("config")
     if not isinstance(config, Mapping) or config.get("header_variant_count") != HEADER_VARIANT_COUNT:
         raise ValueError("prepared inputs have no frozen twelve-variant config")
@@ -575,6 +665,28 @@ def validate_prepared_inputs(prepared: Mapping[str, Any]) -> None:
         for ticker in by_ticker
     ) or len(financial_ids) != len(financial):
         raise ValueError("each ticker must contain each frozen financial prompt column exactly once")
+    expected_donor_count = len(financial) * len(E2_DONOR_CONDITIONS)
+    if len(donor_contracts) != expected_donor_count:
+        raise ValueError("E2 donor contract count does not match financial prompts")
+    donor_keys = set()
+    for row in donor_contracts:
+        if row.get("artifact_type") != "entity_cell_e2_donor_contract":
+            raise ValueError("E2 donor contract artifact type is invalid")
+        key = (row.get("ticker"), row.get("prompt_column"), row.get("condition"))
+        if key in donor_keys or row.get("condition") not in E2_DONOR_CONDITIONS:
+            raise ValueError("E2 donor contracts contain duplicate or unknown conditions")
+        donor_keys.add(key)
+        if row.get("source_prompt_sha256") != next(
+            (item.get("source_prompt_sha256") for item in financial if item.get("ticker") == row.get("ticker") and item.get("prompt_column") == row.get("prompt_column")), None
+        ):
+            raise ValueError("E2 donor contract source hash does not match financial prompt")
+        if row.get("eligible"):
+            if not isinstance(row.get("donor_identity"), Mapping) or not row.get("donor_input_ids"):
+                raise ValueError("eligible E2 donor contract is missing donor identity or token IDs")
+            if row.get("donor_prompt_sha256") is None or row.get("donor_formatted_prompt_sha256") is None:
+                raise ValueError("eligible E2 donor contract is missing prompt hashes")
+        elif not row.get("exclusion_reason"):
+            raise ValueError("ineligible E2 donor contract must explain its exclusion")
     for row in financial:
         groups = row.get("source_groups")
         if not isinstance(groups, Mapping):
@@ -590,7 +702,7 @@ def validate_prepared_inputs(prepared: Mapping[str, Any]) -> None:
         expected = set(range(int(row["final_query_position"])))
         if seen != expected:
             raise ValueError("source groups do not cover all positions before final query position")
-    forbidden = {"activation", "activations", "residual", "hidden_state", "gradient", "jacobian", "attention"}
+    forbidden = {"activation", "activations", "residual", "hidden_state", "gradient", "jacobian", "attention_matrix", "kv_cache", "recurrent_state"}
     def walk(value: Any, key: str = "") -> None:
         if any(part in key.lower().replace("-", "_").split("_") for part in forbidden):
             raise ValueError(f"raw runtime payload is not allowed: {key}")
@@ -654,6 +766,7 @@ def prepare_artifacts(
         "header_variants": prepare_dir / "header_variants.jsonl",
         "generic_baseline": prepare_dir / "generic_baseline.jsonl",
         "financial_prompts": prepare_dir / "financial_prompts.jsonl",
+        "e2_donor_contracts": prepare_dir / "e2_donor_contracts.jsonl",
         "metadata": prepare_dir / "metadata.json",
         "config": prepare_dir / "config.json",
     }
@@ -669,6 +782,7 @@ def prepare_artifacts(
                 "header_variants": write_jsonl(paths["header_variants"], prepared["header_variants"]),
                 "generic_baseline": write_jsonl(paths["generic_baseline"], prepared["generic_baseline"]),
                 "financial_prompts": write_jsonl(paths["financial_prompts"], prepared["financial_prompts"]),
+                "e2_donor_contracts": write_jsonl(paths["e2_donor_contracts"], prepared["e2_donor_contracts"]),
             }
             write_json(paths["config"], prepared["config"])
             metadata = {
@@ -688,13 +802,14 @@ def prepare_artifacts(
                 "baseline_input": str(baseline_source),
                 "baseline_input_sha256": sha256_file(baseline_source),
                 "baseline_identity": baseline_identity,
+                "e2_donor_conditions": list(E2_DONOR_CONDITIONS),
                 "config_sha256": sha256_json(prepared["config"]),
                 "record_counts": counts,
                 "ticker_count": prepared["ticker_count"],
                 "raw_runtime_payloads": False,
             }
             metadata["prepared_artifact_sha256"] = {
-                key: sha256_file(paths[key]) for key in ("header_variants", "generic_baseline", "financial_prompts")
+                key: sha256_file(paths[key]) for key in ("header_variants", "generic_baseline", "financial_prompts", "e2_donor_contracts")
             }
             write_metadata(paths["metadata"], metadata)
             stage.count(sum(counts.values()))
@@ -702,6 +817,7 @@ def prepare_artifacts(
             ("header_variants", "entity_cell_header_variant"),
             ("generic_baseline", "entity_cell_generic_baseline_prompt"),
             ("financial_prompts", "entity_cell_financial_prompt"),
+            ("e2_donor_contracts", "entity_cell_e2_donor_contract"),
             ("metadata", "entity_cell_prepare_metadata"),
             ("config", "entity_cell_prepare_config"),
         ):
@@ -719,6 +835,8 @@ def prepare_artifacts(
 
 __all__ = [
     "BASELINE_EXACT_IDENTITY",
+    "E2_DONOR_CONDITIONS",
+    "E2_DONOR_SCHEMA_VERSION",
     "BASELINE_RECORD_COUNT",
     "FINANCIAL_PROMPT_COLUMNS",
     "HEADER_VARIANT_COUNT",

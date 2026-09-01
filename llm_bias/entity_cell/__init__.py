@@ -23,7 +23,15 @@ from .mlp_cells import (
     select_matched_random_neuron,
     surface_form_controls,
 )
-from .pipeline import DATASET, STAGES, run_e1
+from .pipeline import DATASET, STAGES, analyze_e1, run_e1
+from .confirmation import (
+    CONFIG_ARTIFACT_TYPE, ConfirmationConfig, PRIMARY_FAMILY, PROTOCOL,
+    RECORD_ARTIFACT_TYPE, RESULT_ARTIFACT_TYPE, confirmation_config_hash,
+    default_confirmation_config, evaluate_confirmation, evaluate_confirmation_artifact,
+    evaluate_entity_cell_confirmation, evaluate_entity_cell_confirmation_artifact,
+    summarize_discovery, validate_confirmation_config,
+)
+from .lifecycle import check_provenance, load_complete_run, require_file, require_stage, validate_prepared_directory, verify_registered_artifact
 from .e2 import E2_ALL_STAGES, E2_READOUT_STAGE, E2_STAGES, analyze_e2, run_e2
 from .e3 import E3_ANALYZE_STAGE, E3_STAGES, analyze_e3, analyze_e3_records, run_downstream_suppression_record, run_e3, run_upstream_suppression_record
 from .suppression import (
@@ -101,7 +109,8 @@ __all__ = [
     "rank_stability_scores",
     "record_post_swiglu",
     "run_amnesia_curve",
-    "run_e1",
+    "run_e1", "analyze_e1",
+    "CONFIG_ARTIFACT_TYPE", "ConfirmationConfig", "PRIMARY_FAMILY", "PROTOCOL", "RECORD_ARTIFACT_TYPE", "RESULT_ARTIFACT_TYPE", "confirmation_config_hash", "default_confirmation_config", "evaluate_confirmation", "evaluate_confirmation_artifact", "evaluate_entity_cell_confirmation", "evaluate_entity_cell_confirmation_artifact", "summarize_discovery", "validate_confirmation_config", "check_provenance", "load_complete_run", "require_file", "require_stage", "validate_prepared_directory", "verify_registered_artifact",
     "select_matched_random_neuron",
     "surface_control_summary",
     "surface_form_controls",

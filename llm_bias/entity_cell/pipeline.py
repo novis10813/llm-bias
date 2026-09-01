@@ -25,6 +25,7 @@ from .mlp_cells import (
     surface_form_controls,
 )
 from .preparation import HELD_VARIANT_IDS, LOCALIZATION_VARIANT_IDS, parse_header
+from .lifecycle import check_provenance, validate_prepared_directory
 
 DATASET = "entity-cell-localization"
 STAGES = ("e1-baseline", "e1-localization", "e1-amnesia", "analyze")
@@ -67,11 +68,11 @@ def run_e1(
     if unknown:
         raise ValueError(f"unknown E1 stages: {sorted(unknown)}")
     prepared = Path(prepared_dir)
-    if not (prepared / "metadata.json").is_file():
-        raise ValueError("prepared_dir must contain T1 metadata.json")
-    headers = read_jsonl(prepared / "header_variants.jsonl")
-    financial = read_jsonl(prepared / "financial_prompts.jsonl")
-    baseline = read_jsonl(prepared / "generic_baseline.jsonl")
+    prepared_metadata = validate_prepared_directory(prepared)
+    check_provenance(prepared_metadata, model=model_name)
+    headers = read_jsonl(prepared / "prepare" / "header_variants.jsonl")
+    financial = read_jsonl(prepared / "prepare" / "financial_prompts.jsonl")
+    baseline = read_jsonl(prepared / "prepare" / "generic_baseline.jsonl")
     if max_tickers is not None and max_tickers < 1:
         raise ValueError("max_tickers must be positive")
     tickers = sorted({str(row["ticker"]) for row in headers})
@@ -84,10 +85,10 @@ def run_e1(
     run = ArtifactRun.create(model_name, DATASET, run_id, artifact_root=artifact_root)
     output_dir = run.run_directory / "e1"
     try:
-        metadata_path = prepared / "metadata.json"
+        metadata_path = prepared / "prepare" / "metadata.json"
         if metadata_path.is_file():
             run.manifest.register_artifact(metadata_path, artifact_type="entity_cell_prepare_metadata", stage="prepare", role="input")
-        for path in (prepared / "header_variants.jsonl", prepared / "financial_prompts.jsonl", prepared / "generic_baseline.jsonl"):
+        for path in (prepared / "prepare" / "header_variants.jsonl", prepared / "prepare" / "financial_prompts.jsonl", prepared / "prepare" / "generic_baseline.jsonl", prepared / "prepare" / "e2_donor_contracts.jsonl"):
             run.manifest.register_artifact(path, artifact_type="entity_cell_prepared_input", stage="prepare", role="input")
         from llm_bias.core.model import load_model
         model, tokenizer, fallback_device = load_model(model_name)

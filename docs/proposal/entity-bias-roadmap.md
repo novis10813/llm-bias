@@ -62,7 +62,7 @@ model-specific rendering are both part of the dataset-construction window.
 | Activation patching causal tracing | Draft 1 hierarchical residual resample patching and frozen confirmation analysis are implemented in `jspace-intervention` | Discovery localized an evidence → instruction-context → final-position sufficiency shift; the unchanged Qwen3.5-4B held-out confirmation returned `success=true` |
 | Sector and context follow-up | A V1 cross-sector header-state patching, B V1 negative-evidence context overriding, C V1 L16 instruction-context readout, and B V1 frozen confirmation analysis are implemented with separate artifacts | A/B/C discovery runs are recorded. B V1 calibration reproduced the L16 context effect but failed the same-sector peer specificity gate (`success=false`, `test_authorized=false`); held-out test was not run, so no formal sector-conditioned claim is established |
 | Technology header-span sensitivity | V1 header-only condition preparation, fixed Buy/Sell margin scoring, paired analysis, artifact lifecycle, and CLI are implemented | Technology discovery completed on 35 tickers. `same_sector_swap` exceeded the name-form control and is the calibration primary condition; calibration/test protocol remains unfrozen |
-| Entity cell localization and downstream attribution | Proposed; not yet frozen, implemented, or run | No runs; proposal defines E1 stability-score MLP localization, E2 DLA head classification, and E3 cell-suppression causal test for Qwen3.5-4B financial header prompts |
+| Entity cell localization and downstream attribution | Frozen V1 workflow implemented in `llm_bias/entity_cell/` with `entity-cell` CLI, deterministic E2 donor contracts, lifecycle checks, and confirmation evaluator | No model inference, discovery, calibration, or held-out test runs; see [status report](../entity-cell-localization/report-status.md) |
 | Cross-model/task evaluation | Model loaders and model-specific lens paths exist | No standardised cross-model/task result exists |
 | Optional J-space-candidate preflight | Proposed non-runnable design exists | `jspace_eval` package and CLI are not implemented |
 
@@ -287,7 +287,7 @@ or draft rather than validated evidence of harmful entity bias.
 - [Activation patching causal tracing proposal](../activation-patching-causal-tracing/proposal.md) and [report](../activation-patching-causal-tracing/report.md)
 - [Sector and context follow-up proposal](../sector-context-followup/proposal.md), [discovery report](../sector-context-followup/report-discovery.md), and [B V1 confirmation report](../sector-context-followup/report-confirmation.md)
 - [Technology header-span sensitivity proposal](../span-sensitivity/proposal.md) and [discovery report](../span-sensitivity/report-status.md)
-- [Entity cell localization and downstream attribution proposal](../entity-cell-localization/proposal.md) (proposed; not yet implemented)
+- [Entity cell localization and downstream attribution proposal](../entity-cell-localization/proposal.md) and [status report](../entity-cell-localization/report-status.md) (implemented; no formal runs)
 - [Prompt-analysis reproducibility](../baseline-trial/report-reproducibility.md)
 - [Shared experiment core](../shared-experiment-core.md)
 - [Artifact identity and run manifest contract](../artifact-contract.md)

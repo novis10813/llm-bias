@@ -15,6 +15,7 @@ from llm_bias.core.inference.forward import record_residuals
 from llm_bias.core.prompt_input.encoding import format_prompt
 
 from .analysis import denominator_eligibility
+from .lifecycle import check_provenance, load_complete_run, require_stage, validate_prepared_directory, verify_registered_artifact
 from .attention_attribution import (
     SOURCE_GROUPS,
     _attention_module,
@@ -275,10 +276,15 @@ def run_e3(
     if set(enabled) - set(E3_STAGES):
         raise ValueError(f"unknown E3 stages: {sorted(set(enabled) - set(E3_STAGES))}")
     prepared = Path(prepared_dir)
-    financial = read_jsonl(prepared / "financial_prompts.jsonl")
+    prepared_metadata = validate_prepared_directory(prepared)
+    check_provenance(prepared_metadata, model=model_name)
+    financial = read_jsonl(prepared / "prepare" / "financial_prompts.jsonl")
     if e1_run_root is None:
         cells = []
     else:
+        e1_run, e1_manifest = load_complete_run(e1_run_root, label="E1 upstream run")
+        require_stage(e1_manifest, "e1-localization", label="E3")
+        require_stage(e1_manifest, "e1-amnesia", label="E3")
         cells_path = Path(e1_run_root) / "e1" / "cells.jsonl"
         if not cells_path.is_file():
             raise ValueError("e1_run_root must contain e1/cells.jsonl")
@@ -292,6 +298,8 @@ def run_e3(
     if not trusted:
         raise ValueError("E3 found no trusted E1 candidate cells")
     if e2_run_root:
+        e2_run, e2_manifest = load_complete_run(e2_run_root, label="E2 upstream run")
+        require_stage(e2_manifest, "e2-attribution", label="E3")
         attribution_path = Path(e2_run_root) / "e2" / "head_attribution.jsonl"
         if not attribution_path.is_file():
             raise ValueError("e2_run_root must contain e2/head_attribution.jsonl")
@@ -311,8 +319,8 @@ def run_e3(
     run = ArtifactRun.create(model_name, DATASET, run_id, artifact_root=artifact_root)
     out = run.run_directory / "e3"
     try:
-        run.manifest.register_artifact(prepared / "metadata.json", artifact_type="entity_cell_prepare_metadata", stage="prepare", role="input")
-        run.manifest.register_artifact(prepared / "financial_prompts.jsonl", artifact_type="entity_cell_financial_prompt", stage="prepare", role="input")
+        run.manifest.register_artifact(prepared / "prepare" / "metadata.json", artifact_type="entity_cell_prepare_metadata", stage="prepare", role="input")
+        run.manifest.register_artifact(prepared / "prepare" / "financial_prompts.jsonl", artifact_type="entity_cell_financial_prompt", stage="prepare", role="input")
         e1_cells_path = Path(e1_run_root) / "e1" / "cells.jsonl"
         e1_summary_path = Path(e1_run_root) / "analyze" / "summary.json"
         run.manifest.register_artifact(e1_cells_path, artifact_type="entity_cell_candidates", stage="e1", role="input")

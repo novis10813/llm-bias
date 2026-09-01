@@ -14,6 +14,7 @@ from llm_bias.core.artifacts.lifecycle import ArtifactRun
 from llm_bias.core.inference.forward import record_residuals
 from llm_bias.core.prompt_input.encoding import format_prompt
 
+from .lifecycle import check_provenance, load_complete_run, require_stage, validate_prepared_directory
 from .attention_attribution import (
     FULL_ATTENTION_LAYERS,
     PRIMARY_ATTENTION_LAYERS,
@@ -99,11 +100,21 @@ def run_e2(
         raise ValueError(f"unknown E2 stages: {sorted(unknown)}")
     selected_layers = validate_attention_layers(layers)
     prepared = Path(prepared_dir)
-    financial_path = prepared / "financial_prompts.jsonl"
-    metadata_path = prepared / "metadata.json"
-    if not financial_path.is_file() or not metadata_path.is_file():
-        raise ValueError("prepared_dir must contain T1 financial_prompts.jsonl and metadata.json")
+    prepared_metadata = validate_prepared_directory(prepared)
+    check_provenance(prepared_metadata, model=model_name)
+    financial_path = prepared / "prepare" / "financial_prompts.jsonl"
+    donor_path = prepared / "prepare" / "e2_donor_contracts.jsonl"
+    metadata_path = prepared / "prepare" / "metadata.json"
+    if not financial_path.is_file() or not metadata_path.is_file() or not donor_path.is_file():
+        raise ValueError("prepared_dir must contain financial_prompts.jsonl, e2_donor_contracts.jsonl, and metadata.json")
     financial = read_jsonl(financial_path)
+    donors = read_jsonl(donor_path)
+    donor_by_key = {(str(row["prompt_id"]), str(row["condition"])): row for row in donors}
+    expected_donors = {(str(row["prompt_id"]), condition) for row in financial for condition in ("original", "anonymous_identity", "same_sector_swap", "name_form_control")}
+    if set(donor_by_key) != expected_donors:
+        raise ValueError("E2 donor contracts are incomplete")
+    if "e2-patching" in enabled and any(not row.get("eligible") for row in donors):
+        raise ValueError("E2 patching requires eligible matched donors for all frozen conditions")
     tickers = sorted({str(row["ticker"]) for row in financial})
     if max_tickers is not None:
         if max_tickers < 1:
@@ -115,6 +126,7 @@ def run_e2(
     try:
         run.manifest.register_artifact(metadata_path, artifact_type="entity_cell_prepare_metadata", stage="prepare", role="input")
         run.manifest.register_artifact(financial_path, artifact_type="entity_cell_financial_prompt", stage="prepare", role="input")
+        run.manifest.register_artifact(donor_path, artifact_type="entity_cell_e2_donor_contract", stage="prepare", role="input")
         from llm_bias.core.model import load_model
         model, tokenizer, fallback_device = load_model(model_name)
         target = torch.device(device or getattr(model, "input_device", fallback_device))
@@ -205,12 +217,18 @@ def run_e2(
                 run.manifest.register_artifact(readout_metadata_path, artifact_type="entity_cell_e2_selected_component_readout_metadata", stage="e2-readout", role="output")
                 stage.count(readout_count)
         if "e2-patching" in enabled:
+            if "e2-attribution" not in enabled:
+                raise ValueError("e2-patching requires e2-attribution in the same run")
             with run.stage("e2-patching") as stage:
                 path = output_dir / "patching.jsonl"
-                # Patching is intentionally exposed as a separate API. A full
-                # population patch run requires matched identity contracts that
-                # T1 does not materialize, so this stage emits no fabricated rows.
-                count = write_jsonl(path, [], overwrite=True)
+                # The donor contracts bind all four frozen header conditions. The
+                # live selected-head patch remains an explicit model-control API;
+                # this stage records the prepared contract inventory for smoke runs.
+                patch_rows = [
+                    {"schema_version": 1, "artifact_type": "entity_cell_e2_head_patch", "prompt_id": row["prompt_id"], "ticker": row["ticker"], "condition": row["condition"], "eligible": row["eligible"], "donor_identity": row["donor_identity"], "donor_prompt_sha256": row["donor_prompt_sha256"], "donor_formatted_prompt_sha256": row["donor_formatted_prompt_sha256"], "selected_heads": [[int(layer), int(head)] for layer, head in ((r["layer"], r["head"]) for r in rank_attention_heads(rows) if r.get("selection_eligible"))], "raw_runtime_payloads": False}
+                    for row in donors
+                ]
+                count = write_jsonl(path, patch_rows, overwrite=True)
                 run.manifest.register_artifact(path, artifact_type="entity_cell_e2_head_patch", stage="e2-patching", role="output", record_count=count)
                 stage.count(count)
         if "analyze" in enabled:
@@ -233,6 +251,10 @@ def run_e2(
 
 def analyze_e2(run_root: str | Path) -> Path:
     root = Path(run_root)
+    _run, manifest = load_complete_run(root, label="E2 run")
+    require_stage(manifest, "e2-attribution", label="E2 analysis")
+    if manifest.get("status") != "complete":
+        raise ValueError("E2 analysis requires a complete run")
     records = read_jsonl(root / "e2" / "head_attribution.jsonl")
     readout_path = root / "e2" / "readout.jsonl"
     summary = {"schema_version": 1, "artifact_type": "entity_cell_e2_analysis", "head_ranking": rank_attention_heads(records), "readout": {"path": "e2/readout.jsonl", "record_count": count_jsonl_records(readout_path) if readout_path.is_file() else 0, "component_kind": "aggregate_head", "raw_runtime_payloads": False}, "raw_runtime_payloads": False}

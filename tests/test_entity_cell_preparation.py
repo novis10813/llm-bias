@@ -110,6 +110,13 @@ def test_prepare_inputs_isolates_split_and_resolves_multitoken_name_and_groups(t
     assert {row["ticker"] for row in prepared["financial_prompts"]} == {"ALFA", "BETA"}
     assert len(prepared["header_variants"]) == 24
     assert len(prepared["financial_prompts"]) == 6
+    assert len(prepared["e2_donor_contracts"]) == 24
+    assert {row["condition"] for row in prepared["e2_donor_contracts"]} == {"original", "anonymous_identity", "same_sector_swap", "name_form_control"}
+    assert all(row["eligible"] for row in prepared["e2_donor_contracts"])
+    assert prepared["e2_donor_contracts"] == prepare_inputs(
+        tokenizer=_Tokenizer(), input_path=source, split_manifest=split,
+        baseline_source=baseline, baseline_identity="adapted:test-v1", split="discovery", baseline_expected_count=2,
+    )["e2_donor_contracts"]
     financial = prepared["financial_prompts"][0]
     span = financial["company_name_content_token_span"]
     assert span["token_end"] - span["token_start"] > 1
@@ -168,6 +175,7 @@ def test_prepare_artifacts_writes_compact_provenance_and_parser(tmp_path):
     assert metadata["config_sha256"]
     assert metadata["tokenizer_sha256"]
     assert metadata["prepared_artifact_sha256"]["header_variants"] == sha256_file(root / "prepare" / "header_variants.jsonl")
+    assert metadata["prepared_artifact_sha256"]["e2_donor_contracts"] == sha256_file(root / "prepare" / "e2_donor_contracts.jsonl")
     assert metadata["raw_runtime_payloads"] is False
     assert manifest["status"] == "complete"
     assert manifest["stages"]["prepare"]["status"] == "complete"

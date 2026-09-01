@@ -1,6 +1,6 @@
 # Entity Cell Localization and Downstream Attribution: Proposal
 
-**Document status:** frozen V1 implementation protocol; not yet implemented.
+**Document status:** frozen V1 implementation protocol; implemented on `feat/entity-cell-confirmation`; formal inference and calibration/test evidence not run.
 **Model for first run:** Qwen3.5-4B (`.cache/models/qwen3.5-4b`)
 **Depends on:** existing split manifest
 `artifacts/qwen3.5-4b/jspace-intervention/splits.json`, active baseline prompts
@@ -409,10 +409,12 @@ single-head suppression.
 
 ## Implementation plan
 
-The workflow follows `prepare → forward → analyze → finalize` and lives in a
-new experiment-owned package, proposed as `llm_bias/entity_cell/`. It may import
-shared core packages but must not import `jspace_intervention` or
-`span_sensitivity`.
+The workflow follows `prepare → forward → analyze → finalize` and lives in the
+experiment-owned package `llm_bias/entity_cell/`. The package imports shared core
+packages but does not import `jspace_intervention` or `span_sensitivity`. Its public
+CLI is `entity-cell`; preparation, E1, E2, E3, discovery summary, confirmation config,
+and confirmation evaluation are implemented. No model inference, calibration, or
+held-out test has run for V1.
 
 ### Shared-core reuse
 
@@ -430,12 +432,14 @@ shared core packages but must not import `jspace_intervention` or
 
 | Module | Responsibility |
 |---|---|
-| `preparation.py` | Split filtering, header-prefix variants, generic baseline IDs, prompt spans, hashes, and frozen config validation |
+| `preparation.py` | Split filtering, header-prefix variants, generic baseline IDs, prompt spans, deterministic E2 donor contracts, hashes, and frozen config validation |
 | `mlp_cells.py` | Pre-`down_proj` recorder/scaler, normalization statistics, stability ranking, form controls, and E1 amnesia runs |
 | `attention_attribution.py` | Qwen3.5 full-attention head reconstruction, source-group DLA, output-gate handling, additivity checks, and head-output patching |
 | `readout.py` | Selected-component Jacobian transport and compact top-k/fixed-vocabulary readout |
 | `suppression.py` | E3-A cell scaling, E3-B source-contribution attenuation, dose sweeps, and preservation controls |
-| `analysis.py` | Ticker aggregation, curves, bootstrap, sign-flip, Holm, and confirmation evaluation |
+| `analysis.py` | Ticker aggregation and discovery summaries |
+| `confirmation.py` | Machine-readable frozen confirmation schema, ticker statistics, Holm gates, and calibration authorization |
+| `lifecycle.py` | Prepared-run, stage, provenance, and parent-artifact validation |
 | `cli.py` | Prepare, run E1/E2/E3, analyze discovery, and analyze confirmation commands |
 
 Do not add Qwen-specific component reconstruction to shared core until a second
@@ -453,6 +457,7 @@ artifacts/qwen3.5-4b/entity-cell-localization/
     v1-header-variants.jsonl
     v1-generic-baseline.jsonl
     v1-financial-prompts.jsonl
+    v1-e2-donor-contracts.jsonl
   runs/<run-id>/
     manifest.json
     prepare/metadata.json
@@ -480,7 +485,8 @@ and package version. Failed or interrupted runs remain immutable.
   the final company-name content token rather than the closing bracket;
 - artifact tests reject raw tensors and missing provenance;
 - deterministic analysis tests cover ranking ties, denominator floors,
-  eligibility, bootstrap, sign-flip, Holm, and calibration authorization;
+  eligibility, bootstrap, sign-flip, Holm, donor matching, lifecycle rejection,
+  compact confirmation serialization, and calibration authorization;
 - one-model smoke uses one discovery ticker, two header variants, one full
   attention layer, one cell, and two suppression doses before any population
   run.
