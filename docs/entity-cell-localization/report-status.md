@@ -4,7 +4,7 @@
 
 **Protocol:** frozen V1 in [the proposal](proposal.md).
 
-**Provenance:** branch `feat/entity-cell-confirmation`, based on T5 commit `ab20ca7`. The T6 implementation is intended for one follow-up commit on this branch. No numerical result or confirmation verdict exists.
+**Provenance:** branch `data/entity-cell-generic-baseline`, based on main commit `7d289e1`. No model experiment, numerical result, or confirmation verdict exists.
 
 ## Implemented
 
@@ -16,7 +16,9 @@
 
 ## Evidence status
 
-No formal run has been performed. The repository contains no new E1/E2/E3 or confirmation results from this implementation. Calibration and held-out test remain unrun; this branch does not authorize a test without evaluator output from a successful frozen calibration artifact.
+No formal model run has been performed. The adapted generic baseline is now available at `data/entity-cell/generic-baseline-qwen3.5-9b-v1.jsonl` with identity `adapted:qwen3.5-9b-generic-cloze-v1` and SHA-256 `9e38d79887ba6fc313e9df0f98c63b4816e9a5c7067ec82421b9e0165a905179`. It contains exactly 399 validated records and is not the paper's exact Appendix A list. Calibration and held-out test remain unrun; this branch does not authorize a test without evaluator output from a successful frozen calibration artifact.
+
+Tokenizer-only preparation is now the next step. This update reports dataset availability only; it does not claim a model experiment result.
 
 ## Next executable smoke command
 
@@ -26,11 +28,11 @@ After restoring the ignored editable workspaces and providing the frozen input f
 uv run entity-cell prepare \
   --input data/baseline/paper-local-qwen36-27b/trial_plan_prompts.csv \
   --split-manifest artifacts/qwen3.5-4b/jspace-intervention/splits.json \
-  --baseline <adapted-baseline.jsonl> \
-  --baseline-identity adapted:<version> \
+  --baseline data/entity-cell/generic-baseline-qwen3.5-9b-v1.jsonl \
+  --baseline-identity adapted:qwen3.5-9b-generic-cloze-v1 \
   --model .cache/models/qwen3.5-4b \
   --run-id entity-cell-prepare-smoke \
   --artifact-root artifacts
 ```
 
-The baseline path and adaptation identity remain placeholders because the frozen 399-record paper list is not present in this checkout. Do not run this command until an explicit adapted baseline contract exists.
+The input CSV and split manifest remain required local inputs. This preparation step loads a tokenizer only; do not run model inference here.

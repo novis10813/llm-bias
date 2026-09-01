@@ -27,6 +27,7 @@ fitting checkpoints 則使用 archive checkpoint root。
 | Script | Responsibility | Main outputs | Canonical document |
 |---|---|---|---|
 | `convert_baseline_trial_plan.py` | 將外部 baseline `trial_plan.jsonl` 轉為 prompt CSV 並保存 source provenance | `data/baseline/.../trial_plan_prompts.csv` 與 provenance JSON | [Baseline trial plan prompts](baseline-trial/proposal.md) |
+| `generate_entity_cell_generic_baseline.py` | 以本地 OpenAI-compatible Qwen3.5-9B endpoint 產生、驗證並固定選取 adapted generic cloze baseline | `data/entity-cell/generic-baseline-qwen3.5-9b-v1.jsonl` 與相鄰 provenance JSON | [Entity cell localization](entity-cell-localization/proposal.md) / [status](entity-cell-localization/report-status.md) |
 | `run_prompt_analysis.sh` | 以 tmux/env contract 執行 readout、generation、generated-token attribution lifecycle | model/dataset-scoped run root | [Prompt-analysis reproducibility](baseline-trial/report-reproducibility.md) |
 | `run_mag7_8k_return_prompt_analysis.sh` | 套用 MAG7 8-K return-pairs preset 後轉交 `run_prompt_analysis.sh` | 同上 | 同上 |
 | `visualize_prompt_analysis.sh` | 從完成的 run 建立 uncertainty plots 與 attribution dashboard | run-scoped visualization files | [Prompt-analysis reproducibility](baseline-trial/report-reproducibility.md) |
