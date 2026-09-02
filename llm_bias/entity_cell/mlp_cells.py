@@ -328,6 +328,38 @@ def rank_stability_scores(
     ]
 
 
+def rank_absolute_activations(
+    vectors_by_layer: Mapping[int, torch.Tensor],
+    baseline_stats: Mapping[int, OnlineVectorStats],
+    *,
+    top_k: int = 5,
+    epsilon: float = EPSILON,
+) -> list[dict[str, float | int]]:
+    """Rank layer/neuron pairs by |z| for a single prompt (template signature)."""
+    if top_k < 1 or epsilon <= 0:
+        raise ValueError("top_k and epsilon must be positive")
+    selected_layers = _validate_layers(vectors_by_layer.keys())
+    if set(selected_layers) != set(int(layer) for layer in baseline_stats):
+        raise ValueError("baseline statistics and layers must match")
+    ranked: list[tuple[float, int, int]] = []
+    for layer in selected_layers:
+        vector = vectors_by_layer[int(layer)].detach().to("cpu", torch.float64).flatten()
+        stats = baseline_stats[int(layer)]
+        if stats.mean is None:
+            raise ValueError("baseline statistics are empty")
+        if vector.shape != stats.mean.shape:
+            raise ValueError("template vector width differs from baseline")
+        z = (vector - stats.mean) / (stats.std + epsilon)
+        for neuron, value in enumerate(z.abs().tolist()):
+            if math.isfinite(value):
+                ranked.append((float(value), int(layer), neuron))
+    ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
+    return [
+        {"layer": layer, "neuron": neuron, "abs_z": value, "rank": rank}
+        for rank, (value, layer, neuron) in enumerate(ranked[:top_k], start=1)
+    ]
+
+
 def select_matched_random_neuron(
     stats: Mapping[int, OnlineVectorStats],
     *,
@@ -401,6 +433,7 @@ def run_amnesia_curve(
     alpha_grid: Sequence[float] = ALPHA_GRID,
     device: Any | None = None,
     score_fn: Callable[[str], float] | None = None,
+    wrong_degenerate: bool = False,
 ) -> list[dict[str, Any]]:
     """Run target, wrong-cell, and matched random-neuron compact dose curves."""
     score = score_fn or (lambda prompt: _default_margin(model, tokenizer, prompt, device=device))
@@ -428,9 +461,9 @@ def run_amnesia_curve(
                 positions = header_positions
             for alpha in alpha_grid:
                 for label, cell_layer, cell_neuron in (
-                    ("target", layer, neuron),
-                    ("wrong_entity", wrong_layer, wrong_neuron),
-                    ("matched_random", layer, random_neuron),
+                    (("target", layer, neuron),)
+                    + (() if wrong_degenerate else (("wrong_entity", wrong_layer, wrong_neuron),))
+                    + (("matched_random", layer, random_neuron),)
                 ):
                     with mlp_hooks(
                         model,
@@ -451,6 +484,7 @@ def run_amnesia_curve(
                         "surface_controls": {name: float(score(value)) for name, value in controls.items()},
                         "wrong_entity_layer": wrong_layer,
                         "wrong_entity_neuron": wrong_neuron,
+                        "wrong_entity_degenerate": bool(wrong_degenerate),
                         "matched_random_neuron": int(random_neuron),
                     })
     return output
@@ -470,7 +504,7 @@ __all__ = [
     "ALPHA_GRID", "CANDIDATE_LAYERS", "DECISION_PREFIX", "EPSILON",
     "MLPHookSession", "OnlineVectorStats", "anonymous_progress",
     "qwen_mlp_down_projection", "record_pre_down_proj", "scale_mlp_channels",
-    "collect_generic_stats", "mlp_hooks", "rank_stability_scores",
+    "collect_generic_stats", "mlp_hooks", "rank_absolute_activations", "rank_stability_scores",
     "record_post_swiglu", "rot13_surface_form", "run_amnesia_curve",
     "select_matched_random_neuron", "surface_form_controls", "build_surface_form_controls",
     "compute_online_stats", "compute_stability_scores", "amnesia_progress",

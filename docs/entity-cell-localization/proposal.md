@@ -239,14 +239,22 @@ asserts a per-company fact after the name span.
   `Stock Ticker: [NEUT]` / `Stock Name: [Neutral Entity, Inc.]` — whose top-5
   is the frozen template signature. A candidate that is top-5 in the template
   signature is template-reactive, not identity-selective.
-- **Surface-form controls:** the frozen `anonymous_ticker`,
-  `anonymous_name`, and `name_form_control` variants are retained unchanged.
+- **Surface-form controls:** in the frame family (the V2 ranking family), the
+  eight localization frames are re-rendered at run time with the company name
+  span replaced: `anonymous_name_frames` (name → `Anonymous Company`) and
+  `name_form_control_frames` (name → ROT13 of the name). In the header
+  comparison family, the three frozen V1 controls (`anonymous_ticker`,
+  `anonymous_name`, `name_form_control`) are reported for comparison only. A
+  frame-family candidate is form-robust only if it is not top-5 in either
+  frame-family control ranking; top-5 overlap with each control is reported
+  descriptively.
 
 **V2 gates.** A V2 candidate is a trusted candidate entity cell only if all of
 the following hold:
 
 1. held-variant top-5 overlap $\geq 1$ (V1 rule);
-2. form-robust: not top-5 for `name_form_control` (V1 rule);
+2. form-robust: not top-5 in either frame-family surface control
+   (`anonymous_name_frames` or `name_form_control_frames`);
 3. template-robust (new): not top-5 in the template-only control signature;
 4. amnesia endpoint gate (V1 rule): at $\alpha=-3$, $A_p(-3)>0$ and exceeds
    both control curves on at least two eligible prompts.

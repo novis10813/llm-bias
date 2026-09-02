@@ -48,6 +48,43 @@ HEADER_VARIANT_SPECS = (
     (11, "held", "Before answering, note the company named in the report."),
 )
 
+# Frozen E1 V2 localization family: natural-sentence frames. Each frame contains
+# {name} exactly once as plain prose (no brackets, no label). The proposal's
+# "E1 V2: surface-varying localization" section is the canonical source.
+FRAME_VARIANT_SPECS = (
+    (0, "frame", "The headquarters of {name} is located in"),
+    (1, "frame", "{name} is a technology company."),
+    (2, "frame", "The stock ticker of {name} is"),
+    (3, "frame", "{name} was founded in"),
+    (4, "frame", "The main product of {name} is"),
+    (5, "frame", "Investors often describe {name} as"),
+    (6, "frame", "{name} operates in the"),
+    (7, "frame", "The annual report of {name} states that"),
+    (8, "frame_held", "The CEO of {name} is"),
+    (9, "frame_held", "{name} is headquartered in"),
+    (10, "frame_held", "The market value of {name} reached"),
+    (11, "frame_held", "{name} competes with other"),
+)
+FRAME_VARIANT_COUNT = 12
+FRAME_LOCALIZATION_VARIANT_IDS = tuple(range(8))
+FRAME_HELD_VARIANT_IDS = tuple(range(8, 12))
+
+# Frozen E1 V2 template-only control: V1 financial structure with neutral content.
+TEMPLATE_CONTROL_PROMPT = (
+    "Use the company identity below when reading the evidence.\n"
+    "Stock Ticker: [NEUT]\n"
+    "Stock Name: [Neutral Entity, Inc.]\n"
+    "--- Evidence ---\n"
+    "1. The company reported steady operating results during the period.\n"
+    "2. Analyst coverage of the company remained unchanged.\n"
+    "---\n"
+    "Respond with one valid JSON object containing only the keys \"decision\" (buy | sell) and \"reason\" (brief justification). Do not choose hold."
+)
+TEMPLATE_CONTROL_NAME = "Neutral Entity, Inc."
+
+LOCALIZATION_FAMILY_V1 = "v1-header"
+LOCALIZATION_FAMILY_V2 = "v2-frames"
+
 _TICKER_RE = re.compile(r"^Stock Ticker: \[(?P<value>[^\]\r\n]+)\]$", re.MULTILINE)
 _NAME_RE = re.compile(r"^Stock Name: \[(?P<value>[^\]\r\n]+)\]$", re.MULTILINE)
 _HEADER_RE = re.compile(
@@ -111,6 +148,31 @@ def render_header_variants(prompt: str, *, ticker: str | None = None, name: str 
         )
     if len(rows) != HEADER_VARIANT_COUNT:
         raise AssertionError("frozen header variant contract is incomplete")
+    return rows
+
+
+def render_frame_variants(name: str) -> list[dict[str, Any]]:
+    """Render and validate the frozen twelve natural-sentence frames for one name."""
+    if not name or not isinstance(name, str):
+        raise ValueError("frame rendering requires a non-empty company name")
+    rows = []
+    for variant_id, family, frame in FRAME_VARIANT_SPECS:
+        rendered = frame.replace("{name}", name)
+        if rendered.count(name) != 1:
+            raise ValueError(f"frame {variant_id} must contain the company name exactly once")
+        start = rendered.find(name)
+        rows.append(
+            {
+                "variant_id": variant_id,
+                "variant_family": family,
+                "frame": frame,
+                "name": name,
+                "prompt": rendered,
+                "name_char_span": (start, start + len(name)),
+            }
+        )
+    if len(rows) != FRAME_VARIANT_COUNT:
+        raise AssertionError("frozen frame variant contract is incomplete")
     return rows
 
 
@@ -458,6 +520,85 @@ def _prepare_header_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]
     return rows
 
 
+def _frame_name_span(tokenizer: Any, formatted: str, raw_offset: int, name_start: int, name_end: int) -> dict[str, Any]:
+    """Map a raw frame name character range to content tokens in the formatted prompt."""
+    ids, offsets, specials = _token_offsets(tokenizer, formatted)
+    name_positions = _positions_for_range(
+        offsets, specials, raw_offset + name_start, raw_offset + name_end,
+        limit=len(ids), contained=True,
+    )
+    if not name_positions:
+        raise ValueError("frame company-name content does not map to a non-empty token span")
+    name_span = (min(name_positions), max(name_positions) + 1)
+    return {
+        "company_name_content_token_span": {
+            "char_start": raw_offset + name_start,
+            "char_end": raw_offset + name_end,
+            "token_start": name_span[0],
+            "token_end": name_span[1],
+            "final_content_token": name_span[1] - 1,
+            "final_content_token_id": ids[name_span[1] - 1],
+        },
+        "token_count": len(ids),
+        "input_ids": ids,
+    }
+
+
+def _prepare_frame_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]], *, split: str) -> list[dict[str, Any]]:
+    rows = []
+    for source in source_rows:
+        base_prompt = source["prompts"][FINANCIAL_PROMPT_COLUMNS[0]]
+        variants = render_frame_variants(str(source["name"]))
+        for variant in variants:
+            formatted, raw_offset = _formatted_prompt(tokenizer, variant["prompt"])
+            groups = _frame_name_span(tokenizer, formatted, raw_offset, *variant["name_char_span"])
+            rows.append(
+                {
+                    "schema_version": PREPARATION_SCHEMA_VERSION,
+                    "artifact_type": "entity_cell_frame_variant",
+                    "variant_id": stable_record_id(source["ticker"], variant["variant_id"], split),
+                    "ticker": source["ticker"],
+                    "name": source["name"],
+                    "sector": source["sector"],
+                    "split": split,
+                    "variant_number": variant["variant_id"],
+                    "variant_family": variant["variant_family"],
+                    "source_row_index": source["source_row_index"],
+                    "source_date": source["date"],
+                    "source_prompt_sha256": sha256_bytes(base_prompt.encode("utf-8")),
+                    "prompt_sha256": sha256_bytes(variant["prompt"].encode("utf-8")),
+                    "prompt": variant["prompt"],
+                    "formatted_prompt_sha256": sha256_bytes(formatted.encode("utf-8")),
+                    "company_name_content_token_span": groups["company_name_content_token_span"],
+                    "final_company_name_content_token": groups["company_name_content_token_span"]["final_content_token"],
+                    "final_company_name_content_token_id": groups["company_name_content_token_span"]["final_content_token_id"],
+                    "token_count": groups["token_count"],
+                    "input_ids": groups["input_ids"],
+                }
+            )
+    return rows
+
+
+def _prepare_template_control(tokenizer: Any) -> dict[str, Any]:
+    if TEMPLATE_CONTROL_PROMPT.count(TEMPLATE_CONTROL_NAME) != 1:
+        raise ValueError("template control must contain the neutral name exactly once")
+    name_start = TEMPLATE_CONTROL_PROMPT.find(TEMPLATE_CONTROL_NAME)
+    formatted, raw_offset = _formatted_prompt(tokenizer, TEMPLATE_CONTROL_PROMPT)
+    groups = _frame_name_span(tokenizer, formatted, raw_offset, name_start, name_start + len(TEMPLATE_CONTROL_NAME))
+    return {
+        "schema_version": PREPARATION_SCHEMA_VERSION,
+        "artifact_type": "entity_cell_template_control",
+        "prompt": TEMPLATE_CONTROL_PROMPT,
+        "prompt_sha256": sha256_bytes(TEMPLATE_CONTROL_PROMPT.encode("utf-8")),
+        "formatted_prompt_sha256": sha256_bytes(formatted.encode("utf-8")),
+        "company_name_content_token_span": groups["company_name_content_token_span"],
+        "final_company_name_content_token": groups["company_name_content_token_span"]["final_content_token"],
+        "final_company_name_content_token_id": groups["company_name_content_token_span"]["final_content_token_id"],
+        "token_count": groups["token_count"],
+        "input_ids": groups["input_ids"],
+    }
+
+
 def _replace_identity(prompt: str, *, ticker: str, name: str) -> str:
     ticker_match = _match_one(_TICKER_RE, prompt, "ticker")
     prompt = prompt[: ticker_match.start("value")] + ticker + prompt[ticker_match.end("value") :]
@@ -588,8 +729,11 @@ def prepare_inputs(
     split: str = "discovery",
     sector: str = TECHNOLOGY,
     baseline_expected_count: int = BASELINE_RECORD_COUNT,
+    localization_family: str = LOCALIZATION_FAMILY_V1,
 ) -> dict[str, Any]:
     """Prepare compact E1/E2 input records without loading a model."""
+    if localization_family not in (LOCALIZATION_FAMILY_V1, LOCALIZATION_FAMILY_V2):
+        raise ValueError(f"unknown localization family: {localization_family}")
     source_rows = select_split_rows(input_path, split_manifest, split=split, sector=sector)
     baseline = validate_baseline_contract(
         baseline_source, identity=baseline_identity, expected_count=baseline_expected_count
@@ -601,10 +745,18 @@ def prepare_inputs(
         raise AssertionError("each selected ticker must have exactly twelve header variants")
     if len(financial_prompts) != len(source_rows) * len(FINANCIAL_PROMPT_COLUMNS):
         raise AssertionError("each selected ticker must have exactly three financial prompts")
+    frame_variants: list[dict[str, Any]] = []
+    template_control: dict[str, Any] | None = None
+    if localization_family == LOCALIZATION_FAMILY_V2:
+        frame_variants = _prepare_frame_rows(tokenizer, source_rows, split=split)
+        template_control = _prepare_template_control(tokenizer)
+        if len(frame_variants) != len(source_rows) * FRAME_VARIANT_COUNT:
+            raise AssertionError("each selected ticker must have exactly twelve frame variants")
     config = {
         "schema_version": PREPARATION_SCHEMA_VERSION,
         "experiment": "entity-cell-localization",
-        "version": "v1",
+        "version": "v2" if localization_family == LOCALIZATION_FAMILY_V2 else "v1",
+        "localization_family": localization_family,
         "split": split,
         "sector": sector,
         "header_variant_count": HEADER_VARIANT_COUNT,
@@ -616,7 +768,12 @@ def prepare_inputs(
         "baseline_expected_count": baseline_expected_count,
         "baseline_identity": baseline_identity,
     }
-    return {
+    if localization_family == LOCALIZATION_FAMILY_V2:
+        config["frame_variant_count"] = FRAME_VARIANT_COUNT
+        config["frame_localization_variant_ids"] = list(FRAME_LOCALIZATION_VARIANT_IDS)
+        config["frame_held_variant_ids"] = list(FRAME_HELD_VARIANT_IDS)
+        config["template_control_sha256"] = template_control["prompt_sha256"]
+    result = {
         "header_variants": header_variants,
         "generic_baseline": baseline,
         "financial_prompts": financial_prompts,
@@ -624,6 +781,10 @@ def prepare_inputs(
         "config": config,
         "ticker_count": len(source_rows),
     }
+    if localization_family == LOCALIZATION_FAMILY_V2:
+        result["frame_variants"] = frame_variants
+        result["template_control"] = template_control
+    return result
 
 
 def validate_prepared_inputs(prepared: Mapping[str, Any]) -> None:
@@ -654,6 +815,42 @@ def validate_prepared_inputs(prepared: Mapping[str, Any]) -> None:
             raise ValueError("localization variant family is invalid")
         if any(families[index] != "held" for index in HELD_VARIANT_IDS):
             raise ValueError("held variant family is invalid")
+    if "frame_variants" in prepared:
+        frames = list(prepared["frame_variants"])
+        template_control = prepared.get("template_control")
+        if not isinstance(template_control, Mapping):
+            raise ValueError("v2-frames preparation is missing the template control")
+        if template_control.get("artifact_type") != "entity_cell_template_control":
+            raise ValueError("template control artifact type is invalid")
+        if config.get("localization_family") != LOCALIZATION_FAMILY_V2:
+            raise ValueError("frame variants require the v2-frames localization family")
+        if len(frames) != len(by_ticker) * FRAME_VARIANT_COUNT:
+            raise ValueError("frame variant count does not match the frozen twelve-variant count")
+        frames_by_ticker: dict[str, list[Mapping[str, Any]]] = {}
+        for row in frames:
+            if row.get("artifact_type") != "entity_cell_frame_variant":
+                raise ValueError("frame variant artifact type is invalid")
+            ticker = str(row.get("ticker"))
+            frames_by_ticker.setdefault(ticker, []).append(row)
+            if row.get("variant_number") not in range(FRAME_VARIANT_COUNT):
+                raise ValueError("frame variant number is outside the frozen range")
+            prompt = str(row.get("prompt", ""))
+            name = str(row.get("name", ""))
+            if prompt.count(name) != 1:
+                raise ValueError("frame prompt must contain the company name exactly once")
+            span = row.get("company_name_content_token_span")
+            if not isinstance(span, Mapping) or int(span.get("final_content_token", -1)) < 0:
+                raise ValueError("frame variant is missing a valid name token span")
+        if set(frames_by_ticker) != set(by_ticker):
+            raise ValueError("frame variants must cover exactly the selected tickers")
+        for ticker, rows in frames_by_ticker.items():
+            if {row["variant_number"] for row in rows} != set(range(FRAME_VARIANT_COUNT)):
+                raise ValueError("each ticker must contain each frozen frame variant exactly once")
+            families = {row["variant_number"]: row.get("variant_family") for row in rows}
+            if any(families[index] != "frame" for index in FRAME_LOCALIZATION_VARIANT_IDS):
+                raise ValueError("frame localization variant family is invalid")
+            if any(families[index] != "frame_held" for index in FRAME_HELD_VARIANT_IDS):
+                raise ValueError("frame held variant family is invalid")
     if len(financial) != len(by_ticker) * len(FINANCIAL_PROMPT_COLUMNS):
         raise ValueError("financial prompt count does not match the three frozen columns")
     if len(baseline) != int(config.get("baseline_expected_count", BASELINE_RECORD_COUNT)):
@@ -746,6 +943,7 @@ def prepare_artifacts(
     split: str = "discovery",
     sector: str = TECHNOLOGY,
     baseline_expected_count: int = BASELINE_RECORD_COUNT,
+    localization_family: str = LOCALIZATION_FAMILY_V1,
 ) -> Path:
     """Write prepared JSONL and metadata through the shared lifecycle utilities."""
     input_path, split_manifest, baseline_source = map(Path, (input_path, split_manifest, baseline_source))
@@ -758,6 +956,7 @@ def prepare_artifacts(
         split=split,
         sector=sector,
         baseline_expected_count=baseline_expected_count,
+        localization_family=localization_family,
     )
     validate_prepared_inputs(prepared)
     run = ArtifactRun.create(model, dataset, run_id, artifact_root=artifact_root)
@@ -770,6 +969,10 @@ def prepare_artifacts(
         "metadata": prepare_dir / "metadata.json",
         "config": prepare_dir / "config.json",
     }
+    is_v2 = prepared["config"].get("localization_family") == LOCALIZATION_FAMILY_V2
+    if is_v2:
+        paths["frame_variants"] = prepare_dir / "frame_variants.jsonl"
+        paths["template_control"] = prepare_dir / "template_control.json"
     try:
         for path, artifact_type in (
             (input_path, "entity_cell_source_csv"),
@@ -784,12 +987,16 @@ def prepare_artifacts(
                 "financial_prompts": write_jsonl(paths["financial_prompts"], prepared["financial_prompts"]),
                 "e2_donor_contracts": write_jsonl(paths["e2_donor_contracts"], prepared["e2_donor_contracts"]),
             }
+            if is_v2:
+                counts["frame_variants"] = write_jsonl(paths["frame_variants"], prepared["frame_variants"])
+                write_json(paths["template_control"], prepared["template_control"])
             write_json(paths["config"], prepared["config"])
             metadata = {
                 "schema_version": PREPARATION_SCHEMA_VERSION,
                 "artifact_type": "entity_cell_prepare_metadata",
                 "experiment": "entity-cell-localization",
-                "version": "v1",
+                "version": prepared["config"]["version"],
+                "localization_family": prepared["config"]["localization_family"],
                 "model": model,
                 "tokenizer": _tokenizer_identity(tokenizer),
                 "tokenizer_sha256": _tokenizer_identity(tokenizer)["identity_sha256"],
@@ -809,7 +1016,7 @@ def prepare_artifacts(
                 "raw_runtime_payloads": False,
             }
             metadata["prepared_artifact_sha256"] = {
-                key: sha256_file(paths[key]) for key in ("header_variants", "generic_baseline", "financial_prompts", "e2_donor_contracts")
+                key: sha256_file(paths[key]) for key in ("header_variants", "generic_baseline", "financial_prompts", "e2_donor_contracts", *(["frame_variants"] if is_v2 else []))
             }
             write_metadata(paths["metadata"], metadata)
             stage.count(sum(counts.values()))
@@ -820,6 +1027,12 @@ def prepare_artifacts(
             ("e2_donor_contracts", "entity_cell_e2_donor_contract"),
             ("metadata", "entity_cell_prepare_metadata"),
             ("config", "entity_cell_prepare_config"),
+            *(  # V2 localization family only
+                (
+                    ("frame_variants", "entity_cell_frame_variant"),
+                    ("template_control", "entity_cell_template_control"),
+                ) if is_v2 else ()
+            ),
         ):
             run.manifest.register_artifact(
                 paths[key], artifact_type=artifact_type, stage="prepare", role="output",
@@ -839,14 +1052,23 @@ __all__ = [
     "E2_DONOR_SCHEMA_VERSION",
     "BASELINE_RECORD_COUNT",
     "FINANCIAL_PROMPT_COLUMNS",
+    "FRAME_HELD_VARIANT_IDS",
+    "FRAME_LOCALIZATION_VARIANT_IDS",
+    "FRAME_VARIANT_COUNT",
+    "FRAME_VARIANT_SPECS",
     "HEADER_VARIANT_COUNT",
     "HEADER_VARIANT_SPECS",
     "HELD_VARIANT_IDS",
+    "LOCALIZATION_FAMILY_V1",
+    "LOCALIZATION_FAMILY_V2",
     "LOCALIZATION_VARIANT_IDS",
+    "TEMPLATE_CONTROL_NAME",
+    "TEMPLATE_CONTROL_PROMPT",
     "load_split_manifest",
     "parse_header",
     "prepare_artifacts",
     "prepare_inputs",
+    "render_frame_variants",
     "render_header_variants",
     "select_split_rows",
     "validate_baseline_contract",

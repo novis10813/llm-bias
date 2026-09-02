@@ -1,38 +1,71 @@
 # Entity Cell Localization and Downstream Attribution: Status
 
-**Status:** implementation complete; no model inference, discovery, calibration, or held-out test run.
+**Status:** V1 discovery and E2 discovery complete (negative / descriptive
+findings); E1 V2 (surface-varying localization) implemented and prepared;
+V2 discovery not yet run; confirmation not frozen.
 
-**Protocol:** frozen V1 in [the proposal](proposal.md).
+**Protocol:** V1 frozen in [the proposal](proposal.md); E1 V2 frozen in the
+proposal's "E1 V2: surface-varying localization" section.
 
-**Provenance:** branch `data/entity-cell-generic-baseline`, based on main commit `7d289e1`. No model experiment, numerical result, or confirmation verdict exists.
+## Runs on record
 
-## Implemented
+| run | state | note |
+|---|---|---|
+| `entity-cell-prepare-discovery-v1` | complete | 35 tickers, 420 header variants, 399 baseline, 105 financial prompts, 420 E2 donor contracts |
+| `entity-cell-prepare-discovery-v2` | complete | same inputs plus 420 frame variants and the template-only control (`--localization-family v2-frames`) |
+| `entity-cell-e1-smoke-v1` | failed (preserved) | metadata registration bug, fixed in `80b9a0c` |
+| `entity-cell-e1-smoke-v2` | complete | one-ticker V1 smoke |
+| `entity-cell-e1-discovery-v1` | complete | V1 discovery, all four E1 stages |
+| `entity-cell-e2-discovery-v1`…`v4` | failed (preserved) | keyword-only attention hook, additivity tolerance, single-token continuation unpack, bf16-relative additivity scale — all fixed before v5 |
+| `entity-cell-e2-discovery-v5` | complete | E2 attribution, selected-head readout, and patching |
 
-- `entity-cell prepare` validates split-bound identities, renders the frozen header variants, records E2 source groups, and materializes deterministic donor contracts for `original`, `anonymous_identity`, `same_sector_swap`, and `name_form_control`.
-- E1, E2 attribution/readout/patch preparation, and E3 discovery expose lifecycle-aware public APIs.
-- Discovery summaries report counts and exclusions without issuing a confirmatory verdict.
-- `prepare-confirmation-config` freezes E1/E2/E3 selections and doses. `analyze-confirmation` validates calibration/test records, computes ticker-level bootstrap intervals and sign-flip tests, applies the frozen Holm family, and handles authorization fail-closed.
-- Confirmation output uses the compact `analyze/confirmation.json` schema when the output path is chosen under a run's `analyze/` directory. Parent hashes and configuration provenance are recorded in the run manifest.
+## E1 V1 discovery result (negative, mechanism identified)
 
-## Evidence status
+- 31/35 Technology tickers share the same top-1 cell (L0, N4485); 4 share a
+  second (L0, N5101). The V1 header family is template-dominated: all twelve
+  variants share the identical three-line header, so header-reactive neurons
+  have near-zero cross-variant standard deviation and dominate the stability
+  score for every ticker.
+- 0/35 tickers passed the amnesia eligibility gate.
+- Known V1 limitation (found during V2 implementation): the localization-stage
+  surface controls re-used the prepared `input_ids` of the original prompt
+  instead of re-tokenizing the control prompt, so the reported
+  `surface_control_summary` top-5 overlaps (5/5) are degenerate and not
+  independent evidence. The template-domination conclusion rests on the
+  cross-ticker top-1 collision and the amnesia gate. The V1 code is left
+  unfrozen-unchanged; V2 implements re-tokenized controls from scratch.
 
-No formal model run has been performed. The adapted generic baseline is now available at `data/entity-cell/generic-baseline-qwen3.5-9b-v1.jsonl` with identity `adapted:qwen3.5-9b-generic-cloze-v1` and SHA-256 `9e38d79887ba6fc313e9df0f98c63b4816e9a5c7067ec82421b9e0165a905179`. It contains exactly 399 validated records and is not the paper's exact Appendix A list. Calibration and held-out test remain unrun; this branch does not authorize a test without evaluator output from a successful frozen calibration artifact.
+## E2 discovery result (descriptive)
 
-Tokenizer-only preparation is now the next step. This update reports dataset availability only; it does not claim a model experiment result.
+Selected heads (L31 H0/H1/H3, L19 H4, L27 H6) are all late full-attention
+heads with instruction-dominant identity contribution
+(mean_abs_id 0.002–0.014 versus instruction 0.02–0.11) and 1.00 consistency.
+At the attention level, identity-header contribution to the Buy/Sell margin is
+small relative to instruction context; consistent with the L16
+instruction-context findings from the sector/context follow-up.
 
-## Next executable smoke command
+## E1 V2 (surface-varying localization)
 
-After restoring the ignored editable workspaces and providing the frozen input files, prepare a tokenizer-only smoke artifact:
+Implementation (branch `feat/entity-cell-e1v2`): frozen twelve natural-sentence
+frames (F0–F7 localization, H0–H3 held), frame-family surface controls
+(`anonymous_name_frames`, `name_form_control_frames`) rendered and
+re-tokenized at run time, the template-only control prompt with a frozen
+template signature (top-5 by absolute z-score), the V1 header family re-run
+for comparison only, the deterministic non-degenerate wrong-entity rule with a
+`degraded_control` flag, and the four V2 gates (held overlap, form-robust,
+template-robust, amnesia endpoint). V1 prepared outputs remain
+byte-identical under the default `v1-header` family.
 
-```bash
-uv run entity-cell prepare \
-  --input data/baseline/paper-local-qwen36-27b/trial_plan_prompts.csv \
-  --split-manifest artifacts/qwen3.5-4b/jspace-intervention/splits.json \
-  --baseline data/entity-cell/generic-baseline-qwen3.5-9b-v1.jsonl \
-  --baseline-identity adapted:qwen3.5-9b-generic-cloze-v1 \
-  --model .cache/models/qwen3.5-4b \
-  --run-id entity-cell-prepare-smoke \
-  --artifact-root artifacts
-```
+Preparation is complete: `entity-cell-prepare-discovery-v2` (35 tickers, 420
+frame variants, template-only control, all V1 content reused). V2 discovery
+requires a GPU with ~10 GB headroom; it is not yet run.
 
-The input CSV and split manifest remain required local inputs. This preparation step loads a tokenizer only; do not run model inference here.
+## Next steps
+
+1. Run E1 V2 discovery (all E1 stages) on a free GPU; analyze trusted-candidate
+   count, template/header-family overlap, and degenerate-control flags.
+2. If V2 yields trusted cells: freeze confirmation from V2 selections,
+   calibration (12 tickers) → test (11 tickers) only after a passing
+   calibration gate.
+3. E3 downstream (selected-head intervention) can proceed from the E2 v5
+   selections; E3 upstream remains blocked until trusted cells exist.

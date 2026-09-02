@@ -20,6 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--split", choices=("discovery", "calibration", "test"), default="discovery")
     prepare.add_argument("--sector", default="Technology")
     prepare.add_argument("--baseline-count", type=int, default=399)
+    prepare.add_argument("--localization-family", choices=("v1-header", "v2-frames"), default="v1-header",
+                        help="E1 localization prompt family; v2-frames adds frozen natural-sentence frame variants and the template-only control")
     prepare.add_argument("--tokenizer", default=None, help="tokenizer identity/path; defaults to --model")
     run = commands.add_parser("run", help="run E1 localization/amnesia, E2 attribution, or E3 discovery from prepared inputs")
     run.add_argument("--prepared-dir", type=Path, required=True)
@@ -84,6 +86,7 @@ def main() -> None:
             baseline_identity=args.baseline_identity, tokenizer=load_tokenizer(args.tokenizer or args.model),
             model=args.model, run_id=args.run_id, artifact_root=args.artifact_root, dataset=args.dataset,
             split=args.split, sector=args.sector, baseline_expected_count=args.baseline_count,
+            localization_family=args.localization_family,
         )
     elif args.command == "run":
         stages = tuple(args.stages) if args.stages else ("e1-baseline", "e1-localization", "e1-amnesia", "analyze")

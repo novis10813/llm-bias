@@ -153,6 +153,10 @@ def summarize_amnesia(
                 control: next((float(candidate.get("anonymous_progress", 0.0)) for candidate in values if candidate.get("candidate") == control and str(candidate.get("prompt_id")) == prompt_id and float(candidate["alpha"]) == endpoint_alpha), None)
                 for control in ("wrong_entity", "matched_random")
             }
+            # E1 V2: a degenerate wrong-entity control (identical cell to the
+            # target) is uninformative and drops out of the pass rule.
+            if bool(row.get("wrong_entity_degenerate")):
+                controls.pop("wrong_entity", None)
             if target_value > 0 and all(value is not None and target_value > value for value in controls.values()):
                 passed_prompt_ids.append(prompt_id)
         reasons: list[str] = []
@@ -164,7 +168,7 @@ def summarize_amnesia(
             reasons.append(f"eligible_prompt_count_below_{minimum_eligible_prompts}")
         if len(set(passed_prompt_ids)) < minimum_eligible_prompts:
             reasons.append(f"endpoint_control_gate_below_{minimum_eligible_prompts}")
-        result[f"{ticker}:{scope}"] = {
+        entry: dict[str, Any] = {
             "ticker": ticker,
             "scope": scope,
             "eligible_prompt_count": len(eligible_prompt_ids),
@@ -178,7 +182,84 @@ def summarize_amnesia(
             "eligibility": "eligible" if not reasons and scope == "all_positions" else "excluded",
             "exclusion_reasons": reasons if scope == "all_positions" else ["secondary_header_only_scope"],
         }
+        # Only V2 rows carry the degenerate flag; V1 output stays byte-identical.
+        if any("wrong_entity_degenerate" in row for row in values):
+            entry["degraded_control"] = bool(any(bool(row.get("wrong_entity_degenerate")) for row in endpoint))
+        result[f"{ticker}:{scope}"] = entry
     return result
+
+
+def frame_surface_control_summary(
+    candidate_cells: Sequence[Mapping[str, Any]],
+    control_rankings: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """E1 V2 form-robust: the candidate must be absent from both frame-family control top-5s."""
+    cells = {_cell(row) for row in candidate_cells}
+    result: dict[str, Any] = {}
+    for control, rows in control_rankings.items():
+        ranked = [_cell(row) for row in rows]
+        result[control] = {
+            "top5_overlap": len(cells.intersection(ranked[:5])),
+            "candidate_in_top5": any(cell in ranked[:5] for cell in cells),
+        }
+    result["form_robust"] = not any(result[name]["candidate_in_top5"] for name in control_rankings)
+    return result
+
+
+def select_wrong_entity_cell(
+    ticker: str,
+    tickers: Sequence[str],
+    cells_by_ticker: Mapping[str, Sequence[Mapping[str, Any]]],
+    target_cell: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], bool]:
+    """Deterministic non-degenerate wrong-entity control (E1 V2 rule).
+
+    The wrong entity is the alphabetically next ticker in the run (wrap-around).
+    Its candidate list is scanned in rank order for the first cell that differs
+    from the target cell. If all five match, the control is degenerate.
+    """
+    ordered = sorted(str(value) for value in tickers)
+    if str(ticker) not in ordered:
+        raise ValueError("wrong-entity selection requires the target ticker in the run")
+    wrong_ticker = ordered[(ordered.index(str(ticker)) + 1) % len(ordered)]
+    candidates = list(cells_by_ticker[wrong_ticker])
+    if not candidates:
+        raise ValueError("wrong entity has no candidates")
+    target = (int(target_cell["layer"]), int(target_cell["neuron"]))
+    for candidate in candidates:
+        if (int(candidate["layer"]), int(candidate["neuron"])) != target:
+            return candidate, False
+    return candidates[0], True
+
+
+def v2_candidate_eligibility(
+    *,
+    held_metrics: Mapping[str, Any],
+    surface_control_summary: Mapping[str, Any],
+    candidate_cells: Sequence[Mapping[str, Any]],
+    template_signature: Sequence[Mapping[str, Any]],
+    amnesia_summary: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind the frozen E1 V2 gates: held overlap, form-robust, template-robust, amnesia.
+
+    Cell membership follows the V1 convention: the candidate top-5 set, not only the top-1.
+    """
+    reasons: list[str] = []
+    if int(held_metrics.get("top5_overlap", 0)) <= 0:
+        reasons.append("held_variant_top5_overlap_zero")
+    if not bool(surface_control_summary.get("form_robust", False)):
+        reasons.append("not_form_robust")
+    cells = {_cell(row) for row in candidate_cells}
+    signature = {(int(row["layer"]), int(row["neuron"])) for row in template_signature}
+    if cells.intersection(signature):
+        reasons.append("in_template_signature")
+    if not bool(amnesia_summary.get("trusted_candidate_entity_cell", False)):
+        reasons.extend(str(reason) for reason in amnesia_summary.get("exclusion_reasons", []))
+    return {
+        "eligible": not reasons,
+        "label": "trusted candidate entity cell" if not reasons else None,
+        "exclusion_reasons": sorted(set(reasons)),
+    }
 
 
 def trusted_candidate_eligibility(
@@ -200,6 +281,7 @@ def trusted_candidate_eligibility(
 
 __all__ = [
     "anonymous_progress", "collision_selectivity_summary", "denominator_eligibility",
-    "held_variant_metrics", "summarize_amnesia", "surface_control_summary",
-    "trusted_candidate_eligibility",
+    "frame_surface_control_summary", "held_variant_metrics", "select_wrong_entity_cell",
+    "summarize_amnesia", "surface_control_summary", "trusted_candidate_eligibility",
+    "v2_candidate_eligibility",
 ]
