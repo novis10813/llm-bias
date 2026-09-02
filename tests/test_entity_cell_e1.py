@@ -194,3 +194,71 @@ def test_generic_collection_is_streaming_by_interface(monkeypatch):
     assert stats[0].compact()["width"] == 3
     assert "mean" not in stats[0].compact()
     assert len(calls) == 3
+
+
+def test_run_e1_registers_prepare_metadata_under_prepare_dir(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from llm_bias.entity_cell import pipeline
+
+    prepared = tmp_path / "prepared"
+    (prepared / "prepare").mkdir(parents=True)
+    (prepared / "prepare" / "metadata.json").write_text(
+        json.dumps({"artifact_type": "entity_cell_prepare_metadata", "model": "fake-model"}), encoding="utf-8"
+    )
+    (prepared / "prepare" / "header_variants.jsonl").write_text(
+        json.dumps({"ticker": "ABC", "variant_number": 0}) + "\n", encoding="utf-8"
+    )
+    (prepared / "prepare" / "financial_prompts.jsonl").write_text(
+        json.dumps({"ticker": "ABC"}) + "\n", encoding="utf-8"
+    )
+    (prepared / "prepare" / "generic_baseline.jsonl").write_text(
+        json.dumps({"prompt": "The purpose of a tool is to"}) + "\n", encoding="utf-8"
+    )
+
+    registered = []
+
+    class _Manifest:
+        def register_artifact(self, path, **kwargs):
+            registered.append(Path(path))
+
+    class _Stage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def count(self, _value):
+            return None
+
+    class _Run:
+        run_directory = tmp_path / "run" / "e1-regression"
+        run_id = "e1-regression"
+
+        def __init__(self):
+            self.manifest = _Manifest()
+
+        def stage(self, _name):
+            return _Stage()
+
+        def finalize(self, required_stages=None):
+            return None
+
+        def fail(self, exc):
+            raise AssertionError(exc)
+
+    monkeypatch.setattr(pipeline, "ArtifactRun", type("FakeArtifactRun", (), {"create": staticmethod(lambda model, dataset, run_id, artifact_root=None: _Run())}))
+    monkeypatch.setattr(pipeline, "validate_prepared_directory", lambda path: {"model": "fake-model"})
+    monkeypatch.setattr("llm_bias.core.model.load_model", lambda name: (object(), object(), "cpu"))
+    baseline_stats = OnlineVectorStats()
+    baseline_stats.update(torch.ones(4))
+    monkeypatch.setattr(pipeline, "collect_generic_stats", lambda *args, **kwargs: {0: baseline_stats})
+
+    pipeline.run_e1(
+        prepared_dir=prepared, model_name="fake-model", run_id="e1-regression",
+        artifact_root=tmp_path / "run", stages=("e1-baseline",),
+    )
+
+    assert prepared / "prepare" / "metadata.json" in registered
+    assert prepared / "metadata.json" not in registered

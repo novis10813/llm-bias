@@ -92,12 +92,6 @@ def run_e1(
             run.manifest.register_artifact(path, artifact_type="entity_cell_prepared_input", stage="prepare", role="input")
         from llm_bias.core.model import load_model
         model, tokenizer, fallback_device = load_model(model_name)
-        run.manifest.register_artifact(
-            prepared / "metadata.json",
-            artifact_type="entity_cell_prepare_metadata",
-            stage="prepare",
-            role="input",
-        )
         target_device = device or getattr(model, "input_device", fallback_device)
         stats = None
         if "e1-baseline" in enabled:
