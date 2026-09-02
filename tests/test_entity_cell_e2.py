@@ -87,6 +87,27 @@ def test_fake_gqa_reconstructs_with_repeated_kv_gate_and_o_proj_slices():
     assert original.shape[-1] == 4
 
 
+class _PairContractTokenizer:
+    """Deterministic tokenizer honoring the continuation_scoring tuple contract."""
+
+    def __init__(self):
+        self.table = {"P": [1], "Pbuy": [1, 10], "Psell": [1, 20], "Pab": [1, 11, 12]}
+
+    def __call__(self, text, add_special_tokens=False):
+        class _Output:
+            input_ids = self.table[text]
+
+        return _Output()
+
+
+def test_resolve_single_token_pair_unpacks_suffix_from_tuple_contract():
+    from llm_bias.entity_cell.attention_attribution import resolve_single_token_pair
+
+    assert resolve_single_token_pair(_PairContractTokenizer(), "P", "buy", "sell") == (10, 20)
+    with pytest.raises(ValueError, match="single-token"):
+        resolve_single_token_pair(_PairContractTokenizer(), "P", "ab", "sell")
+
+
 def test_additivity_tolerance_is_bf16_scaled_and_enforced():
     # The frozen tolerance is documented in the proposal at bf16 precision
     # scale; pin the constant so a regression to FP32-scale values is caught.

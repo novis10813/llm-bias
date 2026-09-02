@@ -258,8 +258,9 @@ def frozen_margin_direction(clean_final_residual: torch.Tensor, final_norm: Any,
 
 
 def resolve_single_token_pair(tokenizer: Any, prompt: str, positive: str = "buy", negative: str = "sell") -> tuple[int, int]:
-    positive_ids = continuation_token_ids(tokenizer, prompt, positive)
-    negative_ids = continuation_token_ids(tokenizer, prompt, negative)
+    # continuation_scoring.continuation_token_ids returns (prompt_ids, suffix).
+    _, positive_ids = continuation_token_ids(tokenizer, prompt, positive)
+    _, negative_ids = continuation_token_ids(tokenizer, prompt, negative)
     if len(positive_ids) != 1 or len(negative_ids) != 1:
         raise ValueError("E2 DLA requires single-token Buy/Sell continuations")
     return int(positive_ids[0]), int(negative_ids[0])
