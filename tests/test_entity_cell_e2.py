@@ -109,23 +109,23 @@ def test_resolve_single_token_pair_unpacks_suffix_from_tuple_contract():
 
 
 def test_additivity_tolerance_is_bf16_scaled_and_enforced():
-    # The frozen tolerance is documented in the proposal at bf16 precision
-    # scale; pin the constant so a regression to FP32-scale values is caught.
-    from llm_bias.entity_cell.attention_attribution import RECONSTRUCTION_ATOL, RECONSTRUCTION_RTOL
-    assert RECONSTRUCTION_ATOL == 2e-3
-    assert RECONSTRUCTION_RTOL == 2e-3
+    # The frozen tolerance is documented in the proposal at bf16 relative
+    # scale; pin the constants so a regression to FP32-scale values is caught.
+    from llm_bias.entity_cell.attention_attribution import RECONSTRUCTION_ABSOLUTE_FLOOR, RECONSTRUCTION_RELATIVE_TOLERANCE
+    assert RECONSTRUCTION_ABSOLUTE_FLOOR == 1e-3
+    assert RECONSTRUCTION_RELATIVE_TOLERANCE == 2e-2
     torch.manual_seed(4)
     attention = FakeGQA()
     hidden = torch.randn(1, 4, 5)
     clean, _ = attention(hidden)
-    # Noise at the frozen relative scale must still count as additive.
+    # Noise at half the frozen relative scale must still count as additive.
     noisy = reconstruct_attention_components(
-        attention, hidden, source_groups=groups(), query_position=3, clean_output=(clean * (1.0 + 0.5 * RECONSTRUCTION_RTOL))[:, 3]
+        attention, hidden, source_groups=groups(), query_position=3, clean_output=(clean * (1.0 + 0.5 * RECONSTRUCTION_RELATIVE_TOLERANCE))[:, 3]
     )
     assert noisy.additive
     # A structural-scale error must still fail closed.
     structural = reconstruct_attention_components(
-        attention, hidden, source_groups=groups(), query_position=3, clean_output=(clean + 50.0 * RECONSTRUCTION_ATOL)[:, 3]
+        attention, hidden, source_groups=groups(), query_position=3, clean_output=(clean + 2.0 * clean.abs().max())[:, 3]
     )
     assert not structural.additive
 

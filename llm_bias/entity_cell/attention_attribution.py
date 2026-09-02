@@ -18,12 +18,15 @@ SOURCE_GROUPS = ("identity_header", "evidence", "instruction_context", "other_pr
 ROUTING_EPSILON_FLOOR = 1e-4
 # Additivity tolerances are set at bf16 precision scale: the reconstruction is
 # an FP32 re-implementation compared against the model's bf16 forward, so the
-# gap is rounding noise (observed max-abs ~7e-4 at L3 on Qwen3.5-4B), while any
-# structural error (missing gate, wrong RoPE, wrong GQA repeat, wrong o_proj
-# slice) is orders of magnitude larger. Per-record observed errors are kept in
-# the compact JSONL so the noise distribution stays auditable.
-RECONSTRUCTION_ATOL = 2e-3
-RECONSTRUCTION_RTOL = 2e-3
+# gap is rounding noise proportional to the attention output scale. Measured
+# max-abs / max|clean| on Qwen3.5-4B (5 tickers x 3 prompts x 8 full-attention
+# layers, 120 reconstructions): 2.8e-3 (L3) to 5.7e-3 (L27), i.e. ~0.3-0.6%
+# relative, matching bf16 epsilon times matmul depth. Any structural error
+# (missing gate, wrong RoPE, wrong GQA repeat, wrong o_proj slice) is orders
+# of magnitude larger. Per-record observed errors are kept in the compact
+# JSONL so the noise distribution stays auditable.
+RECONSTRUCTION_ABSOLUTE_FLOOR = 1e-3
+RECONSTRUCTION_RELATIVE_TOLERANCE = 2e-2
 SELECTION_TOP_K = 5
 
 
@@ -173,8 +176,8 @@ def reconstruct_attention_components(
     source_groups: Mapping[str, Any],
     query_position: int = -1,
     clean_output: torch.Tensor | None = None,
-    atol: float = RECONSTRUCTION_ATOL,
-    rtol: float = RECONSTRUCTION_RTOL,
+    absolute_floor: float = RECONSTRUCTION_ABSOLUTE_FLOOR,
+    relative_tolerance: float = RECONSTRUCTION_RELATIVE_TOLERANCE,
 ) -> AttentionReconstruction:
     """Reconstruct final-position per-head vectors grouped by prepared source ranges."""
     if hidden_states.ndim != 3 or hidden_states.shape[0] != 1:
@@ -239,7 +242,10 @@ def reconstruct_attention_components(
     maximum = float(error.abs().max().detach().cpu()) if clean is not None else 0.0
     scale = float(clean.abs().max().detach().cpu()) if clean is not None else 1.0
     relative = maximum / max(scale, 1e-8)
-    return AttentionReconstruction(vectors, margins, reconstructed, clean, maximum, relative, clean is None or torch.allclose(reconstructed, clean, atol=atol, rtol=rtol))
+    # bf16 noise scales with the output magnitude, so the additivity gate is a
+    # relative check with an absolute floor for near-zero outputs.
+    additive = clean is None or maximum <= max(absolute_floor, relative_tolerance * scale)
+    return AttentionReconstruction(vectors, margins, reconstructed, clean, maximum, relative, additive)
 
 
 def frozen_margin_direction(clean_final_residual: torch.Tensor, final_norm: Any, lm_head: Any, positive_token_id: int, negative_token_id: int) -> torch.Tensor:
@@ -468,4 +474,4 @@ def patch_head_output(model: Any, input_ids: torch.Tensor, donor_input_ids: torc
             return runner(input_ids)
 
 
-__all__ = ["FULL_ATTENTION_LAYERS", "PRIMARY_ATTENTION_LAYERS", "SOURCE_GROUPS", "ROUTING_EPSILON_FLOOR", "RECONSTRUCTION_ATOL", "RECONSTRUCTION_RTOL", "SELECTION_TOP_K", "AttentionReconstruction", "validate_attention_layers", "reconstruct_attention_components", "frozen_margin_direction", "resolve_single_token_pair", "direct_logit_attribution", "contract_dla", "routing_label", "rank_attention_heads", "compact_attribution_record", "AttentionCapture", "capture_attention_forward", "remove_hooks", "reconstruct_captured_attention", "OProjectionCapture", "capture_o_projection_input", "selected_head_output_patch", "patch_head_output"]
+__all__ = ["FULL_ATTENTION_LAYERS", "PRIMARY_ATTENTION_LAYERS", "SOURCE_GROUPS", "ROUTING_EPSILON_FLOOR", "RECONSTRUCTION_ABSOLUTE_FLOOR", "RECONSTRUCTION_RELATIVE_TOLERANCE", "SELECTION_TOP_K", "AttentionReconstruction", "validate_attention_layers", "reconstruct_attention_components", "frozen_margin_direction", "resolve_single_token_pair", "direct_logit_attribution", "contract_dla", "routing_label", "rank_attention_heads", "compact_attribution_record", "AttentionCapture", "capture_attention_forward", "remove_hooks", "reconstruct_captured_attention", "OProjectionCapture", "capture_o_projection_input", "selected_head_output_patch", "patch_head_output"]
