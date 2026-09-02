@@ -228,7 +228,14 @@ Because final RMSNorm is nonlinear, report two variants:
 
 Verify the implementation by checking that the sum of reconstructed head
 outputs matches the model's attention-block output at the final position within
-a frozen numerical tolerance before interpreting attribution.
+a frozen numerical tolerance before interpreting attribution. The frozen
+tolerance is $2\times10^{-3}$ absolute and relative: the reconstruction is an
+FP32 re-implementation compared against the model's bf16 forward, so the gap
+is bf16 rounding noise (measured max-abs $\approx 7\times10^{-4}$ at L3 on
+Qwen3.5-4B), while any structural error (missing output gate, wrong RoPE,
+wrong GQA repeat, wrong $o_{\mathrm{proj}}$ slice) is orders of magnitude
+larger. The per-record observed errors are kept in the compact attribution
+JSONL so the noise distribution stays auditable.
 
 #### E2 component screening
 

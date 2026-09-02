@@ -87,6 +87,28 @@ def test_fake_gqa_reconstructs_with_repeated_kv_gate_and_o_proj_slices():
     assert original.shape[-1] == 4
 
 
+def test_additivity_tolerance_is_bf16_scaled_and_enforced():
+    # The frozen tolerance is documented in the proposal at bf16 precision
+    # scale; pin the constant so a regression to FP32-scale values is caught.
+    from llm_bias.entity_cell.attention_attribution import RECONSTRUCTION_ATOL, RECONSTRUCTION_RTOL
+    assert RECONSTRUCTION_ATOL == 2e-3
+    assert RECONSTRUCTION_RTOL == 2e-3
+    torch.manual_seed(4)
+    attention = FakeGQA()
+    hidden = torch.randn(1, 4, 5)
+    clean, _ = attention(hidden)
+    # Noise at the frozen relative scale must still count as additive.
+    noisy = reconstruct_attention_components(
+        attention, hidden, source_groups=groups(), query_position=3, clean_output=(clean * (1.0 + 0.5 * RECONSTRUCTION_RTOL))[:, 3]
+    )
+    assert noisy.additive
+    # A structural-scale error must still fail closed.
+    structural = reconstruct_attention_components(
+        attention, hidden, source_groups=groups(), query_position=3, clean_output=(clean + 50.0 * RECONSTRUCTION_ATOL)[:, 3]
+    )
+    assert not structural.additive
+
+
 def test_dla_routing_selection_and_compact_boundary():
     attention = FakeGQA()
     hidden = torch.randn(1, 4, 5)

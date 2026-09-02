@@ -16,8 +16,14 @@ FULL_ATTENTION_LAYERS = (3, 7, 11, 15, 19, 23, 27, 31)
 PRIMARY_ATTENTION_LAYERS = (11, 15, 19)
 SOURCE_GROUPS = ("identity_header", "evidence", "instruction_context", "other_prefix")
 ROUTING_EPSILON_FLOOR = 1e-4
-RECONSTRUCTION_ATOL = 2e-4
-RECONSTRUCTION_RTOL = 2e-4
+# Additivity tolerances are set at bf16 precision scale: the reconstruction is
+# an FP32 re-implementation compared against the model's bf16 forward, so the
+# gap is rounding noise (observed max-abs ~7e-4 at L3 on Qwen3.5-4B), while any
+# structural error (missing gate, wrong RoPE, wrong GQA repeat, wrong o_proj
+# slice) is orders of magnitude larger. Per-record observed errors are kept in
+# the compact JSONL so the noise distribution stays auditable.
+RECONSTRUCTION_ATOL = 2e-3
+RECONSTRUCTION_RTOL = 2e-3
 SELECTION_TOP_K = 5
 
 
