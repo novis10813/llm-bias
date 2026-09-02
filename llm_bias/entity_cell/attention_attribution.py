@@ -358,11 +358,16 @@ def capture_attention_forward(attention: Any) -> tuple[AttentionCapture, tuple[A
     capture = AttentionCapture()
     def before(_module: Any, args: tuple[Any, ...], kwargs: Mapping[str, Any] | None = None) -> None:
         kwargs = kwargs or {}
-        if not args:
-            raise ValueError("attention forward received no hidden states")
-        capture.hidden_states = args[0]
-        capture.position_embeddings = kwargs.get("position_embeddings", args[1] if len(args) > 1 else None)
-        capture.attention_mask = kwargs.get("attention_mask", args[2] if len(args) > 2 else None)
+        if args:
+            capture.hidden_states = args[0]
+            capture.position_embeddings = kwargs.get("position_embeddings", args[1] if len(args) > 1 else None)
+            capture.attention_mask = kwargs.get("attention_mask", args[2] if len(args) > 2 else None)
+        else:
+            if "hidden_states" not in kwargs:
+                raise ValueError("attention forward received no hidden states")
+            capture.hidden_states = kwargs["hidden_states"]
+            capture.position_embeddings = kwargs.get("position_embeddings")
+            capture.attention_mask = kwargs.get("attention_mask")
     def after(_module: Any, _args: tuple[Any, ...], output: Any) -> None:
         capture.output = output[0] if isinstance(output, (tuple, list)) else output
     handles: list[Any] = []

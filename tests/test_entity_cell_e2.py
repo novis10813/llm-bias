@@ -7,6 +7,7 @@ from torch import nn
 
 from llm_bias.entity_cell.attention_attribution import (
     SOURCE_GROUPS,
+    capture_attention_forward,
     compact_attribution_record,
     direct_logit_attribution,
     rank_attention_heads,
@@ -41,11 +42,11 @@ class FakeGQA(nn.Module):
         self.q_norm = FakeNorm(2)
         self.k_norm = FakeNorm(2)
 
-    def forward(self, value, position_embeddings=None, attention_mask=None):
-        batch, sequence, _ = value.shape
-        query, gate = torch.chunk(self.q_proj(value).view(batch, sequence, 4, 4), 2, dim=-1)
-        key = self.k_norm(self.k_proj(value).view(batch, sequence, 2, 2)).transpose(1, 2)
-        val = self.v_proj(value).view(batch, sequence, 2, 2).transpose(1, 2)
+    def forward(self, hidden_states, position_embeddings=None, attention_mask=None):
+        batch, sequence, _ = hidden_states.shape
+        query, gate = torch.chunk(self.q_proj(hidden_states).view(batch, sequence, 4, 4), 2, dim=-1)
+        key = self.k_norm(self.k_proj(hidden_states).view(batch, sequence, 2, 2)).transpose(1, 2)
+        val = self.v_proj(hidden_states).view(batch, sequence, 2, 2).transpose(1, 2)
         query = self.q_norm(query).transpose(1, 2)
         key = key.repeat_interleave(2, dim=1)
         val = val.repeat_interleave(2, dim=1)
@@ -115,6 +116,30 @@ def test_patch_isolates_one_o_projection_head_and_cleans_hook():
     assert not torch.allclose(patched[:, 3], clean[:, 3])
     assert torch.allclose(patched[:, :3], clean[:, :3])
     assert not attention.o_proj._forward_pre_hooks
+
+
+def test_capture_handles_keyword_only_attention_call():
+    torch.manual_seed(4)
+    attention = FakeGQA()
+    hidden = torch.randn(1, 4, 5)
+    capture, handles = capture_attention_forward(attention)
+    try:
+        # Qwen3.5 decoder layers call self_attn entirely by keyword.
+        attention(hidden_states=hidden, attention_mask=None, position_embeddings=None)
+        assert torch.equal(capture.hidden_states, hidden)
+        assert capture.output is not None
+        # Positional calls must keep working as well.
+        capture2, handles2 = capture_attention_forward(attention)
+        try:
+            attention(hidden, None, None)
+            assert torch.equal(capture2.hidden_states, hidden)
+        finally:
+            for handle in handles2:
+                handle.remove()
+    finally:
+        for handle in handles:
+            handle.remove()
+    assert not attention._forward_pre_hooks
 
 
 def test_rejects_recurrent_layers_and_invalid_groups():
