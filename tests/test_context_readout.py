@@ -53,6 +53,10 @@ class _Norm(torch.nn.Module):
         super().__init__()
         self.weight = torch.nn.Parameter(torch.ones(width))
 
+    def forward(self, x):
+        x = x.float()
+        return x * torch.rsqrt(x.square().mean(-1, keepdim=True) + self.variance_epsilon) * self.weight
+
 
 class _Model:
     n_layers = 31

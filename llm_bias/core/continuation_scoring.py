@@ -215,30 +215,17 @@ def fp32_next_token_logits(model: Any, residual_final: torch.Tensor) -> torch.Te
     """FP32 final norm + unembedding of last-position residuals (no log-softmax).
 
     Accepts a ``[batch, d_model]`` residual (detached or in an autograd graph)
-    and returns ``[batch, vocab]`` logits.  Keeping the tail in FP32 preserves
-    small intervention effects that BF16 logits would quantize before the
-    margin is formed.  ``fp32_next_token_log_probs`` is this tail plus
-    log-softmax; the V2 direction decode consumes this tail directly.
+    and returns ``[batch, vocab]`` logits.  The final normalization is applied
+    by the model's own ``_final_norm`` module on an FP32 tensor, so the result
+    is exact for every norm style (standard RMSNorm, Llama-3 / Qwen3.5-style
+    ``1 + weight``, LayerNorm) instead of re-deriving it manually.  Keeping the
+    tail in FP32 preserves small intervention effects that BF16 logits would
+    quantize before the margin is formed.  ``fp32_next_token_log_probs`` is
+    this tail plus log-softmax; the V2 direction decode consumes this tail
+    directly.
     """
     values = residual_final.float()
-    norm = model._final_norm
-    weight = norm.weight.float().to(values.device)
-    epsilon = float(
-        getattr(norm, "variance_epsilon", getattr(norm, "eps", 1e-6))
-    )
-    norm_name = type(norm).__name__.lower()
-    if "rmsnorm" in norm_name or hasattr(norm, "variance_epsilon"):
-        normalized = values * torch.rsqrt(values.square().mean(-1, keepdim=True) + epsilon)
-        normalized = normalized * weight
-    else:
-        bias = getattr(norm, "bias", None)
-        normalized = F.layer_norm(
-            values,
-            tuple(weight.shape),
-            weight,
-            bias.float().to(values.device) if bias is not None else None,
-            epsilon,
-        )
+    normalized = model._final_norm(values).float()
     head = model._lm_head
     return F.linear(
         normalized,

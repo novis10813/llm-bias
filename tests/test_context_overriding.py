@@ -52,6 +52,10 @@ class _RMS(torch.nn.Module):
         super().__init__()
         self.register_buffer("weight", torch.ones(1))
 
+    def forward(self, x):
+        x = x.float()
+        return x * torch.rsqrt(x.square().mean(-1, keepdim=True) + self.variance_epsilon) * self.weight
+
 
 class _PatchingModel(torch.nn.Module):
     def __init__(self):

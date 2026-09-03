@@ -5,11 +5,13 @@ import pytest
 import torch
 from torch import nn
 
+from llm_bias.core.continuation_scoring import fp32_next_token_logits
 from llm_bias.entity_cell.attention_attribution import (
     SOURCE_GROUPS,
     capture_attention_forward,
     compact_attribution_record,
     direct_logit_attribution,
+    frozen_margin_direction,
     rank_attention_heads,
     reconstruct_attention_components,
     routing_label,
@@ -206,3 +208,57 @@ def test_e2_cli_preserves_e1_parse_contract():
     readout_args = parser.parse_args(["run", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--stage", "e2-readout", "--lens-path", "lens.pt", "--expected-lens-sha256", "a" * 64])
     assert readout_args.stages == ["e2-readout"] and readout_args.lens_path == Path("lens.pt")
     assert parser.parse_args(["analyze", "--run-root", "r", "--experiment", "e2"]).experiment == "e2"
+
+
+class _StandardRMSNorm(nn.Module):
+    """Standard RMSNorm style: ``norm(x) * w``."""
+
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.variance_epsilon = eps
+        self.weight = nn.Parameter(torch.full((dim,), 2.0))
+
+    def forward(self, x):
+        output = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.variance_epsilon)
+        return self.weight * output.to(x.dtype)
+
+
+class _Llama3RMSNorm(nn.Module):
+    """Llama-3 / Qwen3.5 RMSNorm style: ``norm(x) * (1 + w)``."""
+
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.full((dim,), 0.5))
+
+    def forward(self, x):
+        output = (x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)).float()
+        return (output * (1.0 + self.weight.float())).type_as(x)
+
+
+@pytest.mark.parametrize("norm_cls", [_StandardRMSNorm, _Llama3RMSNorm])
+def test_frozen_margin_direction_matches_true_margin_for_norm_style(norm_cls) -> None:
+    generator = torch.Generator().manual_seed(7)
+    norm = norm_cls(4)
+    lm_head = nn.Linear(4, 10, bias=False)
+    with torch.no_grad():
+        lm_head.weight.copy_(torch.randn(10, 4, generator=generator))
+    residual = torch.tensor([0.7, -0.2, 1.3, 0.4])
+    direction = frozen_margin_direction(residual, norm, lm_head, 3, 7)
+    normalized = norm(residual).float()
+    true_margin = float(lm_head.weight[3].float() @ normalized - lm_head.weight[7].float() @ normalized)
+    assert float(torch.dot(direction, residual)) == pytest.approx(true_margin, rel=1e-5, abs=1e-6)
+
+
+@pytest.mark.parametrize("norm_cls", [_StandardRMSNorm, _Llama3RMSNorm])
+def test_frozen_margin_direction_matches_core_fp32_tail(norm_cls) -> None:
+    """The DLA direction must contract with the same final-norm tail as core."""
+    norm = norm_cls(4)
+    lm_head = nn.Linear(4, 10, bias=False)
+    residual = torch.tensor([0.7, -0.2, 1.3, 0.4])
+    direction = frozen_margin_direction(residual, norm, lm_head, 3, 7)
+    stub = type("_Stub", (), {"_final_norm": norm, "_lm_head": lm_head})()
+    logits = fp32_next_token_logits(stub, residual.unsqueeze(0))[0]
+    assert float(torch.dot(direction, residual)) == pytest.approx(
+        float(logits[3] - logits[7]), rel=1e-5, abs=1e-6
+    )

@@ -37,3 +37,12 @@
 - E1 V2: `entity-cell-prepare-discovery-v2`, `entity-cell-e1-smoke-v4`, `entity-cell-e1-discovery-v2`
 - E2: `entity-cell-e2-discovery-v1`~`v4` (failed, preserved), `entity-cell-e2-discovery-v5` (complete)
 - E3: `entity-cell-e3-discovery-v1` (timed out, preserved), `entity-cell-e3-discovery-v2` (failed downstream partition, preserved), `entity-cell-e3-discovery-v3` (complete)
+
+## 測量儀器註記（Instrument Note）
+
+上述所有 Qwen3.5-4B run 的 margin / DLA 數值均產出於 shared core FP32 tail 的 v1 定義
+（final norm 手動公式漏掉 Qwen3.5 的 `1+` 項，詳見
+[`docs/shared-experiment-core.md`](../shared-experiment-core.md) 測量變更記錄 v2）。
+結構性結論（同一 probe 內部的相對比較、no-flip 方向）維持自洽；絕對 margin 值與以 0 為界
+的判定（含 FTNT P2/P3 的「匿名 Sell」前提，v2 儀器下為匿名 Buy）須以 v2 儀器重驗 run
+為準（重驗 run 完成後於此更新）。

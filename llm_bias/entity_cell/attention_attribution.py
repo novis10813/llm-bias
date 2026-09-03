@@ -249,18 +249,30 @@ def reconstruct_attention_components(
 
 
 def frozen_margin_direction(clean_final_residual: torch.Tensor, final_norm: Any, lm_head: Any, positive_token_id: int, negative_token_id: int) -> torch.Tensor:
-    """Return the exact FP32 frozen-scale Buy-minus-Sell residual direction."""
+    """Return the exact FP32 frozen-scale Buy-minus-Sell residual direction.
+
+    The frozen-scale convention fixes the data-dependent RMS scale of the
+    final norm at the clean residual.  For an RMS-style norm
+    ``norm(r) = s(r) * (A * r)`` with ``s(r) = rsqrt(mean(r**2) + eps)``, the
+    margin is linear in the residual with row vector
+    ``(W_b - W_s) * A * s(r0)``.  The per-dimension multiplier ``A`` is
+    recovered from the actual norm module by normalizing a ones vector
+    (``A = norm(1) / s(1)``), which is exact for both standard RMSNorm
+    (``A = w``) and Llama-3 / Qwen3.5-style norms (``A = 1 + w``), so the
+    direction always matches ``core.continuation_scoring.fp32_next_token_logits``.
+    """
     residual = clean_final_residual.float()
     if residual.ndim == 2:
         residual = residual[-1]
     if residual.ndim != 1:
         raise ValueError("clean final residual must be [hidden] or [sequence, hidden]")
-    weight = final_norm.weight.float().to(residual.device)
     epsilon = float(getattr(final_norm, "variance_epsilon", getattr(final_norm, "eps", 1e-6)))
     scale = torch.rsqrt(residual.square().mean() + epsilon)
-    # Match core.continuation_scoring.fp32_next_token_logits exactly: the
-    # frozen scale contracts with the final norm weight used by that helper.
-    return (lm_head.weight[int(positive_token_id)].float().to(residual.device) - lm_head.weight[int(negative_token_id)].float().to(residual.device)) * weight * scale
+    ones = torch.ones_like(residual)
+    ones_scale = torch.rsqrt(ones.square().mean() + epsilon)
+    multiplier = final_norm(ones).float() / ones_scale
+    contrast = lm_head.weight[int(positive_token_id)].float().to(residual.device) - lm_head.weight[int(negative_token_id)].float().to(residual.device)
+    return contrast * multiplier * scale
 
 
 def resolve_single_token_pair(tokenizer: Any, prompt: str, positive: str = "buy", negative: str = "sell") -> tuple[int, int]:

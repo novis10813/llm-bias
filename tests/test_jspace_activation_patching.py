@@ -91,6 +91,10 @@ class _FakeRMSNorm(torch.nn.Module):
         super().__init__()
         self.register_buffer("weight", torch.ones(d_model))
 
+    def forward(self, x):
+        x = x.float()
+        return x * torch.rsqrt(x.square().mean(-1, keepdim=True) + self.variance_epsilon) * self.weight
+
 
 class _PatchingModel(torch.nn.Module):
     """Small CPU-only decoder whose final margin follows the residual sum."""

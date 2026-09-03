@@ -78,7 +78,8 @@ artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
   categorical KL 與 FP32 single-token margin。`fp32_next_token_logits` 提供 final norm 加
   unembedding 的 FP32 logits tail；`fp32_next_token_log_probs` 在同一 tail 後套用
   log-softmax。V2 direction decode 重用前者，確保 fitting target 與 vocabulary
-  decode 使用相同 unembedding convention。
+  decode 使用相同 unembedding convention。Final norm 直接呼叫模型的 `_final_norm`
+  module（FP32 輸入），不對 norm 公式做手動再實作（見下方測量變更記錄 v2）。
 - `artifact_paths.py` / `artifact_manifest.py`：run identity、hash、atomic path helpers 與
   schema-version 1 manifest。
 - `lens_artifacts.py`：canonical/candidate/archive path、schema-version 2 metadata 與 model
@@ -90,6 +91,39 @@ artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
 `prompt_input.continuation_token_ids` 只回傳 continuation suffix；
 `continuation_scoring.continuation_token_ids` 回傳 prompt IDs 與 suffix IDs。兩者同名但契約
 不同，匯入時使用完整 module path。
+
+## 測量變更記錄（Instrument Change Log）
+
+shared core 的計分 tail 一旦改變，所有下游 margin/方向數值的絕對值都會變，因此在此
+明確定版。此記錄只描述 shared core 的測量定義；各 experiment 的 run 狀態與重驗結果
+寫在對應 experiment 的 README/report。
+
+### v2（2026-09-03，branch `fix/fp32-tail-norm`）：final norm 改由模型 module 計算
+
+- **變更**：`fp32_next_token_logits` 不再手動重實作 final norm（舊式
+  `x·rsqrt(mean(x²)+ε)·w`），改為直接呼叫模型的 `_final_norm` module（FP32
+  輸入、FP32 輸出）。`entity_cell.attention_attribution.frozen_margin_direction` 同步修正：
+  per-dimension multiplier `A` 改由 `norm(1)/rsqrt(1+ε)` 從實際 module 提取，使 frozen
+  direction 與 v2 tail 精確一致。
+- **原因**：舊手動公式對 standard RMSNorm（`norm·w`，例如 Llama-3.2-1B）與 LayerNorm
+  精確，但 Qwen3.5 的 `Qwen3_5RMSNorm` 是 Llama-3 風格（weight 初始為 0，forward 為
+  `norm·(1+w)`），舊式漏掉 `1+`，導致所有 Qwen3.5 的 margin 都經過一個與模型真實
+  unembedding 不同的固定線性變換（等價於把 normalized residual 先乘一個固定的正對角
+  矩陣再投影）。
+- **影響範圍**：所有在 Qwen3.5-4B / Qwen3.5-9B 上經 `score_single_token_margin_fp32`、
+  `fp32_next_token_log_probs`、`fp32_next_token_logits` 或 `frozen_margin_direction` 產出的
+  margin、DLA 方向與 readout logits——包含 `entity_cell`（E1 amnesia、E2 DLA、E3、
+  lens readout）與 `jspace_intervention`（outcome_flip、activation_patching、
+  cross_sector_patching、context_readout、context_overriding、prior_probe、runner、
+  outcome_decode）的全部 Qwen3.5 runs。Llama-family 的 runs 數值不變（舊公式對其精確）。
+- **結構性影響說明**：同一 probe 內部的相對比較（劑量方向、pair 對照、匿名推進度、
+  DLA 分組佔比）在舊 run 內部仍然自洽，但「margin 符號 = 模型決策」與任何以 0 為界的
+  判定（decision flip、邊界題的 sign）必須以 v2 儀器重驗；絕對 margin 值一律以 v2
+  重跑或重算為準。
+- **驗證**：`tests/test_continuation_scoring.py`（standard 與 Llama-3 兩種 norm 風格的
+  module 一致性與 true logprobs 回歸測試）、`tests/test_entity_cell_e2.py`（frozen
+  direction 與 true margin / core tail 的一致性）；並對 Qwen3.5-4B 真實模型驗證
+  v2 tail 與模型真實 logits maxdiff = 0。
 
 ## Lens ownership boundary
 
