@@ -6,13 +6,17 @@
 
 ## 文件慣例
 
-- 每個 active experiment 放在 `docs/<experiment-name>/`，至少包含 `proposal.md` 與一份
-  `report*.md`。Proposal 保存 protocol 與操作契約；report 保存 run provenance、數值、
-  verdict 與限制。
-- Active workflow 的命令、參數、artifact layout 與 interpretation limits 只在對應
-  proposal 維護；README 與 AGENTS 只提供摘要和連結。
+- 每個 active experiment 放在 `docs/<experiment-name>/`。單一版本實驗包含 `proposal.md`
+  與對應 report；多版本或分階段演進時，統一使用版本化檔名（`proposal-v1.md`、`proposal-v2.md`
+  等），目錄下不保留無版本號的 `proposal.md`，避免語意混淆。
+- 不同核心假說、因果機制或不同研究階段（例如定位 vs 歸因 vs 干預）應獨立立案或拆分文件，
+  嚴禁將多階段研究路線混裝在單一巨石 proposal 中。
+- 各版本 workflow 的命令、參數、artifact layout 與 interpretation limits 只在該版本
+  對應的 `proposal-vN.md` 維護，版本間不可相互覆蓋或回填假設；README 與 AGENTS 只提供
+  摘要和連結。
 - 實驗結果要附 run ID 或 artifact path，並標明 discovery、calibration、held-out、
-  diagnostic 或 formal status。不要用新結果覆寫舊 run 的 historical record。
+  diagnostic 或 formal status。不要用新結果覆寫舊 run 的 historical record；一旦
+  formal run 執行完畢，對應的 `proposal-vN.md` 實質邏輯即刻凍結，禁止事後原地修改。
 - Direction source、primary outcome、controls 或 gate 改變時，依
   [`documentation-system.md#experiment-versioning`](documentation-system.md#experiment-versioning)
   建立 version index、versioned proposal 與 versioned report；每版明寫
