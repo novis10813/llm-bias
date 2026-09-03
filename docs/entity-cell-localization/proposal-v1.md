@@ -1,6 +1,11 @@
-# Entity Cell Localization and Downstream Attribution: Proposal
+# Entity Cell Localization and Downstream Attribution: Proposal V1
 
-**Document status:** frozen V1 implementation protocol; implemented on `feat/entity-cell-confirmation`; formal inference and calibration/test evidence not run.
+**Document status:** frozen V1 protocol; implemented; V1 E1 discovery and
+E2 discovery runs complete (see [report-v1](report-v1.md)); calibration and
+held-out test not run. This document defines the V1 protocol for all phases
+(E1 header-family localization, E2, E3, confirmation). The E1 phase has a
+later version with a different control family and success gates: see
+[proposal-v2](proposal-v2.md). Version index: [README](README.md).
 **Model for first run:** Qwen3.5-4B (`.cache/models/qwen3.5-4b`)
 **Depends on:** existing split manifest
 `artifacts/qwen3.5-4b/jspace-intervention/splits.json`, active baseline prompts
@@ -106,7 +111,13 @@ stratum rather than used to select prompts after inference.
 > freeze its dataset, prompt family, outcome, controls, and gates in a new
 > version before inference.
 
-### Phase E1: Entity Cell Localization
+### Phase E1: Entity Cell Localization (V1 header family)
+
+> The E1 localization prompt family was superseded by
+> [E1 V2: surface-varying localization](proposal-v2.md) after the V1
+> discovery run. E1 V2 changed the control family and the success gates, so
+> it is a separate version document; E2/E3 and the confirmation design below
+> are unchanged across versions.
 
 **Method:** stability-score MLP neuron localization following Barzilay et al.
 (2026), adapted to the financial header prompt family.
@@ -184,101 +195,6 @@ the count.
 **Compact outputs:** per-ticker top-five candidates, held-variant agreement,
 collision/selectivity summaries, form-control results, and amnesia curves. No
 raw activation vectors or full neuron-score arrays are persisted.
-
-#### E1 V2: surface-varying localization (frozen, not yet run)
-
-**Motivation (V1 discovery finding).** The V1 discovery run
-(`entity-cell-e1-discovery-v1`) localized 31/35 Technology tickers to the same
-top-1 neuron (L0, N4485) and 4 to a second shared neuron (L0, N5101); all three
-surface-form controls showed top-5 overlap 5/5 with the localization top-5;
-zero tickers passed the amnesia eligibility gate. The mechanism is a property
-of the V1 prompt family: all twelve variants share the identical three-line
-header (`Stock Ticker: [X]` / `Stock Name: [Y]` / `--- Evidence ---`), so a
-neuron that reacts to the header template — not to the company — has near-zero
-cross-variant standard deviation and therefore dominates the stability score
-$S_{\ell j} = (\mathbb{E}_i z)^2/(\operatorname{Std}_i z + \varepsilon)$ for every
-ticker. Barzilay et al. (2026) avoid this by localizing on prompts whose entity
-surface context varies per prompt (`The <attribute> of <entity>`, a 100-attribute
-template list, K=2 prompts per entity), so template-reactive neurons are not
-stable across variants. V2 changes the localization prompt family accordingly;
-V1 results stand as reported and are never re-labeled as V2 results.
-
-**V2 localization prompt family (natural-sentence frames).** For each company
-with name $N$ and ticker $X$, render twelve frozen sentence frames; eight form
-the localization set and four the unseen held set. The company name appears
-once per frame as plain prose (no brackets, no fixed label), and the entity
-token position is the last content token of the name span in that frame, using
-the shared character-to-token span helper:
-
-| id | set | frame |
-|---|---|---|
-| F0 | localization | `The headquarters of {name} is located in` |
-| F1 | localization | `{name} is a technology company.` |
-| F2 | localization | `The stock ticker of {name} is` |
-| F3 | localization | `{name} was founded in` |
-| F4 | localization | `The main product of {name} is` |
-| F5 | localization | `Investors often describe {name} as` |
-| F6 | localization | `{name} operates in the` |
-| F7 | localization | `The annual report of {name} states that` |
-| H0 | held | `The CEO of {name} is` |
-| H1 | held | `{name} is headquartered in` |
-| H2 | held | `The market value of {name} reached` |
-| H3 | held | `{name} competes with other` |
-
-Frames are prompt-only: they are never generated or answered, and no frame
-asserts a per-company fact after the name span.
-
-**Comparison and template controls.**
-
-- **Header-family comparison control:** the frozen V1 header family (twelve
-  header-prefix variants) is re-run on the same tickers and reported for
-  comparison only; it is not used for V2 ranking. It must reproduce the V1
-  surface-dominated ranking, and V2 reports how many V2 candidates overlap it.
-- **Template-only control (new):** one frozen prompt with the V1 header
-  structure and neutral content —
-  `Stock Ticker: [NEUT]` / `Stock Name: [Neutral Entity, Inc.]` — whose top-5
-  is the frozen template signature. A candidate that is top-5 in the template
-  signature is template-reactive, not identity-selective.
-- **Surface-form controls:** in the frame family (the V2 ranking family), the
-  eight localization frames are re-rendered at run time with the company name
-  span replaced: `anonymous_name_frames` (name → `Anonymous Company`) and
-  `name_form_control_frames` (name → ROT13 of the name). In the header
-  comparison family, the three frozen V1 controls (`anonymous_ticker`,
-  `anonymous_name`, `name_form_control`) are reported for comparison only. A
-  frame-family candidate is form-robust only if it is not top-5 in either
-  frame-family control ranking; top-5 overlap with each control is reported
-  descriptively.
-
-**V2 gates.** A V2 candidate is a trusted candidate entity cell only if all of
-the following hold:
-
-1. held-variant top-5 overlap $\geq 1$ (V1 rule);
-2. form-robust: not top-5 in either frame-family surface control
-   (`anonymous_name_frames` or `name_form_control_frames`);
-3. template-robust (new): not top-5 in the template-only control signature;
-4. amnesia endpoint gate (V1 rule): at $\alpha=-3$, $A_p(-3)>0$ and exceeds
-   both control curves on at least two eligible prompts.
-
-**Wrong-entity non-degeneracy (new rule).** V1 showed that when every ticker
-shares one top-1 neuron, the wrong-entity control equals the target cell and
-the gate is uninformative. V2 fixes the wrong entity deterministically (the
-next ticker alphabetically within the same split) and uses its top-1 cell;
-if that cell equals the target cell, descend to its top-2, and so on through
-top-5. If all five match, the wrong-entity control is marked degenerate, the
-amnesia gate must be satisfied against the matched-random control alone, and
-the ticker is flagged as degraded-control in the summary.
-
-**Unchanged from V1:** the 399 generic baseline prompts (same file and
-identity), per-neuron $(\mu_{\ell j}, \sigma_{\ell j})$ normalization, $\varepsilon
-= 10^{-6}$, candidate layers L0–L5, top-5 retention, amnesia dose grid
-$\alpha \in \{1,0,-1,-2,-3\}$, three financial prompts per ticker, and the
-all-positions primary scope.
-
-**Versioning boundary.** V2 requires its own tokenizer-only preparation run
-(V2 frames, header-family comparison control, template-only control; reusing
-the existing generic baseline and financial prompts) and its own model runs.
-V1 and V2 cells are never mixed in one analysis. The confirmation freeze
-(calibration/test) may be built only from V2 discovery selections.
 
 ### Phase E2: Downstream Component Attribution
 

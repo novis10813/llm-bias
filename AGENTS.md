@@ -31,7 +31,7 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 - [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) / [discovery report](docs/sector-context-followup/report-discovery.md) / [B V1 confirmation report](docs/sector-context-followup/report-confirmation.md)（A cross-sector header-state patching、B negative-evidence context overriding、C L16 instruction-context readout；A/B/C discovery 完成；B V1 calibration `success=false`，same-sector peer specificity gate 未通過，held-out test 未執行）
 - [Shared experiment core](docs/shared-experiment-core.md)
 - [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) / [discovery report](docs/span-sensitivity/report-status.md)（V1 discovery completed；`same_sector_swap` 為 calibration primary condition，calibration/test protocol 未凍結）
-- [Entity cell localization and downstream attribution proposal](docs/entity-cell-localization/proposal.md) / [implementation status](docs/entity-cell-localization/report-status.md)（frozen V1；workflow implemented；no formal runs）
+- [Entity cell localization and downstream attribution versions](docs/entity-cell-localization/README.md)（[proposal V1](docs/entity-cell-localization/proposal-v1.md) / [report V1](docs/entity-cell-localization/report-v1.md)；[proposal V2](docs/entity-cell-localization/proposal-v2.md) / [report V2](docs/entity-cell-localization/report-v2.md)；V1 discovery 0/35、V2 discovery 1/35；calibration/test 未凍結）
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 
