@@ -64,3 +64,33 @@ against `entity-cell-prepare-discovery-v1`).
    FTNT (L0, N104) 不再被視為群體代表，而是轉入專屬的因果干預實驗（E3）作為單點個案研究（Case Study），直接檢驗該神經元究屬 FTNT 專屬特異性單元，亦或群體共享的通用語法/實體槽位。
 3. **E1 階段結案**：
    E1 定位階段至此正式結案歸檔。未來若需推進群體實體定位，需另立 V3（引入跨 Ticker 選擇性硬門檻或多維表徵分析）。
+
+---
+
+## Instrument Revision Re-verification (v2 instrument, 2026-09-03)
+
+**Erratum context.** E1 V2 四道門檻中只有 amnesia 門檻是 margin-based，受 shared core FP32 tail 的 v1 儀器 bug 影響（final norm 手動公式漏掉 Qwen3.5 的 `1+` 項；詳見 [`docs/shared-experiment-core.md`](../shared-experiment-core.md) 測量變更記錄 v2，修正於 commit `101e44e`）。上方原始記錄不改寫；本節為 v2 儀器下的重驗。
+
+**重驗方式**：全 35 家 amnesia 在 CPU 上不可行（當前機器負載下預估 ~8 天），因此：(a) `entity-cell-e1-discovery-v3`（CPU fp32，partial preserved，manifest status=failed 並註明中停原因）用於 activation-based 部分的自檢；(b) 針對性 amnesia 重驗（FTNT 完整 dose curve + v1 儀器下 endpoint-pass 的 8 家，frozen candidates 與 frozen gate 規則，CPU fp32）以 `scripts/entity_cell_amnesia_recheck.py` 執行，結果保存在該 run 目錄的 `amnesia_recheck_v2_instrument.json`（含 provenance）。
+
+### 1. Amnesia 門檻重驗（v2 儀器，CPU fp32）
+
+**FTNT（E3 個案）：門檻通過，2/3 prompts**（與 v1 儀器相同的 2/3 模式）：
+
+| Prompt | v1 儀器 target $A_p(-3)$ | v2 儀器 target $A_p(-3)$ | v2 clean → 匿名 | 判定（兩版） |
+|---|---|---|---|---|
+| `6ba8dca` | −0.1049 | −0.0373 | +1.9470 → +0.6034 | fail（兩版皆負） |
+| `6eee4cd` | +0.0672 | +0.1004 | +1.7098 → +0.4383 | pass（兩版皆高於兩對照） |
+| `147b61f` | +0.2650 | +0.2281 | +1.5643 → +0.3928 | pass（兩版皆高於兩對照） |
+
+**endpoint-gate 集合的變化**（v1 儀器下 9/35 單獨通過 amnesia endpoint 的 tickers，以同一 gate 規則重驗）：AKAM、AMAT、**FTNT**、MU、TXN 仍通過（5 家）；CTSH、FFIV、IBM、JKHY 不再通過（4 家）。此集合變化**不影響 trusted 集合**：這 8 家在官方 run 中本就因 form-robust / template / held-overlap 被排除，trusted 仍需四道門檻全過。
+
+### 2. Localization 自檢與 form-robust 的精度 near-tie（重要附帶發現）
+
+`entity-cell-e1-discovery-v3`（CPU fp32）的 localization 與 v2（GPU bf16）對比：top-1 在 32/35 不變（IBM/IT/NTAP 為 near-tie rank swap），FTNT top-1 (L0, N104) 穩定。但 **FTNT 的 form-robust 門檻是 bf16/fp32 精度 near-tie**：官方 bf16 run 中 `form_robust=true`（兩個 frame-family surface control top-5 皆不含候選），fp32 自檢 run 中 `name_form_control_frames` 出現 top-5 overlap 1（`form_robust=false`）。form-robust 是 activation-based gate，不受 norm 修復影響；此差異純粹是 bf16→fp32 的 rank 邊界敏感度。
+
+### 3. 修正後的解讀
+
+1. **FTNT 的 amnesia 資格在 v2 儀器下維持**：真決策下 clean/匿名皆為 Buy（gap 约 −1.17~−1.34），`(0,104)` 抑制在 2/3 prompts 上把 margin 拉向匿名基線且高於兩對照，與 v1 儀器相同的 2/3 模式。
+2. **「1/35 trusted」結論在官方 bf16 run 語義下維持**，但 form-robust 成分被標記為精度 near-tie：若未來在 GPU bf16 下以 v2 儀器完整重跑四道門檻（留待 GPU 空檔），該 near-tie 會以官方精度重新落定。在此之前，FTNT 應視為「amnesia-verified、form-robust 為 boundary case」的候選——這與上方 §V2 discovery result 原有的 boundary case 註記一致。
+3. **E3 V1 的個案地位不受影響**：E3 的 frozen 設計已围绕 FTNT (0,104) 執行，且 `entity-cell-e3-discovery-v4`（見 [report-e3-v1 §6](report-e3-v1.md)）在真決策下全數通過 frozen gates。

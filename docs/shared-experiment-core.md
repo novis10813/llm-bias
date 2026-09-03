@@ -124,6 +124,20 @@ shared core 的計分 tail 一旦改變，所有下游 margin/方向數值的絕
   module 一致性與 true logprobs 回歸測試）、`tests/test_entity_cell_e2.py`（frozen
   direction 與 true margin / core tail 的一致性）；並對 Qwen3.5-4B 真實模型驗證
   v2 tail 與模型真實 logits maxdiff = 0。
+- **重驗狀態（2026-09-03，entity_cell 線，Qwen3.5-4B）**：
+  - E3 V1：`entity-cell-e3-discovery-v4`（CPU fp32）完成，全部 frozen gates 通過；
+    「匿名 = Sell」的 decision-conflict 前提被推翻（真決策下匿名基線為 Buy），324 records 0 flips。
+    見 [`entity-cell-localization/report-e3-v1.md` §6](entity-cell-localization/report-e3-v1.md)。
+  - E2：`entity-cell-e2-discovery-v6`（CPU fp32，13,440 DLA records）以真方向重算，
+    top-5 head 選擇、排名與 routing labels 全部不變（DLA 放大约 1.4–1.5×）。
+    見 [`entity-cell-localization/report-e2.md` §5](entity-cell-localization/report-e2.md)。
+  - E1 V2：針對性 amnesia 重驗（FTNT + 8 家 endpoint-pass tickers，CPU fp32），
+    FTNT amnesia 門檻維持（2/3）；endpoint-gate 集合 9→5 家（不影響 trusted 集合）；
+    form-robust 為 bf16/fp32 精度 near-tie（與本 bug 無關）。全 35 家 amnesia 與 GPU
+    bf16 下的完整四門檻重跑留待 GPU 空檔。
+    見 [`entity-cell-localization/report-v2.md` 附錄](entity-cell-localization/report-v2.md)。
+  - `jspace_intervention` 線的 Qwen3.5 runs 同受影響（絕對 margin/readout 值），為 frozen 線，
+    不回填；未來若啟用該線需先以 v2 儀器重驗。
 
 ## Lens ownership boundary
 
