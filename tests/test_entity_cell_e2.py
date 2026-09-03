@@ -1,3 +1,5 @@
+import ast
+import inspect
 import json
 from pathlib import Path
 
@@ -5,7 +7,9 @@ import pytest
 import torch
 from torch import nn
 
+from llm_bias import entity_cell as _entity_cell_pkg
 from llm_bias.core.continuation_scoring import fp32_next_token_logits
+from llm_bias.entity_cell import e2 as e2_module
 from llm_bias.entity_cell.attention_attribution import (
     SOURCE_GROUPS,
     capture_attention_forward,
@@ -208,6 +212,36 @@ def test_e2_cli_preserves_e1_parse_contract():
     readout_args = parser.parse_args(["run", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--stage", "e2-readout", "--lens-path", "lens.pt", "--expected-lens-sha256", "a" * 64])
     assert readout_args.stages == ["e2-readout"] and readout_args.lens_path == Path("lens.pt")
     assert parser.parse_args(["analyze", "--run-root", "r", "--experiment", "e2"]).experiment == "e2"
+
+
+def _imports_in_body(node):
+    """Yield imported names under ``node`` without entering nested function/class scopes."""
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        if isinstance(child, (ast.Import, ast.ImportFrom)):
+            for alias in child.names:
+                yield alias.asname or alias.name
+        else:
+            yield from _imports_in_body(child)
+
+
+def test_run_e2_stage_branch_imports_do_not_shadow_module_names():
+    """Regression: a stage-branch local import of a module-level name inside
+    ``run_e2`` made that name function-local for the whole function, so the
+    analyze stage crashed with UnboundLocalError whenever it ran without the
+    branch containing the import (e.g. ``--stage analyze`` without
+    ``--stage e2-readout``; run ``entity-cell-e2-discovery-v6``)."""
+    func_tree = ast.parse(inspect.getsource(e2_module.run_e2))
+    func = next(n for n in func_tree.body if isinstance(n, ast.FunctionDef) and n.name == "run_e2")
+    local_imports = set(_imports_in_body(func))
+    module_tree = ast.parse(inspect.getsource(e2_module))
+    module_names = set()
+    for statement in module_tree.body:
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            module_names.update(alias.asname or alias.name for alias in statement.names)
+    shadowed = local_imports & module_names
+    assert not shadowed, f"stage-branch imports shadow module-level names in run_e2: {sorted(shadowed)}"
 
 
 class _StandardRMSNorm(nn.Module):

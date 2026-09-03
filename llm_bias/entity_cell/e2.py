@@ -163,7 +163,6 @@ def run_e2(
         if "e2-readout" in enabled:
             if "e2-attribution" not in enabled:
                 raise ValueError("e2-readout requires e2-attribution in the same run")
-            from .attention_attribution import rank_attention_heads
             from .readout import readout_selected_component, unavailable_component_readout
             selected = {(int(row["layer"]), int(row["head"])): row for row in rank_attention_heads(rows) if row.get("selection_eligible")}
             with run.stage("e2-readout") as stage:
