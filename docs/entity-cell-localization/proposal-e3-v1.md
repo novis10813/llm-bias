@@ -1,6 +1,6 @@
 # Entity Cell Localization: Proposal E3 V1 (Upstream Suppression with Cross-Ticker Specificity and Downstream Component Attenuation)
 
-**Document status:** frozen E3 V1 Discovery protocol; ready for discovery inference run. Version index: [README](README.md).
+**Document status:** frozen E3 V1 Discovery protocol; discovery run complete (see [report-e3-v1](report-e3-v1.md)). Calibration and test not run. Version index: [README](README.md).
 
 **Model for run:** Qwen3.5-4B (`.cache/models/qwen3.5-4b`)  
 **Depends on:**

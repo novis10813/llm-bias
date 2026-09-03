@@ -15,7 +15,7 @@
 | **[E1 V1](proposal-v1.md)** / [報告](report-v1.md) | 三行固定 Header 前綴變體 | Held-out 變體重疊 + 失憶門檻（雙關門檻） | `entity-cell run-localization --localization-family v1-header` | **Discovery 結案**：0/35 通過（31/35 撞車於模板神經元 L0 N4485；證偽固定 Header 定位有效性） |
 | **[E1 V2](proposal-v2.md)** / [報告](report-v2.md) | 12 個自然句框（F0–F7 / H0–H3）消除固定前綴 | 四道門檻：held 重疊、form-robust、template-robust、amnesia 終點 | `entity-cell run-localization --localization-family v2-frames` | **Discovery 結案**：1/35 通過（FTNT, L0 N104；**證偽群體普遍性**，轉入單點解剖） |
 | **[E2](proposal-e2.md)** / [報告](report-e2.md) | 8 個 Full-Attention 層的 source-resolved DLA 歸因 | Identity vs Instruction 10:1 routing 標籤與加法重構誤差 | `entity-cell run-attribution --e2-layers 3 7 11 15 19 23 27 31` | **Discovery 結案**：128 heads 全部為 instruction-dominant；選出 5 個 heads 作為 E3-B 衰減組 |
-| **[E3 V1](proposal-e3-v1.md)** | 上游單元壓制 + 跨 Ticker 特異性對照 + 下游注意力路徑衰減 | 實體專屬性對比（FTNT vs 同撞車組 ADI/MU vs 異組 FTV） | `entity-cell run-intervention --peer-tickers ADI MU FTV` | 協議凍結；實作修復中，準備執行 Preflight 與 Discovery run |
+| **[E3 V1](proposal-e3-v1.md)** / [報告](report-e3-v1.md) | 上游單元壓制 + 跨 Ticker 特異性對照 + 下游注意力路徑衰減 | 實體專屬性對比（FTNT vs 同撞車組 ADI/MU vs 異組 FTV） | `entity-cell run-intervention --peer-tickers ADI MU FTV` | **Discovery 完成**：實體專屬性成立（對比 ADI/MU 特異性差值 +0.4127 > 0.10；下游衰減證據保留度 100%） |
 
 ---
 
@@ -36,4 +36,4 @@
 - E1: `entity-cell-prepare-discovery-v1`, `entity-cell-e1-smoke-v2`, `entity-cell-e1-discovery-v1`
 - E1 V2: `entity-cell-prepare-discovery-v2`, `entity-cell-e1-smoke-v4`, `entity-cell-e1-discovery-v2`
 - E2: `entity-cell-e2-discovery-v1`~`v4` (failed, preserved), `entity-cell-e2-discovery-v5` (complete)
-- E3: `entity-cell-e3-discovery-v1` (timed out, preserved), `entity-cell-e3-discovery-v2` (failed downstream partition, preserved)
+- E3: `entity-cell-e3-discovery-v1` (timed out, preserved), `entity-cell-e3-discovery-v2` (failed downstream partition, preserved), `entity-cell-e3-discovery-v3` (complete)
