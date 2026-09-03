@@ -1,60 +1,37 @@
-# Entity Cell Localization: V1 Discovery Report (E1 V1 + E2)
+# Entity Cell Localization: Report V1 (Header Family Discovery)
 
-**Status:** V1 E1 discovery and E2 discovery complete. V1 E1 is a negative
-result with an identified mechanism; E2 is descriptive. Calibration and
-held-out test not run; V1 results are not re-labeled as any later version.
+**Status:** V1 discovery complete. Negative result: protocol template-dominated. 0/35 trusted candidates. Superseded by V2. Version index: [README](README.md).
 
-**Protocol:** [proposal-v1](proposal-v1.md). Version index: [README](README.md).
-Later E1 version: [proposal-v2](proposal-v2.md) / [report-v2](report-v2.md).
+**Protocol:** [proposal-v1](proposal-v1.md).
 
-## V1 runs on record
+---
+
+## 1. Runs on Record
+
+All runs located under `artifacts/qwen3.5-4b/entity-cell-localization/runs/`:
 
 | run | state | note |
 |---|---|---|
-| `entity-cell-prepare-discovery-v1` | complete | 35 tickers, 420 header variants, 399 baseline, 105 financial prompts, 420 E2 donor contracts |
+| `entity-cell-prepare-discovery-v1` | complete | 35 tickers, 420 header variants, 399 baseline, 105 financial prompts |
 | `entity-cell-e1-smoke-v1` | failed (preserved) | metadata registration bug, fixed in `80b9a0c` |
 | `entity-cell-e1-smoke-v2` | complete | one-ticker V1 smoke |
-| `entity-cell-e1-discovery-v1` | complete | V1 discovery, all four E1 stages |
-| `entity-cell-e2-discovery-v1`…`v4` | failed (preserved) | keyword-only attention hook, additivity tolerance, single-token continuation unpack, bf16-relative additivity scale — all fixed before v5 |
-| `entity-cell-e2-discovery-v5` | complete | E2 attribution, selected-head readout, and patching contracts |
+| **`entity-cell-e1-discovery-v1`** | **complete** | **Formal E1 V1 discovery run** (all 4 stages: baseline, localization, amnesia, analyze) |
 
-All runs under
-`artifacts/qwen3.5-4b/entity-cell-localization/runs/`.
+---
 
-## E1 V1 discovery result (negative, mechanism identified)
+## 2. E1 V1 Discovery Results
 
-- 31/35 Technology tickers share the same top-1 cell (L0, N4485); 4 share a
-  second (L0, N5101). The V1 header family is template-dominated: all twelve
-  variants share the identical three-line header, so header-reactive neurons
-  have near-zero cross-variant standard deviation and dominate the stability
-  score for every ticker.
-- 0/35 tickers passed the amnesia eligibility gate.
-- Known V1 limitation (found during V2 implementation): the localization-stage
-  surface controls re-used the prepared `input_ids` of the original prompt
-  instead of re-tokenizing the control prompt, so the reported
-  `surface_control_summary` top-5 overlaps (5/5) are degenerate and not
-  independent evidence. The template-domination conclusion rests on the
-  cross-ticker top-1 collision and the amnesia gate. The V1 code path is left
-  unchanged (frozen); E1 V2 implements re-tokenized controls from scratch.
+- **神經元高度撞車（31/35 共享同一神經元）**：
+  31/35 家 Technology tickers 共享完全相同的 top-1 神經元：**(L0, N4485)**；其餘 4 家共享第二顆神經元 **(L0, N5101)**。
+- **門檻通過率：0/35**：
+  沒有任何一家公司通過預設的失憶（amnesia）門檻。
+- **機制剖析（模板主導）**：
+  V1 的 12 個變體共享完全相同的三行 Header 前綴結構（`Stock Ticker: [X]` / `Stock Name: [Y]` / `--- Evidence ---`）。對 Header 模板反應強烈的神經元，在不同變體之間的激活方差趨近於 0，導致其穩定度分數 $S_{\ell j} = (\mathbb{E} z)^2 / (\operatorname{Std} z + \varepsilon)$ 在所有公司身上均名列第一。定位算法找到的是「三行 Header 模板檢測器」，而非個別公司的實體單元。
+- **已知實作限制（已被 V2 修復）**：
+  在 V1 程式碼中，定位階段的表面形式控制組重用了原 prompt 的 `input_ids`（未重新 tokenize），導致報告中的 5/5 overlap 屬無效對照。但「31/35 撞車」與「0/35 通過失憶門檻」的事實不受此影響，模板主導的結論確立。
 
-## E2 discovery result (descriptive; E2 design is shared across E1 versions)
+---
 
-`entity-cell-e2-discovery-v5`, run under the V1 protocol (E2 is unchanged in
-E1 V2). Selected heads (L31 H0/H1/H3, L19 H4, L27 H6) are all late
-full-attention heads with instruction-dominant identity contribution
-(mean_abs_id 0.002–0.014 versus instruction 0.02–0.11) and 1.00 consistency.
-At the attention level, identity-header contribution to the Buy/Sell margin
-is small relative to instruction context; consistent with the L16
-instruction-context findings from the sector/context follow-up. Readout is
-available for L19 H4 (105/105 buy>sell) and L27 H6; the three L31 heads are
-readout-unavailable because the canonical lens covers source layers up to L30.
-The e2-patching stage wrote patch contracts only; live head-output
-intervention remains the explicit `patch_head_output` API (E3-B).
+## 3. 結案結論
 
-## Consequences
-
-- E1 V1 produced no trusted candidate entity cell; the confirmation pipeline
-  cannot be built from V1 selections (and per the V2 versioning boundary,
-  confirmation may be built only from V2 discovery selections).
-- The template-domination mechanism motivated the E1 V2 prompt-family change;
-  see [report-v2](report-v2.md).
+V1 證明固定的三行 Header 前綴無法分離模板反應與實體表徵。本版本正式結案並歸檔，不進入 Calibration 或 Test。促使建立 [proposal-v2](proposal-v2.md)（自然句 Frames）。

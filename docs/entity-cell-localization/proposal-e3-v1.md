@@ -1,120 +1,94 @@
 # Entity Cell Localization: Proposal E3 V1 (Upstream Suppression with Cross-Ticker Specificity and Downstream Component Attenuation)
 
-**Document status:** frozen E3 V1 Discovery protocol; implemented; ready for first discovery inference run. Version index: [README](README.md).
+**Document status:** frozen E3 V1 Discovery protocol; ready for discovery inference run. Version index: [README](README.md).
 
 **Model for run:** Qwen3.5-4B (`.cache/models/qwen3.5-4b`)  
 **Depends on:**
-- Prepared inputs: `artifacts/qwen3.5-4b/entity-cell-localization/runs/entity-cell-prepare-discovery-v2` (contains 105 financial prompts across 35 Technology discovery tickers, 3 prompts/ticker).
+- Prepared inputs: `artifacts/qwen3.5-4b/entity-cell-localization/runs/entity-cell-prepare-discovery-v2` (105 financial prompts across 35 Technology discovery tickers, 3 prompts/ticker).
 - Completed E1 V2 discovery: `artifacts/qwen3.5-4b/entity-cell-localization/runs/entity-cell-e1-discovery-v2` (sole trusted candidate: `FTNT`, cell `(L0, N104)`, stability score 363.4; baseline stats in `e1/baseline_stats.json`).
 - Completed E2 discovery: `artifacts/qwen3.5-4b/entity-cell-localization/runs/entity-cell-e2-discovery-v5` (selected heads: `(31, 0)`, `(31, 1)`, `(31, 3)`, `(19, 4)`, `(27, 6)`).
 
 ---
 
-## Motivation & Scientific Tension
+## 1. 核心假說與文獻邊界（Scientific Question & Literature Boundary）
 
-E1 V2 natural-sentence frame localization identified **FTNT (Fortinet)** as the sole ticker passing all four frozen gates (held-frame retention, form-robust, template-robust, and amnesia endpoint). Its candidate entity cell is **`(L0, N104)`**.
+### 研究問題
+E1 V2 中唯一通過四道門檻的實體單元 FTNT `(L0, N104)`，究竟是「真正的 FTNT 專屬實體神經元」，還是「17 家公司共享的通用實體語法/槽位神經元」？
+透過因果壓制（suppression）與跨 Ticker 對照，能否確立該神經元對 FTNT 的專屬因果必要性？壓制該單元是否會特異性地調控下游 E2 full-attention heads 的實體 DLA 貢獻，同時保留證據（evidence）貢獻？
 
-However, V2 discovery also revealed a major caveat: **17 out of 35 Technology tickers share `(L0, N104)` as their top-1 localization neuron**. The other 16 tickers failed form-robustness because their surface-form controls (`anonymous_name_frames` or `name_form_control_frames`) also activated `(L0, N104)`.
+### 文獻依據與差異對照表
 
-This raises a fundamental mechanistic question:
-> **Is `(L0, N104)` a genuine company identity cell specific to FTNT, or is it a generic "company entity-slot / proper-noun detector" that activates across many corporate names and passed on FTNT merely by boundary thresholding?**
-
-Observational localization alone cannot resolve this. **Causal suppression** can:
-1. If suppressing `(L0, N104)` moves FTNT's decision margin toward its Anonymous baseline while leaving same-collision peers (`ADI`, `MU`) unaffected, then `(L0, N104)` exhibits genuine **causal identity specificity**.
-2. If suppressing `(L0, N104)` moves `ADI` and `MU` toward Anonymous with comparable magnitude, then `(L0, N104)` is a **generic entity-slot neuron**. This would provide definitive evidence that Qwen3.5-4B does not localize individual company identities to single monosemantic early MLP neurons.
-
----
-
-## Experiment Design
-
-Phase E3 separates two causal interventions:
-- **E3-A**: upstream entity-cell suppression with within-ticker controls and cross-ticker specificity controls.
-- **E3-B**: downstream component attenuation on the E2-selected attention heads.
-
-### Population & Prompts
-
-| Role | Ticker | Localization top-1 | Selection rationale | Prompts |
-|---|---|---|---|---|
-| **Target ticker** | `FTNT` | `(0, 104)` | Sole trusted candidate from E1 V2 | 3 financial prompts |
-| **Peer control 1 (same collision)** | `ADI` | `(0, 104)` | Shared top-1, failed form-robust | 3 financial prompts |
-| **Peer control 2 (same collision)** | `MU` | `(0, 104)` | Shared top-1, failed form-robust; passed amnesia alone | 3 financial prompts |
-| **Peer control 3 (different top-1)** | `FTV` | `(0, 5101)` | Non-104 top-1 in L0 | 3 financial prompts |
-
-Total prompts evaluated: 4 tickers × 3 financial prompts = 12 prompts.
-
-### Phase E3-A: Upstream Entity-Cell Suppression
-
-For each prompt, scale the pre-`down_proj` activation of the designated neuron across the specified scope using the fixed dose grid:
-$$\alpha \in \{1.0, 0.5, 0.0, -1.0, -2.0, -3.0\}$$
-
-#### Conditions evaluated in E3-A:
-
-1. **Target Ticker Arm (`FTNT`)**:
-   - `target`: suppress `(0, 104)`.
-   - `wrong_entity`: suppress `(0, 5101)` (derived deterministically as the top candidate of the alphabetically next ticker `FTV` in the discovery split from `cells.jsonl`).
-   - `matched_random`: suppress a same-layer (L0) neuron sampled via `select_matched_random_neuron` from baseline stats.
-
-2. **Cross-Ticker Specificity Arms (`ADI`, `MU`, `FTV`)**:
-   - `target_cell_cross_ticker`: suppress the **exact same target cell `(0, 104)`** on the peer ticker's prompt.
-   - `matched_random`: suppress a same-layer (L0) neuron matched to the peer's baseline distribution.
-
-#### Scopes:
-- `all_positions` (primary): scales pre-`down_proj` across the full input sequence (Barzilay et al. protocol).
-- `header_only` (secondary): scales pre-`down_proj` only over the `identity_header` token span.
-
-### Phase E3-B: Downstream Component Attenuation
-
-For the 5 E2-selected full-attention heads (`(31, 0)`, `(31, 1)`, `(31, 3)`, `(19, 4)`, `(27, 6)`), attenuate the reconstructed source contributions at the final query position using the fixed dose grid:
-$$\beta \in \{1.0, 0.75, 0.5, 0.25, 0.0\}$$
-
-#### Modes evaluated:
-- `identity`: attenuate the identity-source vector $\Delta v_{\text{id}} = -(1 - \beta) v_{\text{id}}$.
-- `evidence`: norm-matched attenuation along the evidence-source direction.
-- `random_subset`: norm-matched attenuation along a deterministic random source-token subset direction.
-- `whole_head`: unselective attenuation of the full head output (upper-bound side-effect control).
+| 維度 | Barzilay et al. (2026) / Chughtai et al. (2024) 原始設定 | 本專案 E3 適應性修改（Adaptations） | 理論風險與邊界限制 |
+|---|---|---|---|
+| **干預對象** | Barzilay: 對通過 amnesia filter 的實體神經元進行單元壓制 | 包含目標公司（FTNT）、同撞車公司（ADI, MU）與異組公司（FTV） | 本實驗首創「跨 Ticker 同單元抑制對照」，以因果手段直接檢驗單義性 vs 通用語法槽位。 |
+| **劑量網格** | Barzilay: 抑制倍率 $\alpha \in \{1, 0, -1, -2, -3\}$ | 完全相同：$\alpha \in \{1.0, 0.5, 0.0, -1.0, -2.0, -3.0\}$ | 負倍率表示反向激活（negative ablation）。 |
+| **下游衰減** | Chughtai: 玩具任務 IOI 上的整體 head 衰減 | E3-B: 僅對 E2 選定 5 個 heads 之**重構實體 source 向量**進行衰減（$\beta \in \{1.0, 0.75, 0.5, 0.25, 0.0\}$） | 不直接抑制整顆注意力頭，而是保留證據與指令向量，僅精確衰減實體更新路徑。 |
+| **控制組基準** | 常規隨機神經元抽樣 | 同層 matched-random、確定性錯實體（wrong-entity）、以及同單元跨 Ticker 對照 | 三重對照交叉鎖定特異性。 |
 
 ---
 
-## Primary Outcomes & Estimands
+## 2. 預期 Input / Output 契約
 
-1. **Clean margin**: $m_{\text{clean}} = \text{logit}(\text{Buy}) - \text{logit}(\text{Sell})$ on the clean prompt at `DECISION_PREFIX`.
-2. **Intervened margin**: $m(\alpha)$ under suppression (or $m(\beta)$ under attenuation).
-3. **Anonymous baseline margin**: $m_{\text{anon}}$ on the prompt with name/ticker replaced by `[ANON]` / `[Anonymous Company]`.
-4. **Anonymous progress**:
+### Input 契約
+- `financial_prompts.jsonl`：包含 105 題真實財務提示詞。
+- `cells.jsonl`（來自 E1 V2）：包含 35 家公司候選單元清單。
+- `summary.json`（來自 E1 V2）：必須包含 `v2_candidate_eligibility` 欄位。**合格 Trusted Ticker 判定嚴格以 `v2_candidate_eligibility[ticker]["eligible"] == True` 為準，禁止僅依賴 V1 的 amnesia 局部欄位**。
+- `head_attribution.jsonl`（來自 E2 v5）：提供選定 heads 名單。
+
+### Output 契約
+- **輸出路徑**：`e3/suppression.jsonl`（上游）、`e3/downstream.jsonl`（下游）、`analyze/summary.json`、`manifest.json`。
+- **資料格式**：嚴格 compact JSONL。每筆記錄包含 ticker、prompt_id、phase、scope、dose、margin、clean_margin、anonymous_margin、anonymous_progress ($A_p$)、flip、mediation_deltas、controls 與 provenance。
+- **禁令**：嚴禁儲存任何未聚合之 raw activations、hidden states、residuals、KV caches 或注意力權重。
+- **數值約束**：所有純量必須為 finite float。
+
+### CLI 契約 1:1 綁定
+本協議綁定專屬子命令：
+```bash
+entity-cell run-intervention \
+  --prepared-dir <prepared_dir> \
+  --model .cache/models/qwen3.5-4b \
+  --run-id <run_id> \
+  --artifact-root artifacts \
+  --stages e3-upstream e3-downstream analyze \
+  --e1-run-root <e1_run_root> \
+  --e2-run-root <e2_run_root> \
+  --peer-tickers ADI MU FTV
+```
+
+---
+
+## 3. 邊界情況與防禦性行為（Edge Cases & Fail-Safe Policies）
+
+1. **下游 Random Subset 分組無空洞保證（Partition Integrity）**：
+   在 E3-B 的 `random_subset` 控制組中，從非實體 token 隨機抽樣 $K$ 個 token 作為假實體時，**原始的 `identity_header` token 位置必須強制併入 `other_prefix`**。系統在 forward hook 執行前必須強制斷言：
+   $$\bigcup_{g \in \text{SOURCE\_GROUPS}} \text{positions}(g) == \text{range}(\text{query}), \quad \text{且組間交集為空}$$
+   若有任何位置遺失或重疊，立即阻斷執行。
+2. **錯實體單元不等性防禦（Non-Degenerate Wrong-Entity Rule）**：
+   在為 Trusted Ticker 選取 `wrong_entity` 時，必須同時滿足兩項條件：
+   - Ticker 來源不同（依 discovery 字母序回繞）；
+   - **神經元絕對不同**：`c["layer"] == target["layer"]` 且 `c["neuron"] != target["neuron"]`。
+   若同 split 內的所有備選均等於目標神經元，標記為 `degraded_control: True`，失憶門檻自動改由 matched-random 單獨判定。嚴禁出現「目標為 (0, 104) 且錯實體也是 (0, 104)」之退化對照。
+3. **合格資格識別邊界（V2 Eligibility Binding）**：
+   解析 E1 run 時，若發現 `v2_candidate_eligibility` 欄位存在，則必須採用該字典判定 `trusted` 資格（本 run 中僅 FTNT 1 家合格）；若無該欄位則向後相容退回 V1 判定。嚴禁將未通過 form-robust 的同撞車公司混入 trusted 集合。
+
+---
+
+## 4. 評估指標與預註冊解讀標準
+
+1. **Anonymous Progress**：
    $$A_p(\alpha) = \frac{(m(\alpha) - m_{\text{clean}}) \cdot g}{g^2 + \varepsilon}, \quad g = m_{\text{anon}} - m_{\text{clean}}$$
-5. **Decision flip**: boolean flag indicating whether the Buy/Sell sign flipped relative to clean.
-6. **DLA mediation deltas**: change in identity-, evidence-, and instruction-sourced direct logit attribution for each selected head:
-   $$\Delta D_{e,h}^{\text{source}}(\alpha) = D_{e,h}^{\text{source}}(\alpha) - D_{e,h}^{\text{source}}(1.0)$$
-7. **Cross-ticker specificity contrast**:
-   $$\Delta A_p^{\text{specificity}}(\alpha) = A_p^{\text{FTNT}}(\alpha) - \frac{1}{|\mathcal{P}|} \sum_{P \in \mathcal{P}} A_p^P(\alpha)$$
-   where $\mathcal{P} = \{\text{ADI}, \text{MU}\}$ is the same-collision peer group.
+2. **跨 Ticker 特異性對照（Specificity Contrast）**：
+   $$\Delta A_p^{\text{specificity}}(\alpha) = A_p^{\text{FTNT}}(\alpha) - \frac{1}{|\mathcal{P}|} \sum_{P \in \mathcal{P}} A_p^P(\alpha), \quad \mathcal{P} = \{\text{ADI}, \text{MU}\}$$
+3. **預註冊解讀標準**：
+   - **實體專屬性成立**：$A_p^{\text{FTNT}}(-3.0) > 0$ 且高於 wrong-entity / matched-random，同時 $A_p^{\text{FTNT}}(-3.0) - A_p^{\text{ADI}}(-3.0) > 0.10$ 與 $A_p^{\text{FTNT}}(-3.0) - A_p^{\text{MU}}(-3.0) > 0.10$。
+   - **通用語法/槽位神經元成立**：$A_p^{\text{FTNT}}(-3.0) \approx A_p^{\text{ADI}}(-3.0) \approx A_p^{\text{MU}}(-3.0) > 0$。
 
 ---
 
-## Scientific Interpretation Gates (Discovery Characterization)
+## 5. 版本分立觸發條件（Version Break Triggers）
 
-Because E3 V1 is a discovery run, it reports descriptive curves and contrasts without an automated pass/fail gate. However, we pre-register the following interpretation criteria:
-
-- **Evidence for FTNT-specific identity cell**:
-  - $A_p^{\text{FTNT}}(-3.0) > 0$ and exceeds both within-ticker controls (`wrong_entity`, `matched_random`).
-  - $A_p^{\text{FTNT}}(-3.0) > A_p^{\text{ADI}}(-3.0)$ and $A_p^{\text{FTNT}}(-3.0) > A_p^{\text{MU}}(-3.0)$ by at least $0.10$.
-  - Evidence-sourced DLA is preserved ($|\Delta D_{\text{evidence}}| / |D_{\text{evidence}}| < 0.20$).
-
-- **Evidence for generic entity-slot neuron**:
-  - $A_p^{\text{FTNT}}(-3.0) \approx A_p^{\text{ADI}}(-3.0) \approx A_p^{\text{MU}}(-3.0) > 0$.
-  - Suppressing `(0, 104)` moves all collision tickers toward their respective Anonymous baselines.
-
-- **Evidence for inert / noisy neuron**:
-  - $|A_p(-3.0)| \approx 0$ across all tickers, comparable to `matched_random`.
-
----
-
-## Compact Output Artifacts
-
-Following repository safety rules:
-- No raw activations, residuals, attention weights, KV caches, or full-vocabulary logits are persisted.
-- Compact outputs:
-  - `e3/suppression.jsonl`: per-prompt compact records (ticker, prompt_id, phase, scope, dose, margin, clean_margin, anonymous_margin, flip, contributions, controls, provenance).
-  - `e3/downstream.jsonl`: downstream attenuation compact records.
-  - `analyze/summary.json`: aggregated group statistics (mean margin, anonymous progress, flip counts, mediation deltas, cross-ticker contrasts).
-  - `manifest.json`: run manifest with input/output hashes, stage counts, and completion status.
+以下任一變更必須另立新版（如 `proposal-e3-v2.md`），禁止原地修改本文件：
+1. 變更 $\alpha$ 抑制劑量網格或 $\beta$ 衰減網格；
+2. 增減跨 Ticker 對照組名單；
+3. 改變下游衰減的四種 mode（identity, evidence, random_subset, whole_head）；
+4. 更改主要評估指標。

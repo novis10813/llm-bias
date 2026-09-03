@@ -56,15 +56,11 @@ against `entity-cell-prepare-discovery-v1`).
   endpoint gate alone (AKAM, AMAT, CTSH, FFIV, FTNT, IBM, JKHY, MU, TXN),
   all but FTNT excluded by form-robust, template, or held overlap.
 
-## Next steps
+## Next steps and scientific closure
 
-1. Decide the V2 confirmation design: the single trusted candidate (FTNT,
-   L0 N104) must be handled explicitly — per-ticker confirmation with a
-   pre-registered cross-ticker specificity analysis, or a V3 design with a
-   selectivity gate. Any change to gates/selection requires a new frozen
-   version per experiment-versioning.
-2. If confirmed: calibration (12 tickers) → test (11 tickers) only after a
-   passing calibration gate.
-3. E3 downstream (selected-head intervention) can proceed from the E2 v5
-   selections (L31 H0/H1/H3, L19 H4, L27 H6); E3 upstream can target the
-   FTNT candidate if the confirmation design authorizes it.
+1. **科學定性（證偽假設 H1）**：
+   大模型在 Qwen3.5-4B 規模下，並未展現出如 7B PopQA 論文所稱的普遍單神經元實體編碼特性（35 家僅 1 家通過，且該神經元為 17 家共享）。此結果**正式證偽了「可為整個產業族群建立單一 MLP 實體神經元字典」之假設**。
+2. **研究轉向個案解剖**：
+   FTNT (L0, N104) 不再被視為群體代表，而是轉入專屬的因果干預實驗（E3）作為單點個案研究（Case Study），直接檢驗該神經元究屬 FTNT 專屬特異性單元，亦或群體共享的通用語法/實體槽位。
+3. **E1 階段結案**：
+   E1 定位階段至此正式結案歸檔。未來若需推進群體實體定位，需另立 V3（引入跨 Ticker 選擇性硬門檻或多維表徵分析）。
