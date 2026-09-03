@@ -247,24 +247,63 @@ def run_downstream_suppression_record(
     return output
 
 
-def _trusted_cells(cells: Sequence[Mapping[str, Any]], amnesia: Mapping[str, Any] | None = None) -> dict[str, Mapping[str, Any]]:
+def _trusted_cells(
+    cells: Sequence[Mapping[str, Any]],
+    amnesia: Mapping[str, Any] | None = None,
+    v2_eligibility: Mapping[str, Any] | None = None,
+) -> dict[str, Mapping[str, Any]]:
     result: dict[str, Mapping[str, Any]] = {}
+    use_v2 = bool(v2_eligibility)
     for row in cells:
         ticker = str(row["ticker"])
         held = row.get("held_variant_metrics", {})
-        summary = (amnesia or {}).get(f"{ticker}:all_positions", {})
         candidates = row.get("localization_candidates", ())
-        if (
-            isinstance(held, Mapping)
-            and int(held.get("top5_overlap", 0)) > 0
-            and isinstance(summary, Mapping)
-            and summary.get("trusted_candidate_entity_cell") is True
-            and isinstance(candidates, Sequence)
-            and candidates
-            and isinstance(candidates[0], Mapping)
-        ):
-            result[ticker] = candidates[0]
+        if not (isinstance(candidates, Sequence) and candidates and isinstance(candidates[0], Mapping)):
+            continue
+        if use_v2:
+            elig = (v2_eligibility or {}).get(ticker, {})
+            if isinstance(elig, Mapping) and elig.get("eligible") is True:
+                result[ticker] = candidates[0]
+        else:
+            summary = (amnesia or {}).get(f"{ticker}:all_positions", {})
+            if (
+                isinstance(held, Mapping)
+                and int(held.get("top5_overlap", 0)) > 0
+                and isinstance(summary, Mapping)
+                and summary.get("trusted_candidate_entity_cell") is True
+            ):
+                result[ticker] = candidates[0]
     return result
+
+
+def _select_e3_wrong_cell(
+    target_ticker: str,
+    target_cell: Mapping[str, Any],
+    trusted_cells: Mapping[str, Mapping[str, Any]],
+    all_cells: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    """Select a deterministic non-degenerate wrong-entity cell.
+
+    Guarantees the returned cell has the same layer but a DIFFERENT neuron.
+    First checks other trusted tickers; falls back to alphabetical wrap-around
+    across all discovery cells.
+    """
+    target_coord = (int(target_cell["layer"]), int(target_cell["neuron"]))
+    for name, cell in sorted(trusted_cells.items()):
+        if name != target_ticker and int(cell["layer"]) == target_coord[0]:
+            if (int(cell["layer"]), int(cell["neuron"])) != target_coord:
+                return cell
+    if all_cells:
+        all_tickers = sorted(str(row["ticker"]) for row in all_cells)
+        if target_ticker in all_tickers:
+            idx = all_tickers.index(target_ticker)
+            cells_by_ticker = {str(row["ticker"]): row.get("localization_candidates", ()) for row in all_cells}
+            for step in range(1, len(all_tickers)):
+                next_ticker = all_tickers[(idx + step) % len(all_tickers)]
+                for c in cells_by_ticker.get(next_ticker, ()):
+                    if int(c["layer"]) == target_coord[0] and (int(c["layer"]), int(c["neuron"])) != target_coord:
+                        return c
+    return None
 
 
 def run_e3(
@@ -302,9 +341,12 @@ def run_e3(
             raise ValueError("e1_run_root must contain e1/cells.jsonl")
         cells = read_jsonl(cells_path)
     amnesia_summary = {}
+    v2_eligibility = {}
     if e1_run_root and (Path(e1_run_root) / "analyze" / "summary.json").is_file():
-        amnesia_summary = json.loads((Path(e1_run_root) / "analyze" / "summary.json").read_text(encoding="utf-8")).get("amnesia", {})
-    trusted = _trusted_cells(cells, amnesia_summary)
+        summary_payload = json.loads((Path(e1_run_root) / "analyze" / "summary.json").read_text(encoding="utf-8"))
+        amnesia_summary = summary_payload.get("amnesia", {})
+        v2_eligibility = summary_payload.get("v2_candidate_eligibility", {})
+    trusted = _trusted_cells(cells, amnesia=amnesia_summary, v2_eligibility=v2_eligibility)
     if not e1_run_root:
         raise ValueError("E3 requires a completed E1 run root")
     if not trusted:
@@ -354,20 +396,7 @@ def run_e3(
                     if ticker not in trusted:
                         continue
                     candidate = trusted[ticker]
-                    wrong = next((cell for name, cell in trusted.items() if name != ticker and int(cell["layer"]) == int(candidate["layer"])), None)
-                    if wrong is None and cells:
-                        all_tickers = sorted(str(row["ticker"]) for row in cells)
-                        if ticker in all_tickers:
-                            idx = all_tickers.index(ticker)
-                            cells_by_ticker = {str(row["ticker"]): row.get("localization_candidates", ()) for row in cells}
-                            for step in range(1, len(all_tickers)):
-                                next_ticker = all_tickers[(idx + step) % len(all_tickers)]
-                                for c in cells_by_ticker.get(next_ticker, ()):
-                                    if (int(c["layer"]), int(c["neuron"])) != (int(candidate["layer"]), int(candidate["neuron"])):
-                                        wrong = c
-                                        break
-                                if wrong is not None:
-                                    break
+                    wrong = _select_e3_wrong_cell(ticker, candidate, trusted, cells)
                     random = int(candidate["neuron"]) + 1
                     stats_path = Path(e1_run_root) / "e1" / "baseline_stats.json" if e1_run_root else None
                     if stats_path is not None and stats_path.is_file():

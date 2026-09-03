@@ -176,28 +176,87 @@ def test_analyze_e3_records_groups_by_candidate_and_computes_contrasts():
 
 
 def test_wrong_candidate_fallback_when_single_trusted_ticker():
+    from llm_bias.entity_cell.e3 import _select_e3_wrong_cell
+
     trusted = {"FTNT": {"layer": 0, "neuron": 104}}
     cells = [
         {"ticker": "FTNT", "localization_candidates": [{"layer": 0, "neuron": 104}]},
         {"ticker": "FTV", "localization_candidates": [{"layer": 0, "neuron": 5101}]},
     ]
     candidate = trusted["FTNT"]
-    ticker = "FTNT"
-    wrong = next((cell for name, cell in trusted.items() if name != ticker and int(cell["layer"]) == int(candidate["layer"])), None)
-    assert wrong is None
-    if wrong is None and cells:
-        all_tickers = sorted(str(row["ticker"]) for row in cells)
-        if ticker in all_tickers:
-            idx = all_tickers.index(ticker)
-            cells_by_ticker = {str(row["ticker"]): row.get("localization_candidates", ()) for row in cells}
-            for step in range(1, len(all_tickers)):
-                next_ticker = all_tickers[(idx + step) % len(all_tickers)]
-                for c in cells_by_ticker.get(next_ticker, ()):
-                    if (int(c["layer"]), int(c["neuron"])) != (int(candidate["layer"]), int(candidate["neuron"])):
-                        wrong = c
-                        break
-                if wrong is not None:
-                    break
+    wrong = _select_e3_wrong_cell("FTNT", candidate, trusted, cells)
     assert wrong == {"layer": 0, "neuron": 5101}
+
+    # If another trusted ticker has the SAME neuron, it must NOT be selected as wrong
+    shared_trusted = {
+        "FTNT": {"layer": 0, "neuron": 104},
+        "JKHY": {"layer": 0, "neuron": 104},
+    }
+    wrong_shared = _select_e3_wrong_cell("FTNT", candidate, shared_trusted, cells)
+    assert wrong_shared == {"layer": 0, "neuron": 5101}
+    assert (wrong_shared["layer"], wrong_shared["neuron"]) != (candidate["layer"], candidate["neuron"])
+
+
+def test_trusted_cells_v2_eligibility_priority():
+    from llm_bias.entity_cell.e3 import _trusted_cells
+
+    cells = [
+        {"ticker": "FTNT", "held_variant_metrics": {"top5_overlap": 1}, "localization_candidates": [{"layer": 0, "neuron": 104}]},
+        {"ticker": "MU", "held_variant_metrics": {"top5_overlap": 1}, "localization_candidates": [{"layer": 0, "neuron": 104}]},
+    ]
+    # In V1 amnesia, both FTNT and MU passed amnesia gate
+    amnesia = {
+        "FTNT:all_positions": {"trusted_candidate_entity_cell": True},
+        "MU:all_positions": {"trusted_candidate_entity_cell": True},
+    }
+    # But in V2 4-gate eligibility, only FTNT passed form-robust
+    v2_eligibility = {
+        "FTNT": {"eligible": True},
+        "MU": {"eligible": False, "exclusion_reasons": ["not_form_robust"]},
+    }
+    # When v2_eligibility is provided, it must override V1 amnesia
+    trusted = _trusted_cells(cells, amnesia=amnesia, v2_eligibility=v2_eligibility)
+    assert list(trusted.keys()) == ["FTNT"]
+    assert trusted["FTNT"]["neuron"] == 104
+
+    # When v2_eligibility is omitted, it falls back to V1 amnesia behavior
+    fallback_trusted = _trusted_cells(cells, amnesia=amnesia)
+    assert set(fallback_trusted.keys()) == {"FTNT", "MU"}
+
+
+def test_random_subset_preserves_total_position_coverage():
+    from llm_bias.entity_cell.attention_attribution import _positions
+    from llm_bias.entity_cell.suppression import SOURCE_GROUPS, deterministic_source_subset
+
+    query = 507
+    seq = 515
+    source_groups = {
+        "evidence": {"ranges": [[38, 465]]},
+        "identity_header": {"ranges": [[21, 23], [29, 34]]},
+        "instruction_context": {"ranges": [[465, 507]]},
+        "other_prefix": {"ranges": [[0, 21], [23, 29], [34, 38]]},
+    }
+    groups = _positions(source_groups, seq, query)
+    identity_positions = set(groups["identity_header"])
+    pool = tuple(pos for pos in range(query) if pos not in identity_positions)
+    identity_count = len(groups["identity_header"])
+    subset = deterministic_source_subset(identity_count, pool, seed=0)
+
+    subset_groups = {name: {"ranges": []} for name in SOURCE_GROUPS}
+    subset_groups["identity_header"]["ranges"] = [[pos, pos + 1] for pos in sorted(subset)]
+    for name in ("evidence", "instruction_context"):
+        remaining = [pos for pos in groups[name] if pos < query and pos not in set(subset)]
+        subset_groups[name]["ranges"] = [[pos, pos + 1] for pos in sorted(remaining)]
+    assigned = set(subset)
+    for name in ("evidence", "instruction_context"):
+        assigned.update(pos for start, end in subset_groups[name]["ranges"] for pos in range(start, end))
+    other_remaining = [pos for pos in range(query) if pos not in assigned]
+    subset_groups["other_prefix"]["ranges"] = [[pos, pos + 1] for pos in sorted(other_remaining)]
+
+    # _positions must succeed without raising "source groups must cover every position before the final query"
+    res = _positions(subset_groups, seq, query)
+    total_covered = sum(len(positions) for positions in res.values())
+    assert total_covered == query + 1  # includes self query token in other_prefix
+    assert len(res["identity_header"]) == identity_count
 
 

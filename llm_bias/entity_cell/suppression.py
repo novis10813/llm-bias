@@ -327,13 +327,20 @@ class SourceAttenuationSession:
                         identity_count = len(groups["identity_header"])
                         subset = deterministic_source_subset(identity_count, pool, seed=self.seed + layer)
                         # Reconstruct a same-token-count non-identity source
-                        # subset while keeping the four groups disjoint.
+                        # subset while keeping the four groups disjoint and covering
+                        # range(query) without leaving holes from original identity tokens.
                         subset_set = set(subset)
                         subset_groups = {name: {"ranges": []} for name in SOURCE_GROUPS}
-                        subset_groups["identity_header"]["ranges"] = [[pos, pos + 1] for pos in subset]
-                        for name in ("evidence", "instruction_context", "other_prefix"):
+                        subset_groups["identity_header"]["ranges"] = [[pos, pos + 1] for pos in sorted(subset)]
+                        for name in ("evidence", "instruction_context"):
                             remaining = [pos for pos in groups[name] if pos < query and pos not in subset_set]
-                            subset_groups[name]["ranges"] = [[pos, pos + 1] for pos in remaining]
+                            subset_groups[name]["ranges"] = [[pos, pos + 1] for pos in sorted(remaining)]
+                        # other_prefix receives all remaining positions strictly before query
+                        assigned = set(subset)
+                        for name in ("evidence", "instruction_context"):
+                            assigned.update(pos for start, end in subset_groups[name]["ranges"] for pos in range(start, end))
+                        other_remaining = [pos for pos in range(query) if pos not in assigned]
+                        subset_groups["other_prefix"]["ranges"] = [[pos, pos + 1] for pos in sorted(other_remaining)]
                         subset_raw = source_resolved_head_inputs(attention, capture["hidden"], position_embeddings=capture["position_embeddings"], attention_mask=capture["attention_mask"], source_groups=subset_groups, query_position=query)
                         random_vectors = {head: subset_raw[head]["identity_header"] for head in selected}
                     vectors = {head: raw[head] for head in selected}
