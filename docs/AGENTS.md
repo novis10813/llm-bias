@@ -29,6 +29,43 @@ Shared core 的 ownership 與 compatibility map 見
 的詳細對照見 [`research-scripts.md`](research-scripts.md)；artifact lifecycle 見
 [`artifact-contract.md`](artifact-contract.md)。
 
+## 實驗目錄與版本化規格
+
+多版本或分階段的研究線，在 `docs/<experiment-topic>/` 下採用以下檔案結構：
+
+```text
+docs/<experiment-topic>/
+├── README.md               # 版本路由與矩陣（列出各版 status、primary outcome、evidence 與停止原因）
+├── proposal-v1.md          # 凍結的 V1 協議（完成後禁止原地修改實質邏輯）
+├── report-v1.md            # V1 實驗報告（記錄 run ID、完整數值、成功或失敗結論）
+├── proposal-v2.md          # 若觸發版本分立條件，建立獨立文件
+└── report-v2.md            # V2 實驗報告
+```
+
+### Proposal 必備章節與契約要素
+
+每份 `proposal-vN.md` 必須具備以下章節與明確契約，不可省略：
+
+1. **核心假說與文獻邊界（Scientific Question & Literature Boundary）**：
+   - 明確標註方法參考的文獻出處（論文名稱、演算法、定理或任務設定）。
+   - 附「文獻原始設定」與「本專案適應性修改（Adaptations）」的差異對照表，載明修改可能引入的理論風險與邊界限制。
+2. **預期 Input / Output 契約**：
+   - **Input**：精確記錄依賴的檔案路徑、預期欄位、型別、Tokenizer 條件與 upstream artifact hashes。
+   - **Output**：產出的 compact JSON/JSONL 格式與 schema，禁止保存未聚合的 raw tensors/activations/KV caches，明定數值欄位必須為 finite float。
+3. **邊界情況與防禦性行為（Edge Cases & Fail-Safe Policies）**：
+   - **退化條件**：明確定義何種數值或分佈屬 degenerate/degraded，以及退化時的 fallback 對照規則。
+   - **控制組缺失**：若僅單一實體通過篩選或缺乏配對對照，定義系統回退行為（如報錯中斷或採用預設基準）。
+   - **序列覆蓋**：序列 position 分割必須在邏輯上保證互斥且 100% 覆蓋目標區間。
+   - **數值容差**：數值判定門檻（如 additivity tolerance）必須根據模型 precision（bf16/fp32）給出明確公式或底限。
+4. **版本分立觸發條件（Version Break Triggers）**：
+   - 當以下任一要素發生變更時，**必須建立新的 `proposal-v(N+1).md` 與 `report-v(N+1).md`，嚴禁原地修改既有文件**：
+     - ① Prompt 構造方式或 prompt family 變更（例如固定 Header 轉自然句 Frames）；
+     - ② 核心評估指標（Estimand）或 direction source 變更；
+     - ③ 合格門檻（Gates / Thresholds）的判定規則或篩選條件調整；
+     - ④ 控制組（Control family）的構造邏輯改變。
+5. **強制端到端 Preflight 要求**：
+   - 在啟動任何 formal discovery/calibration/test run 前，必須先以真實模型與真實 tokenizer 執行至少 1 筆 prompt 的完整端到端 smoke run（涵蓋所有 hook、controls、downstream 模組與 analyze 摘要），確認未拋出例外且輸出符合 schema 後，方可執行 formal run。
+
 ## Instruction Index
 
 目前 `docs/` 的直接子目錄沒有 `AGENTS.md`。實驗目錄沿用本檔的 proposal/report 規則；
