@@ -3,15 +3,16 @@
 本頁是 entity-cell 研究線（`llm_bias/entity_cell/`，CLI `entity-cell`）的版本
 入口。討論、config、run ID 與結果報告必須標明版本（V1 / V2），避免把
 frozen header family 與 surface-varying frame family 的結果混用。E2（downstream
-component attribution）與 E3（suppression）設計跨版本共用，定義在
-[proposal-v1](proposal-v1.md)。
+component attribution）定義在 [proposal-v1](proposal-v1.md)；E3（suppression 與
+cross-ticker 因果驗證）定義在 [proposal-e3-v1](proposal-e3-v1.md)。
 
 ## Version matrix
 
-| Version | E1 direction source | Primary outcome | Implementation | Evidence status |
+| Version | Phase / Direction source | Primary outcome | Implementation | Evidence status |
 |---|---|---|---|---|
-| [V1](proposal-v1.md) | Frozen 三行 financial header（12 個 header-prefix variants，表面固定） | Trusted candidate entity cell（held overlap + amnesia endpoint；V1 雙關） | `entity-cell prepare/run --localization-family v1-header`（預設） | Discovery 完成：0/35 通過（template-dominated，機制已識別）；E2 discovery 完成（descriptive） |
-| [V2](proposal-v2.md) | 12 個 frozen 自然句 frames（F0–F7 localization / H0–H3 held，公司名 plain prose） | Trusted candidate entity cell（V2 四關：held overlap、form-robust、template-robust、amnesia endpoint） | `--localization-family v2-frames`（frame variants + template-only control + re-tokenized surface controls + 非退化 wrong-entity 規則） | Discovery 完成：1/35 通過（FTNT, L0 N104；shared-top-1 caveat） |
+| [V1](proposal-v1.md) | E1: Frozen 三行 header（12 個 prefix variants） | Trusted candidate entity cell（held overlap + amnesia endpoint；V1 雙關） | `entity-cell prepare/run --localization-family v1-header`（預設） | Discovery 完成：0/35 通過（template-dominated，機制已識別）；E2 discovery 完成（descriptive） |
+| [V2](proposal-v2.md) | E1: 12 個 frozen 自然句 frames（公司名 plain prose） | Trusted candidate entity cell（V2 四關：held overlap、form-robust、template-robust、amnesia endpoint） | `--localization-family v2-frames`（frame variants + template control + re-tokenized controls + 非退化 wrong-entity） | Discovery 完成：1/35 通過（FTNT, L0 N104；shared-top-1 caveat） |
+| [E3 V1](proposal-e3-v1.md) | E3: 上游單元 suppression + 跨 ticker 特異性對照 + 下游注意力和衰減 | 實體特異性對照（FTNT vs 同撞車組 ADI/MU vs 異組 FTV）與 DLA mediation deltas | `entity-cell run --stage e3-upstream --stage e3-downstream --e3-peer-tickers ADI MU FTV` | Protocol 凍結；準備執行 Discovery run |
 
 Calibration / held-out test 皆未凍結、未執行；confirmation freeze 只能從
 V2 discovery selections 建立（V2 versioning boundary）。

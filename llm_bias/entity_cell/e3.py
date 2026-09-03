@@ -137,6 +137,8 @@ def run_upstream_suppression_record(
     scopes: Sequence[str] = ("all_positions", "header_only"),
     device: Any = None,
     score_fn: Callable[[str], float] | None = None,
+    target_label: str = "target",
+    source_ticker: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run E3-A target and cell controls without retaining runtime tensors."""
     alphas = validate_dose_grid(alpha_grid, name="alpha_grid")
@@ -148,7 +150,7 @@ def run_upstream_suppression_record(
     groups = prompt_row.get("source_groups", {}).get("identity_header", {})
     positions = tuple(position for start, end in groups.get("ranges", ()) for position in range(int(start), int(end)))
     clean_contributions = _capture_dla(model, tokenizer, prompt_row, selected_heads=selected_heads, device=device) if selected_heads else {}
-    controls = [("target", candidate)]
+    controls = [(target_label, candidate)]
     if wrong_candidate is not None:
         controls.append(("wrong_entity", wrong_candidate))
     if random_neuron is not None:
@@ -168,11 +170,20 @@ def run_upstream_suppression_record(
                     head: {group: float(value) - float(clean_contributions.get(head, {}).get(group, 0.0)) for group, value in values.items()}
                     for head, values in contributions.items()
                 }
+                control_meta: dict[str, Any] = {
+                    "candidate": label,
+                    "eligible": eligible,
+                    "exclusion_reason": exclusion,
+                    "cell": {"layer": layer, "neuron": neuron},
+                    "mediation_deltas": mediation_deltas,
+                }
+                if source_ticker is not None and label == target_label:
+                    control_meta["source_ticker"] = source_ticker
                 output.append(e3_compact_record(
                     ticker=ticker, prompt_id=str(prompt_row["prompt_id"]), phase="e3-a", scope=scope,
                     dose=alpha, margin=margin, clean_margin=clean, anonymous_margin=anonymous,
                     flip=_flip(margin, clean), contributions=contributions,
-                    controls={"candidate": label, "eligible": eligible, "exclusion_reason": exclusion, "cell": {"layer": layer, "neuron": neuron}, "mediation_deltas": mediation_deltas},
+                    controls=control_meta,
                     provenance={"anonymous_prompt_id": f"{prompt_row['prompt_id']}:anonymous_identity", "selected_heads": [list(item) for item in selected_heads]},
                 ))
     return output
@@ -271,6 +282,7 @@ def run_e3(
     beta_grid: Sequence[float] = E3_BETA_GRID,
     grouping: str = "single",
     device: Any = None,
+    peer_tickers: Sequence[str] | None = None,
 ) -> Path:
     enabled = tuple(dict.fromkeys(stages))
     if set(enabled) - set(E3_STAGES):
@@ -341,6 +353,19 @@ def run_e3(
                         continue
                     candidate = trusted[ticker]
                     wrong = next((cell for name, cell in trusted.items() if name != ticker and int(cell["layer"]) == int(candidate["layer"])), None)
+                    if wrong is None and cells:
+                        all_tickers = sorted(str(row["ticker"]) for row in cells)
+                        if ticker in all_tickers:
+                            idx = all_tickers.index(ticker)
+                            cells_by_ticker = {str(row["ticker"]): row.get("localization_candidates", ()) for row in cells}
+                            for step in range(1, len(all_tickers)):
+                                next_ticker = all_tickers[(idx + step) % len(all_tickers)]
+                                for c in cells_by_ticker.get(next_ticker, ()):
+                                    if (int(c["layer"]), int(c["neuron"])) != (int(candidate["layer"]), int(candidate["neuron"])):
+                                        wrong = c
+                                        break
+                                if wrong is not None:
+                                    break
                     random = int(candidate["neuron"]) + 1
                     stats_path = Path(e1_run_root) / "e1" / "baseline_stats.json" if e1_run_root else None
                     if stats_path is not None and stats_path.is_file():
@@ -349,6 +374,33 @@ def run_e3(
                         random = select_matched_random_neuron(stats, layer=int(candidate["layer"]), target_neuron=int(candidate["neuron"]))
                     for row in prompt_rows:
                         rows.extend(run_upstream_suppression_record(model, tokenizer, prompt_row=row, candidate=candidate, wrong_candidate=wrong, random_neuron=random, selected_heads=heads, alpha_grid=alpha_grid, device=target))
+                if peer_tickers:
+                    primary_trusted_ticker = next(iter(trusted))
+                    target_candidate = trusted[primary_trusted_ticker]
+                    stats_path = Path(e1_run_root) / "e1" / "baseline_stats.json" if e1_run_root else None
+                    stats = None
+                    if stats_path is not None and stats_path.is_file():
+                        saved = json.loads(stats_path.read_text(encoding="utf-8"))
+                        stats = {int(layer): OnlineVectorStats.from_compact(value) for layer, value in saved["layers"].items()}
+                    for peer in peer_tickers:
+                        peer_str = str(peer)
+                        if peer_str not in by_ticker or peer_str in trusted:
+                            continue
+                        peer_prompts = by_ticker[peer_str]
+                        random_peer = select_matched_random_neuron(stats, layer=int(target_candidate["layer"]), target_neuron=int(target_candidate["neuron"])) if stats is not None else int(target_candidate["neuron"]) + 1
+                        for row in peer_prompts:
+                            rows.extend(run_upstream_suppression_record(
+                                model, tokenizer,
+                                prompt_row=row,
+                                candidate=target_candidate,
+                                wrong_candidate=None,
+                                random_neuron=random_peer,
+                                selected_heads=heads,
+                                alpha_grid=alpha_grid,
+                                device=target,
+                                target_label="target_cell_cross_ticker",
+                                source_ticker=primary_trusted_ticker,
+                            ))
                 path = out / "suppression.jsonl"
                 count = write_jsonl(path, rows, overwrite=True)
                 run.manifest.register_artifact(path, artifact_type="entity_cell_e3_suppression", stage="e3-upstream", role="output", record_count=count)
@@ -395,15 +447,64 @@ def defaultdict_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[Mappin
 def analyze_e3_records(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for row in rows:
-        key = f"{row.get('ticker')}:{row.get('phase')}:{row.get('scope')}"
+        candidate_label = row.get("controls", {}).get("candidate") or row.get("controls", {}).get("mode") or "target"
+        key = f"{row.get('ticker')}:{row.get('phase')}:{row.get('scope')}:{candidate_label}"
         groups.setdefault(key, []).append(row)
     summaries = []
     for key, values in sorted(groups.items()):
         preservation = [row.get("controls", {}).get("preservation", {}) for row in values]
         evidence_deltas = [float(item["evidence"]["delta"]) for item in preservation if isinstance(item, Mapping) and isinstance(item.get("evidence"), Mapping)]
         identity_deltas = [float(item["identity_header"]["delta"]) for item in preservation if isinstance(item, Mapping) and isinstance(item.get("identity_header"), Mapping)]
-        summaries.append({"group": key, "record_count": len(values), "mean_margin": sum(float(row["margin"]) for row in values) / len(values), "mean_anonymous_progress": sum(float(row["anonymous_progress"]) for row in values) / len(values), "flip_count": sum(bool(row["flip"]) for row in values), "eligible_count": sum(bool(row.get("controls", {}).get("eligible", True)) for row in values), "mean_evidence_dla_delta": sum(evidence_deltas) / len(evidence_deltas) if evidence_deltas else None, "mean_identity_dla_delta": sum(identity_deltas) / len(identity_deltas) if identity_deltas else None})
-    return {"schema_version": 1, "artifact_type": "entity_cell_e3_analysis", "groups": summaries, "discovery_only": True, "raw_runtime_payloads": False}
+        doses = sorted(set(float(r["dose"]) for r in values))
+        by_dose: dict[str, dict[str, Any]] = {}
+        for d in doses:
+            dose_rows = [r for r in values if float(r["dose"]) == d]
+            by_dose[str(d)] = {
+                "record_count": len(dose_rows),
+                "mean_margin": sum(float(r["margin"]) for r in dose_rows) / len(dose_rows),
+                "mean_anonymous_progress": sum(float(r["anonymous_progress"]) for r in dose_rows) / len(dose_rows),
+                "flip_count": sum(bool(r["flip"]) for r in dose_rows),
+            }
+        min_dose_str = str(min(doses)) if doses else None
+        endpoint_progress = by_dose.get(min_dose_str, {}).get("mean_anonymous_progress") if min_dose_str else None
+        summaries.append({
+            "group": key,
+            "record_count": len(values),
+            "mean_margin": sum(float(row["margin"]) for row in values) / len(values),
+            "mean_anonymous_progress": sum(float(row["anonymous_progress"]) for row in values) / len(values),
+            "endpoint_anonymous_progress": endpoint_progress,
+            "flip_count": sum(bool(row["flip"]) for row in values),
+            "eligible_count": sum(bool(row.get("controls", {}).get("eligible", True)) for row in values),
+            "by_dose": by_dose,
+            "mean_evidence_dla_delta": sum(evidence_deltas) / len(evidence_deltas) if evidence_deltas else None,
+            "mean_identity_dla_delta": sum(identity_deltas) / len(identity_deltas) if identity_deltas else None,
+        })
+    contrasts: dict[str, Any] = {}
+    by_key = {s["group"]: s for s in summaries}
+    for key, item in by_key.items():
+        if ":e3-a:all_positions:target" in key:
+            target_ticker = key.split(":")[0]
+            target_endpoint = item.get("endpoint_anonymous_progress")
+            for peer_key, peer_item in by_key.items():
+                if ":e3-a:all_positions:target_cell_cross_ticker" in peer_key:
+                    peer_ticker = peer_key.split(":")[0]
+                    peer_endpoint = peer_item.get("endpoint_anonymous_progress")
+                    if target_endpoint is not None and peer_endpoint is not None:
+                        contrasts[f"{target_ticker}_vs_{peer_ticker}_all_positions"] = {
+                            "target_ticker": target_ticker,
+                            "peer_ticker": peer_ticker,
+                            "target_endpoint_progress": target_endpoint,
+                            "peer_endpoint_progress": peer_endpoint,
+                            "specificity_delta": target_endpoint - peer_endpoint,
+                        }
+    return {
+        "schema_version": 1,
+        "artifact_type": "entity_cell_e3_analysis",
+        "groups": summaries,
+        "cross_ticker_contrasts": contrasts,
+        "discovery_only": True,
+        "raw_runtime_payloads": False,
+    }
 
 
 def analyze_e3(run_root: str | Path) -> Path:

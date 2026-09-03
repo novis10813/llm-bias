@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--e3-e2-run-root", type=Path, default=None, help="completed E2 discovery run used for selected heads")
     run.add_argument("--e3-head", action="append", nargs=2, type=int, metavar=("LAYER", "HEAD"), default=None, help="selected E2 head; repeat for a group")
     run.add_argument("--e3-grouping", choices=("single", "group"), default="single")
+    run.add_argument("--e3-peer-tickers", nargs="+", default=None, help="peer tickers for E3-A cross-ticker specificity controls (e.g. ADI MU FTV)")
     run.add_argument("--max-tickers", type=int, default=None, help="one-ticker smoke cap when set to 1")
     run.add_argument("--lens-path", type=Path, default=None, help="explicit validated canonical lens path")
     run.add_argument("--expected-lens-sha256", default=None)
@@ -92,7 +93,19 @@ def main() -> None:
         stages = tuple(args.stages) if args.stages else ("e1-baseline", "e1-localization", "e1-amnesia", "analyze")
         if any(stage.startswith("e3-") for stage in stages):
             from llm_bias.entity_cell.e3 import run_e3
-            root = run_e3(prepared_dir=args.prepared_dir, model_name=args.model, run_id=args.run_id, artifact_root=args.artifact_root, stages=stages, e1_run_root=args.e3_e1_run_root, e2_run_root=args.e3_e2_run_root, selected_heads=args.e3_head, max_tickers=args.max_tickers, grouping=args.e3_grouping)
+            root = run_e3(
+                prepared_dir=args.prepared_dir,
+                model_name=args.model,
+                run_id=args.run_id,
+                artifact_root=args.artifact_root,
+                stages=stages,
+                e1_run_root=args.e3_e1_run_root,
+                e2_run_root=args.e3_e2_run_root,
+                selected_heads=args.e3_head,
+                max_tickers=args.max_tickers,
+                grouping=args.e3_grouping,
+                peer_tickers=args.e3_peer_tickers,
+            )
         elif any(stage.startswith("e2-") for stage in stages):
             from llm_bias.entity_cell.e2 import run_e2
             root = run_e2(prepared_dir=args.prepared_dir, model_name=args.model, run_id=args.run_id, artifact_root=args.artifact_root, stages=stages, layers=args.e2_layers or (3, 7, 11, 15, 19, 23, 27, 31), max_tickers=args.max_tickers, lens_path=args.lens_path, expected_lens_sha256=args.expected_lens_sha256, expected_model_revision=args.expected_model_revision, expected_tokenizer_identity=args.expected_tokenizer_identity)
