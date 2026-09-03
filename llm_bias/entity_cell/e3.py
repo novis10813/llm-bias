@@ -326,8 +326,10 @@ def run_e3(
     if max_tickers is not None:
         if max_tickers < 1:
             raise ValueError("max_tickers must be positive")
-        tickers = sorted(trusted)[:max_tickers]
-        financial = [row for row in financial if str(row["ticker"]) in tickers]
+        allowed = set(sorted(trusted)[:max_tickers])
+        if peer_tickers:
+            allowed.update(str(p) for p in peer_tickers)
+        financial = [row for row in financial if str(row["ticker"]) in allowed]
     run = ArtifactRun.create(model_name, DATASET, run_id, artifact_root=artifact_root)
     out = run.run_directory / "e3"
     try:
