@@ -23,9 +23,8 @@ commands 或取代各 workflow 文件。
 - `span_sensitivity/`：擁有單一產業 identity-header conditions、固定 Buy/Sell
   continuation margin 與 ticker-clustered paired analysis；workflow 見
   [`../docs/span-sensitivity/proposal.md`](../docs/span-sensitivity/proposal.md)。
-- `entity_cell/`：擁有 entity-cell localization 的 tokenizer-only input preparation，
-  包含 split isolation、header-prefix variants、E1 baseline contract 與 E2 source spans；
-  model execution 與 downstream phases 尚未實作。
+- `entity_cell/`：擁有 entity-cell localization、attention attribution 與
+  suppression intervention 工作流；CLI 入口為 `entity-cell`。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
   `edgar_preparation/`：已隨程式移至 `archive/llm_bias/`（frozen），操作文件在
   `docs/archive/`。
@@ -34,7 +33,20 @@ Shared infrastructure 不可 import 任一 experiment package。`baseline_trial`
 legacy compatibility 直接重用部分 `prompt_analysis` modules；不要擴大這個例外，新增
 跨實驗共用能力應移入 `core/`。其餘 experiment packages 不可互相 import。
 CLI 入口是 `jacobian-lens`、`prompt-analysis`、`baseline-trial`、
-`jspace-intervention` 與 `span-sensitivity`；experiment CLI 不可自行 fitting lens。
+`jspace-intervention`、`span-sensitivity` 與 `entity-cell`；experiment CLI
+不可自行 fitting lens。
+
+## CLI 設計原則
+
+- **頂層命令維持一個 Package 一個**：保持 `pyproject.toml` 中的 `[project.scripts]`
+  精簡（如 `entity-cell`、`jspace-intervention`），不為單一子實驗註冊全局命令，避免環境污染。
+- **子命令依研究階段（Phase / Milestone）解耦分立**：每個獨立實驗階段必須有專屬的
+  Subcommand（如 `run-localization`、`run-attribution`、`run-intervention`，或如
+  `jspace-intervention` 的 `run-token-screen`、`run-outcome-flip`）。
+- **封閉獨立的參數空間**：各子命令只宣告自己需要的參數，必要參數在 `argparse` 層級設為
+  `required=True`，不可在單一命令中混裝跨階段參數。
+- **嚴禁巨石 Dispatcher 反模式**：嚴禁把定位、歸因、干預等多個不同階段硬塞在同一個通用
+  `run` 裡，嚴禁在程式碼內部使用 `if any(stage.startswith(...)):` 等猜測使用者意圖的脆弱分發邏輯。
 
 ## Instruction Index
 

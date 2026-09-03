@@ -10,12 +10,12 @@
   與對應 report；多版本或分階段演進時，統一使用版本化檔名（`proposal-v1.md`、`proposal-v2.md`
   等），目錄下不保留無版本號的 `proposal.md`，避免語意混淆。
 - 不同核心假說、因果機制或不同研究階段（例如定位 vs 歸因 vs 干預）應獨立立案或拆分文件，
-  嚴禁將多階段研究路線混裝在單一巨石 proposal 中。
+  嚴禁將多階段研究路線混裝在單一 proposal 中。
 - 各版本 workflow 的命令、參數、artifact layout 與 interpretation limits 只在該版本
   對應的 `proposal-vN.md` 維護，版本間不可相互覆蓋或回填假設；README 與 AGENTS 只提供
   摘要和連結。
 - 實驗結果要附 run ID 或 artifact path，並標明 discovery、calibration、held-out、
-  diagnostic 或 formal status。不要用新結果覆寫舊 run 的 historical record；一旦
+  diagnostic 或 formal status。不要用新結果覆寫舊 run 的歷史紀錄；一旦
   formal run 執行完畢，對應的 `proposal-vN.md` 實質邏輯即刻凍結，禁止事後原地修改。
 - Direction source、primary outcome、controls 或 gate 改變時，依
   [`documentation-system.md#experiment-versioning`](documentation-system.md#experiment-versioning)
@@ -56,6 +56,7 @@ docs/<experiment-topic>/
 2. **預期 Input / Output 契約**：
    - **Input**：精確記錄依賴的檔案路徑、預期欄位、型別、Tokenizer 條件與 upstream artifact hashes。
    - **Output**：產出的 compact JSON/JSONL 格式與 schema，禁止保存未聚合的 raw tensors/activations/KV caches，明定數值欄位必須為 finite float。
+   - **CLI 契約 1:1 綁定**：Proposal 內記載的可執行命令，必須精準對應所屬實驗階段的專屬 Subcommand，嚴禁在文檔中寫入帶有跨階段條件分支、或需讀者自行挑選互斥參數的模糊指令。
 3. **邊界情況與防禦性行為（Edge Cases & Fail-Safe Policies）**：
    - **退化條件**：明確定義何種數值或分佈屬 degenerate/degraded，以及退化時的 fallback 對照規則。
    - **控制組缺失**：若僅單一實體通過篩選或缺乏配對對照，定義系統回退行為（如報錯中斷或採用預設基準）。
