@@ -87,9 +87,25 @@ def test_serialization_rejects_nonfinite_and_keeps_compact_payload():
 def test_e3_cli_preserves_previous_commands_and_exposes_discovery():
     parser = build_parser()
     assert parser.parse_args(["prepare", "--input", "i", "--split-manifest", "s", "--baseline", "b", "--baseline-identity", "v", "--model", "m", "--run-id", "r"]).command == "prepare"
+    # Legacy run compatibility
     args = parser.parse_args(["run", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--stage", "e3-downstream", "--e3-head", "11", "2", "--e3-grouping", "group", "--e3-peer-tickers", "ADI", "MU", "FTV"])
     assert args.stages == ["e3-downstream"] and args.e3_head == [[11, 2]] and args.e3_grouping == "group"
     assert args.e3_peer_tickers == ["ADI", "MU", "FTV"]
+
+    # New dedicated subcommands
+    loc_args = parser.parse_args(["run-localization", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--localization-family", "v2-frames"])
+    assert loc_args.command == "run-localization" and loc_args.localization_family == "v2-frames"
+
+    attr_args = parser.parse_args(["run-attribution", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--e2-layers", "11", "15"])
+    assert attr_args.command == "run-attribution" and attr_args.e2_layers == [11, 15]
+
+    interv_args = parser.parse_args(["run-intervention", "--prepared-dir", "p", "--model", "m", "--run-id", "r", "--e1-run-root", "e1", "--peer-tickers", "ADI", "MU", "FTV", "--selected-head", "19", "4"])
+    assert interv_args.command == "run-intervention" and interv_args.peer_tickers == ["ADI", "MU", "FTV"] and interv_args.selected_head == [[19, 4]]
+
+    # run-intervention requires --e1-run-root
+    with pytest.raises(SystemExit):
+        parser.parse_args(["run-intervention", "--prepared-dir", "p", "--model", "m", "--run-id", "r"])
+
     assert parser.parse_args(["analyze", "--run-root", "r", "--experiment", "e3"]).experiment == "e3"
 
 
