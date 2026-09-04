@@ -86,6 +86,7 @@ Character-to-token mapping uses existing `token_span()` from
 ### Phase 0: Baseline Confirmation
 
 Verify that each valence pair produces naturally opposed decisions:
+
 - Source (positive) → $M > 0$ (Buy)
 - Target (negative) → $M < 0$ (Sell)
 
@@ -102,13 +103,13 @@ establishes the upper bound of patching effect at each layer granularity.
 
 **Sweep design:**
 
-| Condition | Layers patched |
-|-----------|---------------|
-| Single-layer sweep | Each layer individually: L0, L1, ..., L30 |
-| Cumulative band | L14–L16, L14–L18, L14–L20, L14–L22, L14–L24, L14–L26 |
-| Full band | L14–L26 (known margin-sensitive band) |
-| Late band | L24–L30 |
-| Early band | L0–L13 |
+| Condition          | Layers patched                                       |
+| ------------------ | ---------------------------------------------------- |
+| Single-layer sweep | Each layer individually: L0, L1, ..., L30            |
+| Cumulative band    | L14–L16, L14–L18, L14–L20, L14–L22, L14–L24, L14–L26 |
+| Full band          | L14–L26 (known margin-sensitive band)                |
+| Late band          | L24–L30                                              |
+| Early band         | L0–L13                                               |
 
 For each condition: patch all positions in those layers → measure $\Delta M$.
 
@@ -124,27 +125,27 @@ specific semantic spans.
 **Prompt spans** (character boundaries from `render_valence_prompt_with_spans`
 mapped to token positions):
 
-| Span ID | Content | Same across conditions? |
-|---------|---------|----------------------|
-| `header` | Ticker, name, header text | Yes (identical tokens) |
-| `evidence_qual` | Evidence item 1 (qualitative) | No |
-| `evidence_quant` | Evidence item 2 (quantitative) | No |
+| Span ID               | Content                                                                                         | Same across conditions?                |
+| --------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `header`              | Ticker, name, header text                                                                       | Yes (identical tokens)                 |
+| `evidence_qual`       | Evidence item 1 (qualitative)                                                                   | No                                     |
+| `evidence_quant`      | Evidence item 2 (quantitative)                                                                  | No                                     |
 | `instruction_context` | Post-evidence instruction and assistant-prefix positions, excluding the final decision position | Same text; evidence-conditioned states |
-| `instruction` | `instruction_context` plus final decision position | Same text; evidence-conditioned states |
-| `all_evidence` | `evidence_qual` ∪ `evidence_quant` | No |
-| `final_position` | Last token only | N/A (positive control) |
+| `instruction`         | `instruction_context` plus final decision position                                              | Same text; evidence-conditioned states |
+| `all_evidence`        | `evidence_qual` ∪ `evidence_quant`                                                              | No                                     |
+| `final_position`      | Last token only                                                                                 | N/A (positive control)                 |
 
 **Patching combinations** (within effective layer band):
 
-| Condition | Positions patched | Expected role |
-|-----------|------------------|---------------|
-| `all_evidence` | All evidence token positions | Primary test |
-| `evidence_qual` | Qualitative evidence only | Component test |
-| `evidence_quant` | Quantitative evidence only | Component test |
-| `header` | Header positions only | Negative control |
+| Condition             | Positions patched                                             | Expected role            |
+| --------------------- | ------------------------------------------------------------- | ------------------------ |
+| `all_evidence`        | All evidence token positions                                  | Primary test             |
+| `evidence_qual`       | Qualitative evidence only                                     | Component test           |
+| `evidence_quant`      | Quantitative evidence only                                    | Component test           |
+| `header`              | Header positions only                                         | Negative control         |
 | `instruction_context` | Post-evidence positions excluding the final decision position | Primary aggregation test |
-| `instruction` | `instruction_context` plus final position | Aggregation upper bound |
-| `final_position` | Final token only | V2 comparison control |
+| `instruction`         | `instruction_context` plus final position                     | Aggregation upper bound  |
+| `final_position`      | Final token only                                              | V2 comparison control    |
 
 **Key contrasts:**
 
@@ -159,6 +160,7 @@ mapped to token positions):
 Cross Phase 1 (effective layers) with Phase 2 (effective spans):
 
 For each effective single layer $l$ and each effective span $s$:
+
 - Patch only $(l, s)$ → measure $\Delta M$
 
 Output: A (layer × span) causal matrix.
@@ -175,22 +177,22 @@ Output: A (layer × span) causal matrix.
 
 ### Metrics Per Condition
 
-| Metric | Definition |
-|--------|-----------|
-| `delta_margin` | $M_\text{patched} - M_\text{target\_clean}$ |
-| `flip` | $\text{sign}(M_\text{patched}) \ne \text{sign}(M_\text{target\_clean})$ |
-| `flip_rate` | Fraction of pairs where flip = true |
-| `mean_delta_margin` | Mean $\Delta M$ across tickers |
-| `bidirectional_effect` | $\frac{1}{2}[\Delta M_{+→-} - \Delta M_{-→+}]$ |
+| Metric                 | Definition                                                              |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `delta_margin`         | $M_\text{patched} - M_\text{target\_clean}$                             |
+| `flip`                 | $\text{sign}(M_\text{patched}) \ne \text{sign}(M_\text{target\_clean})$ |
+| `flip_rate`            | Fraction of pairs where flip = true                                     |
+| `mean_delta_margin`    | Mean $\Delta M$ across tickers                                          |
+| `bidirectional_effect` | $\frac{1}{2}[\Delta M_{+→-} - \Delta M_{-→+}]$                          |
 
 ### Controls and Comparisons
 
 - **Negative control:** `header`-only patching (identical tokens → expected
   $\Delta M \approx 0$).
 - **Positive control:** `final_position`-only patching (known V2 comparison).
-Draft 1 implements the header and final-position controls. A random unrelated
-source prompt is reserved for the confirmatory version because it changes the
-control family and requires a frozen ticker-matching rule.
+  Draft 1 implements the header and final-position controls. A random unrelated
+  source prompt is reserved for the confirmatory version because it changes the
+  control family and requires a frozen ticker-matching rule.
 
 ### Discovery and Confirmatory Analysis
 
@@ -358,13 +360,13 @@ This experiment does **not** have a single pass/fail gate. Instead, it
 produces a descriptive causal map. The key questions and their interpretive
 outcomes:
 
-| Observation | Interpretation |
-|-------------|---------------|
+| Observation                                                                                               | Interpretation                                                                                                 |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Evidence-span patching at mid-layers flips decisions; final-position patching at the same layers does not | Evidence positions carry decision-relevant info that propagates forward — **evidence-position causal pathway** |
-| Both evidence-span and final-position patching flip decisions at the same layers | Decision info is available at multiple positions by mid-layers — consistent with V2 position non-specificity |
-| Only late-layer (L24+) patching is effective regardless of span | Decision is formed very late; evidence influence is indirect |
-| No single-layer patching flips decisions but multi-layer bands do | Decision info accumulates gradually across layers |
-| `evidence_qual` is much stronger than `evidence_quant` (or vice versa) | One evidence modality dominates the decision pathway |
+| Both evidence-span and final-position patching flip decisions at the same layers                          | Decision info is available at multiple positions by mid-layers — consistent with V2 position non-specificity   |
+| Only late-layer (L24+) patching is effective regardless of span                                           | Decision is formed very late; evidence influence is indirect                                                   |
+| No single-layer patching flips decisions but multi-layer bands do                                         | Decision info accumulates gradually across layers                                                              |
+| `evidence_qual` is much stronger than `evidence_quant` (or vice versa)                                    | One evidence modality dominates the decision pathway                                                           |
 
 ## Relation to Prior Experiments
 
@@ -384,11 +386,11 @@ outcomes:
 
 Discovery fixes a 3 × 3 layer/span matrix:
 
-| Layer | Discovery-selected role |
-|---:|---|
-| L6 | Early evidence-state site |
-| L16 | Middle post-evidence instruction-context site |
-| L30 | Late final-position site |
+| Layer | Discovery-selected role                       |
+| ----: | --------------------------------------------- |
+|    L6 | Early evidence-state site                     |
+|   L16 | Middle post-evidence instruction-context site |
+|   L30 | Late final-position site                      |
 
 Each layer is crossed with `all_evidence`, `instruction_context`, and
 `final_position`, in both patching directions. Calibration and test use newly
