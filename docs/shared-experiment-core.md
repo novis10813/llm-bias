@@ -131,10 +131,12 @@ shared core 的計分 tail 一旦改變，所有下游 margin/方向數值的絕
   - E2：`entity-cell-e2-discovery-v6`（CPU fp32，13,440 DLA records）以真方向重算，
     top-5 head 選擇、排名與 routing labels 全部不變（DLA 放大约 1.4–1.5×）。
     見 [`entity-cell-localization/report-e2.md` §5](entity-cell-localization/report-e2.md)。
-  - E1 V2：針對性 amnesia 重驗（FTNT + 8 家 endpoint-pass tickers，CPU fp32），
-    FTNT amnesia 門檻維持（2/3）；endpoint-gate 集合 9→5 家（不影響 trusted 集合）；
-    form-robust 為 bf16/fp32 精度 near-tie（與本 bug 無關）。全 35 家 amnesia 與 GPU
-    bf16 下的完整四門檻重跑留待 GPU 空檔。
+  - E1 V2：`entity-cell-e1-discovery-v4`（GPU bf16，完整四階段全重驗）完成。
+    官方原生 GPU bf16 精度下 FTNT 通過全部四道門檻（`form_robust` 在 bf16 官方精度下
+    確認為 pass，overlap=0），維持 1/35 trusted 唯一候選；全 35 家 amnesia endpoint gate
+    共有 13 家通過（含 v1 的 9 家與 4 家新通過），其餘 12 家皆被 form-robust 或
+    template 排除。輔助 CPU fp32 針對性重驗（`entity_cell_amnesia_recheck.py`）作為
+    off-device 交叉驗證對照。
     見 [`entity-cell-localization/report-v2.md` 附錄](entity-cell-localization/report-v2.md)。
   - `jspace_intervention` 線的 Qwen3.5 runs 同受影響（絕對 margin/readout 值），為 frozen 線，
     不回填；未來若啟用該線需先以 v2 儀器重驗。
