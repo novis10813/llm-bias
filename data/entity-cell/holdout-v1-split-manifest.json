@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "input_sha256": "5a155611fc957ad1ad923887293141f17cdf81e4ec1de705f622d574f04eccff",
+  "assignments": {
+    "LLY": "discovery",
+    "PFE": "discovery",
+    "UNH": "discovery",
+    "BAC": "discovery",
+    "WFC": "discovery",
+    "CVX": "discovery",
+    "COP": "discovery",
+    "BA": "discovery",
+    "CAT": "discovery",
+    "PG": "discovery",
+    "NKE": "discovery"
+  }
+}
