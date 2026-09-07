@@ -36,6 +36,10 @@ sensitivity 使用 `prepare`、`forward`、`analyze`。
 - `forward.py` 提供 `encode_batch`、`forward_batch`、`capture_final_residuals` 與
   intervention workflow 使用的 `record_residuals`。
 - `logits.py` 統一處理 Hugging Face output 形狀與 final-position logits。
+- `mlp.py` 提供 dense MLP down projection 前的單位置記錄、縮放與替換；只接受
+  batch-one 與絕對 token 位置，離開 context 後移除 hooks，不保存 raw values。
+- `continuations.py` 對已驗證的 prompt/suffix IDs 作完整續接 FP32 計分；單 token
+  候選共用一次 forward，多 token 使用 teacher forcing，不改動 prompt 干預位置。
 - `generation.py` 定義 `GenerationConfig`、`generate_tokens` 與 `finish_reason`。
 - `interventions.py` 提供 exception-safe forward-hook context manager。Hooks 只在 forward
   期間修改 residual；離開 context 後必須移除。
@@ -60,6 +64,9 @@ Research-specific estimand、success gate 或 vocabulary 定義留在 owning exp
 `ArtifactRun`、`StageContext` 與 `run_context` 管理 stage 狀態。`io.py` 的 atomic writers
 預設拒絕 overwrite，並拒絕 tensor、array、non-finite value 與 raw activation/gradient
 payload。`load_parent_jsonl` 驗證 supplied hash、previous-stage hash 與 sidecar hash。
+
+`artifacts/provenance.py` 提供 local checkpoint 檔案、tokenizer 與 Python source
+指紋；實驗 package 擁有需要核對哪些來源的研究契約。
 
 `artifacts/manifest.py` 與 `artifacts/paths.py` 是 package namespace facades；canonical
 實作位於 `core/artifact_manifest.py` 與 `core/artifact_paths.py`。Run root 固定為：
