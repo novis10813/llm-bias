@@ -26,8 +26,8 @@ from .prompts import VERSION, PREFIX, build_trials, encode_trials
 REQUIRED = {"prepare/protocol.json", "prepare/trials.json", "analyze/result.json"}
 
 
-def _load(model_path, loaded):
-    return loaded if loaded is not None else load_model(model_path)
+def _load(model_path, loaded, dtype=None):
+    return loaded if loaded is not None else load_model(model_path, dtype=dtype)
 
 
 def _identity(model_path, tokenizer):
@@ -91,7 +91,7 @@ def _tagged(rows, **tags):
 
 
 def run_check(input_path, model_path, run_id, *, artifact_root="artifacts", max_new_tokens=128,
-              cpu_bf16=False, loaded=None):
+              cpu_bf16=False, save_on_cpu=False, loaded=None):
     """One-prompt engineering check; never an investment-bias result."""
     data = json.loads(Path(input_path).read_text())
     trials = build_trials(data, repeats=1)
@@ -108,7 +108,7 @@ def run_check(input_path, model_path, run_id, *, artifact_root="artifacts", max_
                 "input_sha256": file_sha256(input_path), "model_identity": _identity(model_path, tokenizer),
                 "source_identity": _source(), "runtime": _runtime(model, tokenizer, device),
                 "max_new_tokens": max_new_tokens, "epsilons": [.01, .1],
-                "thinking": False, "decision_prefix": PREFIX}
+                "thinking": False, "decision_prefix": PREFIX, "save_on_cpu": save_on_cpu}
     with run_context(model_path, "investment-dial-check", run_id, artifact_root=artifact_root) as run, frozen_eval(model):
         with run.stage("prepare") as stage:
             write(run, "prepare/protocol.json", protocol)
@@ -116,7 +116,7 @@ def run_check(input_path, model_path, run_id, *, artifact_root="artifacts", max_
             stage.count(1)
         with run.stage("forward") as stage:
             margin, vectors = coordinate_derivatives(model, row["decision_ids"], *row["answer_ids"], device,
-                                                       list(range(len(model.layers))))
+                                                       list(range(len(model.layers))), save_on_cpu=save_on_cpu)
             candidates = []
             for layer, vector in vectors.items():
                 neuron = int(vector.abs().argmax())
@@ -148,13 +148,15 @@ def run_check(input_path, model_path, run_id, *, artifact_root="artifacts", max_
 
 
 def run_screen(input_path, model_path, run_id, *, artifact_root="artifacts", top_k=3,
-               repeats=2, seed=42, layers=None, loaded=None):
+               repeats=2, seed=42, layers=None, save_on_cpu=False, cpu_bf16=False, loaded=None):
     # Validate missing/invalid data before loading expensive weights.
     data = json.loads(Path(input_path).read_text())
     trials = build_trials(data, seed=seed, repeats=repeats, graded=True)
     if top_k < 1:
         raise ValueError("top_k must be positive")
-    model, tokenizer, device = _load(model_path, loaded)
+    if cpu_bf16 and torch.cuda.is_available():
+        raise ValueError("cpu-bf16 requires CUDA_VISIBLE_DEVICES='' before launch")
+    model, tokenizer, device = _load(model_path, loaded, dtype=torch.bfloat16 if cpu_bf16 else None)
     rows = encode_trials(trials, tokenizer)
     layers = list(range(len(model.layers))) if layers is None else layers
     if not layers or len(set(layers)) != len(layers) or any(not 0 <= l < len(model.layers) for l in layers):
@@ -164,7 +166,7 @@ def run_screen(input_path, model_path, run_id, *, artifact_root="artifacts", top
                 "model_identity": _identity(model_path, tokenizer), "source_identity": _source(),
                 "runtime": _runtime(model, tokenizer, device),
                 "seed": seed, "repeats": repeats, "top_k": top_k, "layers": layers,
-                "thinking": False, "decision_prefix": PREFIX, "batch_size": 1,
+                "thinking": False, "decision_prefix": PREFIX, "batch_size": 1, "save_on_cpu": save_on_cpu,
                 "screen_objective": "next_token_buy_minus_sell_at_fixed_json_prefix",
                 "screen_aggregation": "sum_positions_then_mean_trials_then_mean_tickers_then_abs"}
     screening = [row for row in rows if row["split"] == "screen" and row["positive_count"] == 2]
@@ -184,7 +186,8 @@ def run_screen(input_path, model_path, run_id, *, artifact_root="artifacts", top
             for ticker, ticker_rows in by_ticker.items():
                 ticker_totals = {}
                 for row in ticker_rows:
-                    margin, vectors = coordinate_derivatives(model, row["decision_ids"], *row["answer_ids"], device, layers)
+                    margin, vectors = coordinate_derivatives(model, row["decision_ids"], *row["answer_ids"], device, layers,
+                                                           save_on_cpu=save_on_cpu)
                     margins.append({"id": row["id"], "ticker": ticker, "margin": margin})
                     for layer, vector in vectors.items():
                         ticker_totals[layer] = ticker_totals.get(layer, 0) + vector.double() / len(ticker_rows)
@@ -215,17 +218,19 @@ def run_screen(input_path, model_path, run_id, *, artifact_root="artifacts", top
 
 def run_calibration(source_run, model_path, run_id, *, artifact_root="artifacts",
                     deltas=(-8., -4., 0., 4., 8.), targets=(-.3, 0., .3), minimum_rate=.9,
-                    max_new_tokens=256, loaded=None):
+                    max_new_tokens=256, cpu_bf16=False, loaded=None):
     deltas, targets = list(deltas), list(targets)
     if (len(deltas) < 3 or deltas != sorted(set(deltas)) or 0 not in deltas or
         any(not math.isfinite(d) for d in deltas) or not targets or
         len(set(targets)) != len(targets) or any(not math.isfinite(t) or not -1 <= t <= 1 for t in targets) or
         not 0 < minimum_rate <= 1 or max_new_tokens < 1):
         raise ValueError("invalid calibration settings")
+    if cpu_bf16 and torch.cuda.is_available():
+        raise ValueError("cpu-bf16 requires CUDA_VISIBLE_DEVICES='' before launch")
     bundle = verified_run(source_run, "investment-dial-screen", REQUIRED)
     if not bundle[0]["analyze/result.json"]["candidates"]:
         raise ValueError("no nonzero gradient candidates")
-    model, tokenizer, device = _load(model_path, loaded)
+    model, tokenizer, device = _load(model_path, loaded, dtype=torch.bfloat16 if cpu_bf16 else None)
     parent, rows, screen, digest = _parent(bundle, model_path, tokenizer, model, device)
     protocol = {"schema_version": 1, "protocol_version": VERSION,
                 "model_identity": parent["model_identity"], "source_identity": _source(),
@@ -287,11 +292,13 @@ def run_calibration(source_run, model_path, run_id, *, artifact_root="artifacts"
         return run.run_directory
 
 
-def run_evaluation(source_run, model_path, run_id, *, artifact_root="artifacts", loaded=None):
+def run_evaluation(source_run, model_path, run_id, *, artifact_root="artifacts", cpu_bf16=False, loaded=None):
+    if cpu_bf16 and torch.cuda.is_available():
+        raise ValueError("cpu-bf16 requires CUDA_VISIBLE_DEVICES='' before launch")
     bundle = verified_run(source_run, "investment-dial-calibration", REQUIRED)
     if bundle[0]["analyze/result.json"]["selected"] is None:
         raise ValueError("calibration has no feasible candidate; independent test not run")
-    model, tokenizer, device = _load(model_path, loaded)
+    model, tokenizer, device = _load(model_path, loaded, dtype=torch.bfloat16 if cpu_bf16 else None)
     parent, rows, calibration, digest = _parent(bundle, model_path, tokenizer, model, device)
     selected = calibration["selected"]
     layer, neuron = selected["layer"], selected["neuron"]

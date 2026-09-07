@@ -1,5 +1,5 @@
 """Differentiable last-token objectives for transient coordinate screening."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import torch
 
@@ -30,9 +30,14 @@ def next_token_margin(model, ids, positive_id, negative_id, device):
     return logits[positive_id] - logits[negative_id]
 
 
-def coordinate_derivatives(model, ids, positive_id, negative_id, device, layers):
-    """Return transient signed token-summed vectors; never serialize directly."""
-    with frozen_eval(model), torch.enable_grad():
+def coordinate_derivatives(model, ids, positive_id, negative_id, device, layers, *, save_on_cpu=False):
+    """Return transient signed token-summed vectors; never serialize directly.
+
+    Optionally keep tensors saved for backward in CPU RAM, never on disk.
+    This leaves the objective, precision, and returned derivatives unchanged.
+    """
+    saved_tensors = torch.autograd.graph.save_on_cpu(pin_memory=False) if save_on_cpu else nullcontext()
+    with frozen_eval(model), torch.enable_grad(), saved_tensors:
         with mlp_summed_derivatives(model, layers) as records:
             margin = next_token_margin(model, ids, positive_id, negative_id, device)
             value = float(margin.detach())

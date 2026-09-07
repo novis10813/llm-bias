@@ -40,6 +40,14 @@ sensitivity 使用 `prepare`、`forward`、`analyze`。
   batch-one 與絕對 token 位置，離開 context 後移除 hooks，不保存 raw values。
 - `continuations.py` 對已驗證的 prompt/suffix IDs 作完整續接 FP32 計分；單 token
   候選共用一次 forward，多 token 使用 teacher forcing，不改動 prompt 干預位置。
+- `coordinate_screen.py` 的 `coordinate_derivatives(..., save_on_cpu=False)` 可選擇
+  以 `torch.autograd.graph.save_on_cpu(pin_memory=False)` 將反向傳播所需張量暫存在
+  CPU RAM，使用時回傳原裝置；不寫磁碟、不改權重精度、目標量或篩選層。
+  `investment-dial run-check` 與 `run-screen` 以 `--save-on-cpu` 啟用，並在
+  `prepare/protocol.json` 記錄同名 `save_on_cpu` 布林欄位；預設關閉，舊產物缺少
+  此欄位表示未啟用。此選項不改完整 logits 計算或 JSON decision/reason 生成，
+  也不對 calibration/evaluation 增加參數。CPU/GPU 傳輸可能增加耗時；GPU 峰值
+  仍需以真實模型工程檢查測量，不能保證固定顯存上限。
 - `generation.py` 定義 `GenerationConfig`、`generate_tokens` 與 `finish_reason`。
 - `interventions.py` 提供 exception-safe forward-hook context manager。Hooks 只在 forward
   期間修改 residual；離開 context 後必須移除。

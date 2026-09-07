@@ -10,13 +10,15 @@ def main(argv=None):
     check = sub.add_parser("run-check", help="one-prompt engineering check, not a research result")
     check.add_argument("--input", required=True)
     check.add_argument("--max-new-tokens", type=int, default=128)
-    check.add_argument("--cpu-bf16", action="store_true")
     screen = sub.add_parser("run-screen", help="screen gradients using only screen companies")
     screen.add_argument("--input", required=True)
     screen.add_argument("--top-k", type=int, default=3)
     screen.add_argument("--repeats", type=int, default=2)
     screen.add_argument("--seed", type=int, default=42)
     screen.add_argument("--layers", type=int, nargs="+")
+    for command in (check, screen):
+        command.add_argument("--save-on-cpu", action="store_true",
+                             help="keep backward saved tensors in CPU RAM to reduce VRAM")
     calibration = sub.add_parser("run-calibration", help="fit A curves, rank candidates on B")
     calibration.add_argument("--source-run", required=True)
     calibration.add_argument("--deltas", type=float, nargs="+", default=[-8., -4., 0., 4., 8.])
@@ -29,6 +31,8 @@ def main(argv=None):
         command.add_argument("--model", default=".cache/models/qwen3.5-4b")
         command.add_argument("--run-id", required=True)
         command.add_argument("--artifact-root", default="artifacts")
+        command.add_argument("--cpu-bf16", action="store_true",
+                             help="force bf16 on CPU (requires CUDA_VISIBLE_DEVICES='')")
     args = vars(parser.parse_args(argv))
     command = args.pop("command")
     args["model_path"] = args.pop("model")

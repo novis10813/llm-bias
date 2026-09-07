@@ -183,7 +183,7 @@ def test_signed_ticker_means_cancel_before_absolute_value(setup, tmp_path, monke
     inputs["companies"].append(extra)
     path.write_text(json.dumps(inputs))
     calls = []
-    def derivatives(*args):
+    def derivatives(*args, **kwargs):
         calls.append(1)
         return 0., {0: torch.tensor([1. if len(calls) <= 2 else -1., .25])}
     monkeypatch.setattr(pipeline, "coordinate_derivatives", derivatives)
@@ -238,11 +238,12 @@ def test_multitoken_answer_rejected():
         encode_trials(build_trials(data()), CharacterTokenizer())
 
 
-def test_gradient_flags_restored_after_exception():
+@pytest.mark.parametrize("save_on_cpu", [False, True])
+def test_gradient_flags_restored_after_exception(save_on_cpu):
     raw = Raw()
     model = SimpleNamespace(_hf_model=raw, layers=raw.layers)
     with pytest.raises(IndexError):
-        coordinate_derivatives(model, [1, 2], 500, 3, "cpu", [0])
+        coordinate_derivatives(model, [1, 2], 500, 3, "cpu", [0], save_on_cpu=save_on_cpu)
     assert raw.training and all(p.requires_grad for p in raw.parameters())
     assert not raw.layers[0].mlp.down_proj._forward_pre_hooks
 
@@ -253,3 +254,56 @@ def test_cli_dispatch(monkeypatch):
     monkeypatch.setattr(cli, "run_screen", lambda **kwargs: seen.update(kwargs))
     cli.main(["run-screen", "--input", "input.json", "--run-id", "test", "--layers", "0", "2"])
     assert seen["layers"] == [0, 2] and seen["input_path"] == "input.json"
+    assert seen["save_on_cpu"] is False and seen["cpu_bf16"] is False
+    cli.main(["run-screen", "--input", "input.json", "--run-id", "test", "--save-on-cpu"])
+    assert seen["save_on_cpu"] is True
+    monkeypatch.setattr(cli, "run_check", lambda **kwargs: seen.update(kwargs))
+    cli.main(["run-check", "--input", "input.json", "--run-id", "test", "--save-on-cpu"])
+    assert seen["save_on_cpu"] is True
+    monkeypatch.setattr(cli, "run_calibration", lambda **kwargs: seen.update(kwargs))
+    cli.main(["run-calibration", "--source-run", "run", "--run-id", "test", "--cpu-bf16"])
+    assert seen["cpu_bf16"] is True
+    monkeypatch.setattr(cli, "run_evaluation", lambda **kwargs: seen.update(kwargs))
+    cli.main(["run-evaluation", "--source-run", "run", "--run-id", "test"])
+    assert seen["cpu_bf16"] is False
+
+
+def test_cpu_saved_tensors_preserve_derivatives(monkeypatch):
+    raw = Raw()
+    model = SimpleNamespace(_hf_model=raw, layers=raw.layers)
+    expected_margin, expected = coordinate_derivatives(model, [1, 2], 2, 3, "cpu", [0])
+    original = torch.autograd.graph.save_on_cpu
+    calls = []
+
+    def context(**kwargs):
+        calls.append(kwargs)
+        return original(**kwargs)
+
+    monkeypatch.setattr(torch.autograd.graph, "save_on_cpu", context)
+    margin, actual = coordinate_derivatives(model, [1, 2], 2, 3, "cpu", [0], save_on_cpu=True)
+    assert calls == [{"pin_memory": False}]
+    assert margin == expected_margin
+    torch.testing.assert_close(actual[0], expected[0], rtol=0, atol=0)
+    assert raw.training and all(p.requires_grad for p in raw.parameters())
+    assert not raw.layers[0].mlp.down_proj._forward_pre_hooks
+
+
+@pytest.mark.parametrize("stage", ["check", "screen"])
+def test_cpu_saved_tensors_pipeline_provenance(setup, tmp_path, monkeypatch, stage):
+    path, loaded, _ = setup
+    calls = []
+    original = pipeline.coordinate_derivatives
+
+    def derivatives(*args, **kwargs):
+        calls.append(kwargs["save_on_cpu"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "coordinate_derivatives", derivatives)
+    run = getattr(pipeline, "run_" + stage)(path, "fake", stage, artifact_root=tmp_path,
+                                          loaded=loaded, save_on_cpu=True)
+    assert calls and all(calls)
+    protocol = json.loads((run / "prepare/protocol.json").read_text())
+    assert protocol["save_on_cpu"] is True
+    if stage == "check":
+        result = json.loads((run / "analyze/result.json").read_text())
+        assert result["numeric_agreement"] and result["zero_identical"]
