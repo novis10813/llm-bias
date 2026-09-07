@@ -32,6 +32,7 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 - [Shared experiment core](docs/shared-experiment-core.md)
 - [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) / [discovery report](docs/span-sensitivity/report-status.md)（V1 discovery completed；`same_sector_swap` 為 calibration primary condition，calibration/test protocol 未凍結）
 - [Entity cell localization and downstream attribution versions](docs/entity-cell-localization/README.md)（[proposal V1](docs/entity-cell-localization/proposal-v1.md) / [report V1](docs/entity-cell-localization/report-v1.md)；[proposal V2](docs/entity-cell-localization/proposal-v2.md) / [report V2](docs/entity-cell-localization/report-v2.md)；[proposal V3](docs/entity-cell-localization/proposal-v3.md) frozen（4 entity cells，calibration + hold-out 雙驗證）；[收線報告](docs/entity-cell-localization/report-line-closing.md)；[E4 proposal](docs/entity-cell-localization/proposal-e4.md) proposed（residual stream 壓抑 readout 比較，[報告](docs/entity-cell-localization/report-e4-readout-delta.md)））
+- [財務穩健判斷相關神經元定位](docs/financial-soundness-localization/proposal.md) / [因果驗證](docs/financial-soundness-causal-validation/proposal.md)（探索版 V1；formal run 尚未授權）
 - [Entity-bias proposal and roadmap](docs/proposal/README.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 

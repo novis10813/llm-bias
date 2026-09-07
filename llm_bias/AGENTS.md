@@ -23,6 +23,9 @@ commands 或取代各 workflow 文件。
 - `span_sensitivity/`：擁有單一產業 identity-header conditions、固定 Buy/Sell
   continuation margin 與 ticker-clustered paired analysis；workflow 見
   [`../docs/span-sensitivity/proposal.md`](../docs/span-sensitivity/proposal.md)。
+- `financial_soundness/`：擁有財務短句探索定位與獨立因果驗證；CLI 為
+  `financial-soundness`，協議見 [定位提案](../docs/financial-soundness-localization/proposal.md)
+  與 [因果驗證提案](../docs/financial-soundness-causal-validation/proposal.md)。
 - `entity_cell/`：擁有 entity-cell localization、attention attribution 與
   suppression intervention 工作流；CLI 入口為 `entity-cell`。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
@@ -33,7 +36,7 @@ Shared infrastructure 不可 import 任一 experiment package。`baseline_trial`
 legacy compatibility 直接重用部分 `prompt_analysis` modules；不要擴大這個例外，新增
 跨實驗共用能力應移入 `core/`。其餘 experiment packages 不可互相 import。
 CLI 入口是 `jacobian-lens`、`prompt-analysis`、`baseline-trial`、
-`jspace-intervention`、`span-sensitivity` 與 `entity-cell`；experiment CLI
+`jspace-intervention`、`span-sensitivity`、`entity-cell` 與 `financial-soundness`；experiment CLI
 不可自行 fitting lens。
 
 ## CLI 設計原則

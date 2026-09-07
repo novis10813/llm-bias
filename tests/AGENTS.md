@@ -66,6 +66,8 @@
   聚合、pipeline lifecycle（identity/selection 綁定、band 候選集驗證、tamper
   拒絕、artifact 不含 raw payload 掃描）與 CLI 行為；全部用 fake
   model/lens、無 GPU。
+- `test_financial_soundness.py`：三類財務短句與對照、分組隔離、完整續接計分、
+  MLP hook 清理、定位到因果驗證 lifecycle 及來源篡改拒絕；fake model、無 GPU。
 - `test_baseline_trial_pipeline.py`：baseline trial workflow 行為。
 - `test_span_sensitivity.py`：header condition rendering、paired estimands、artifact lifecycle
   與 CLI。
