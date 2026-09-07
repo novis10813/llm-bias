@@ -148,11 +148,14 @@ def load_model(
     *,
     device_map: str | Mapping[str, int | str] | None = None,
     max_memory: Mapping[int | str, int | str] | None = None,
+    dtype: torch.dtype | None = None,
 ) -> tuple[Any, Any, torch.device]:
     """Load a decoder and wrap it in jlens' HF adapter.
 
     ``device_map=None`` retains the historical single-device behavior. Passing a
     map opts into GPU-only Accelerate dispatch and fails closed on offload.
+    An explicit floating dtype supports bounded CPU integration checks; omitting
+    it preserves the historical CUDA-bf16 / CPU-fp32 defaults.
     """
     name = resolve_model_name(model)
     sharded = device_map is not None
@@ -160,7 +163,10 @@ def load_model(
         raise RuntimeError("Sharded loading requires at least two CUDA GPUs")
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
-    dtype = torch.bfloat16 if use_cuda else torch.float32
+    if dtype is None:
+        dtype = torch.bfloat16 if use_cuda else torch.float32
+    if dtype not in (torch.bfloat16, torch.float16, torch.float32, torch.float64):
+        raise ValueError("model dtype must be floating point")
     print(f"Loading {name} on {device} with {dtype} (transformers {transformers.__version__})")
     tokenizer = load_tokenizer(name)
     auto_model = transformers.AutoModelForCausalLM

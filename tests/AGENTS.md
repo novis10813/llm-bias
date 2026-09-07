@@ -66,6 +66,9 @@
   聚合、pipeline lifecycle（identity/selection 綁定、band 候選集驗證、tamper
   拒絕、artifact 不含 raw payload 掃描）與 CLI 行為；全部用 fake
   model/lens、無 GPU。
+- `test_investment_dial.py` / `test_mlp_addition.py`：JSON 格式、帶符號導數聚合、
+  全 token 加法、A/B 校準、獨立公司隔離、來源雜湊與失敗清理；另以小型隨機
+  Qwen3.5 混合層模型測有限差分與 cached generation，不載入大型 checkpoint。
 - `test_financial_soundness.py`：三類財務短句與對照、分組隔離、完整續接計分、
   MLP hook 清理、定位到因果驗證 lifecycle 及來源篡改拒絕；fake model、無 GPU。
 - `test_baseline_trial_pipeline.py`：baseline trial workflow 行為。
