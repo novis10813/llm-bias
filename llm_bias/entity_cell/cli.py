@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     loc.add_argument(
         "--stage",
         action="append",
-        choices=("e1-baseline", "e1-localization", "e1-amnesia", "analyze"),
+        choices=("e1-baseline", "e1-localization", "e1-amnesia", "e1-fact-amnesia", "analyze"),
         dest="stages",
     )
     loc.add_argument("--max-tickers", type=int, default=None, help="one-ticker smoke cap when set to 1")
@@ -87,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     interv.add_argument("--e3-grouping", choices=("single", "group"), default="single")
     interv.add_argument("--peer-tickers", nargs="+", default=None, help="peer tickers for E3-A cross-ticker specificity controls (e.g. ADI MU FTV)")
     interv.add_argument("--max-tickers", type=int, default=None, help="one-ticker smoke cap when set to 1")
+
+    # 4b. fact-gold verification (E1 V3 operator decision; proposed)
+    verify_gold = commands.add_parser("verify-fact-gold", help="list or record operator gold-validity decisions for the E1 V3 fact gate")
+    verify_gold.add_argument("--run-dir", type=Path, required=True, help="E1 run directory containing e1/fact_amnesia.jsonl")
+    verify_gold.add_argument("--list", action="store_true", dest="list_rows", help="print the unique gold rows needing a decision")
+    verify_gold.add_argument("--decisions", type=Path, default=None, help="JSON mapping decision key -> {verified: bool, note?: str}")
 
     # 5. legacy run (backward compatibility)
     run = commands.add_parser("run", help="legacy monolithic runner (deprecated; prefer run-localization, run-attribution, or run-intervention)")
@@ -137,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    root: str | Path | None = None
     if args.command == "prepare":
         from llm_bias.core.model import load_tokenizer
         from llm_bias.entity_cell.preparation import prepare_artifacts
@@ -166,6 +173,33 @@ def main() -> None:
             stages=stages,
             max_tickers=args.max_tickers,
         )
+    elif args.command == "verify-fact-gold":
+        import json as _json
+        from llm_bias.core.artifacts.io import read_jsonl
+        from llm_bias.entity_cell.fact_amnesia import list_gold_decisions, write_verifications
+        fact_path = Path(args.run_dir) / "e1" / "fact_amnesia.jsonl"
+        if not fact_path.is_file():
+            raise SystemExit(f"missing {fact_path} (run the e1-fact-amnesia stage first)")
+        fact_rows = read_jsonl(fact_path)
+        if args.list_rows:
+            for row in list_gold_decisions(fact_rows):
+                print(_json.dumps(row, ensure_ascii=False))
+        elif args.decisions is not None:
+            decisions = _json.loads(args.decisions.read_text(encoding="utf-8"))
+            if not isinstance(decisions, dict):
+                raise SystemExit("decisions must be a JSON mapping key -> {verified: bool}")
+            known = {row["key"] for row in list_gold_decisions(fact_rows)}
+            unknown = sorted(set(decisions) - known)
+            if unknown:
+                raise SystemExit(f"unknown decision keys: {unknown}")
+            for key, decision in decisions.items():
+                if not isinstance(decision, dict) or not isinstance(decision.get("verified"), bool):
+                    raise SystemExit(f"decision for {key} must carry a boolean verified flag")
+            write_verifications(Path(args.run_dir) / "e1" / "fact_gold_verifications.json", decisions)
+            root = str(Path(args.run_dir) / "e1" / "fact_gold_verifications.json")
+            print(f"recorded {len(decisions)} decisions; re-run analyze to update v3 eligibility")
+        else:
+            raise SystemExit("verify-fact-gold requires --list or --decisions")
     elif args.command == "run-attribution":
         from llm_bias.entity_cell.e2 import run_e2
         stages = tuple(args.stages) if args.stages else ("e2-attribution", "e2-readout", "e2-patching", "analyze")
@@ -289,7 +323,8 @@ def main() -> None:
             root = analyze_e1(args.run_root)
     else:
         raise ValueError(f"unsupported command: {args.command}")
-    print(root)
+    if root is not None:
+        print(root)
 
 
 if __name__ == "__main__":

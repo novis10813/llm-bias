@@ -25,6 +25,13 @@
   寫入、tamper 拒絕）、average-before-top-k 與 span exclusion、family mass/rank
   compact serialization、artifact 不含 raw/full vectors 與 CLI；全部 fake model/lens、
   無 GPU。
+- `test_entity_cell_e2.py`、`test_entity_cell_e3.py` 與同族 `test_entity_cell_*.py`
+  （E1 V1/V2 pipeline、E2 donor contract、E3 record）：entity-cell workflow 的
+  deterministic preparation、fail-closed gates、compact artifacts 與 CLI；
+  `test_entity_cell_v3_fact_gate.py` 另覆蓋 E1 V3 fact-level amnesia stage
+  （fake model 的 gold 生成/own/cross rows、classification 六態、
+  gold verification 記錄與 tamper fail-closed）與 `verify-fact-gold` CLI；
+  全部 fake model、無 GPU。
 - `test_jspace_valence_readout.py`：valence pair 驗證/選擇/rendering、
   full-softmax average-before-top-k contract、contrast 分數 closed form、
   frozen candidate 候選規則與上限、fake model/lens 的 workflow 與 CLI 行為。

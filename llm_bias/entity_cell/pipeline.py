@@ -20,7 +20,9 @@ from .analysis import (
     summarize_amnesia,
     surface_control_summary,
     v2_candidate_eligibility,
+    v2_robustness_reasons,
 )
+from .fact_amnesia import read_verifications, run_fact_amnesia_stage, v3_candidate_eligibility
 from .mlp_cells import (
     CANDIDATE_LAYERS,
     collect_generic_stats,
@@ -44,7 +46,7 @@ from .preparation import (
 from .lifecycle import check_provenance, validate_prepared_directory
 
 DATASET = "entity-cell-localization"
-STAGES = ("e1-baseline", "e1-localization", "e1-amnesia", "analyze")
+STAGES = ("e1-baseline", "e1-localization", "e1-amnesia", "e1-fact-amnesia", "analyze")
 
 
 def _group(rows: Iterable[Mapping[str, Any]], key: str) -> dict[str, list[Mapping[str, Any]]]:
@@ -222,6 +224,9 @@ def run_e1(
         if family == LOCALIZATION_FAMILY_V2:
             run.manifest.register_artifact(prepared / "prepare" / "frame_variants.jsonl", artifact_type="entity_cell_frame_variant", stage="prepare", role="input")
             run.manifest.register_artifact(prepared / "prepare" / "template_control.json", artifact_type="entity_cell_template_control", stage="prepare", role="input")
+            fact_frames_input = prepared / "prepare" / "fact_frames.jsonl"
+            if fact_frames_input.is_file():
+                run.manifest.register_artifact(fact_frames_input, artifact_type="entity_cell_fact_frame", stage="prepare", role="input")
         from llm_bias.core.model import load_model
         model, tokenizer, fallback_device = load_model(model_name)
         target_device = device or getattr(model, "input_device", fallback_device)
@@ -320,11 +325,40 @@ def run_e1(
                 count = write_jsonl(path, rows_out, overwrite=True)
                 run.manifest.register_artifact(path, artifact_type="entity_cell_amnesia", stage="e1-amnesia", role="output", record_count=count)
                 stage.count(count)
+        if "e1-fact-amnesia" in enabled:
+            if stats is None:
+                stats_path = output_dir / "baseline_stats.json"
+                if not stats_path.is_file():
+                    raise ValueError("e1-fact-amnesia requires completed e1-baseline statistics")
+                from .mlp_cells import OnlineVectorStats
+                saved = json.loads(stats_path.read_text(encoding="utf-8"))
+                stats = {int(layer): OnlineVectorStats.from_compact(value) for layer, value in saved["layers"].items()}
+            if family != LOCALIZATION_FAMILY_V2:
+                raise ValueError("e1-fact-amnesia requires the v2-frames localization family")
+            cells_path = output_dir / "cells.jsonl"
+            if not cells_path.is_file():
+                raise ValueError("e1-fact-amnesia requires completed e1-localization")
+            fact_frames_path = prepared / "prepare" / "fact_frames.jsonl"
+            if not fact_frames_path.is_file():
+                raise ValueError("e1-fact-amnesia requires fact_frames.jsonl (re-run prepare for a V3-capable preparation)")
+            fact_frames_rows = [row for row in read_jsonl(fact_frames_path) if row["ticker"] in tickers]
+            with run.stage("e1-fact-amnesia") as stage:
+                records = run_fact_amnesia_stage(
+                    model=model, tokenizer=tokenizer, device=target_device, stats=stats,
+                    fact_frames_by_ticker=_group(fact_frames_rows, "ticker"),
+                    cells_by_ticker={row["ticker"]: row["localization_candidates"] for row in read_jsonl(cells_path)},
+                    tickers=tickers,
+                )
+                path = output_dir / "fact_amnesia.jsonl"
+                count = write_jsonl(path, records, overwrite=True)
+                run.manifest.register_artifact(path, artifact_type="entity_cell_fact_amnesia", stage="e1-fact-amnesia", role="output", record_count=count)
+                stage.count(count)
         if "analyze" in enabled:
             with run.stage("analyze") as stage:
                 cells = read_jsonl(output_dir / "cells.jsonl") if (output_dir / "cells.jsonl").is_file() else []
                 amnesia = read_jsonl(output_dir / "amnesia.jsonl") if (output_dir / "amnesia.jsonl").is_file() else []
-                if not cells or not amnesia:
+                fact = read_jsonl(output_dir / "fact_amnesia.jsonl") if (output_dir / "fact_amnesia.jsonl").is_file() else []
+                if not cells or (not amnesia and not fact):
                     raise ValueError("analyze requires completed E1 localization and amnesia artifacts")
                 candidates = {row["ticker"]: row["localization_candidates"] for row in cells}
                 scores = {
@@ -334,26 +368,48 @@ def run_e1(
                     }
                     for row in cells
                 }
-                amnesia_summary = summarize_amnesia(amnesia)
+                amnesia_summary = summarize_amnesia(amnesia) if amnesia else {}
                 summary = {"schema_version": 1, "artifact_type": "entity_cell_analysis", "candidate_label": "trusted candidate entity cell", "collision_selectivity": collision_selectivity_summary(candidates, scores_by_ticker=scores), "amnesia": amnesia_summary, "raw_runtime_payloads": False}
                 if family == LOCALIZATION_FAMILY_V2:
                     signature_path = output_dir / "template_signature.json"
                     if not signature_path.is_file():
                         raise ValueError("v2-frames analyze requires the template signature")
                     signature = json.loads(signature_path.read_text(encoding="utf-8"))["cells"]
-                    eligibility = {
-                        row["ticker"]: v2_candidate_eligibility(
-                            held_metrics=row["held_variant_metrics"],
-                            surface_control_summary=row["surface_control_summary"],
-                            candidate_cells=row["localization_candidates"],
-                            template_signature=signature,
-                            amnesia_summary=amnesia_summary[f"{row['ticker']}:all_positions"],
-                        )
-                        for row in cells
-                    }
+                    if amnesia:
+                        eligibility = {
+                            row["ticker"]: v2_candidate_eligibility(
+                                held_metrics=row["held_variant_metrics"],
+                                surface_control_summary=row["surface_control_summary"],
+                                candidate_cells=row["localization_candidates"],
+                                template_signature=signature,
+                                amnesia_summary=amnesia_summary[f"{row['ticker']}:all_positions"],
+                            )
+                            for row in cells
+                        }
+                        summary["v2_candidate_eligibility"] = eligibility
+                        summary["trusted_ticker_count"] = sum(1 for entry in eligibility.values() if entry["eligible"])
+                    if fact:
+                        verifications_path = output_dir / "fact_gold_verifications.json"
+                        verifications = read_verifications(verifications_path) if verifications_path.is_file() else {}
+                        v3_eligibility = {}
+                        for row in cells:
+                            fact_rows = [value for value in fact if value["ticker"] == row["ticker"]]
+                            gates_1_3_pass = not v2_robustness_reasons(
+                                held_metrics=row["held_variant_metrics"],
+                                surface_control_summary=row["surface_control_summary"],
+                                candidate_cells=row["localization_candidates"],
+                                template_signature=signature,
+                            )
+                            v3_eligibility[row["ticker"]] = v3_candidate_eligibility(
+                                ticker=row["ticker"],
+                                candidate_cells=row["localization_candidates"],
+                                fact_rows=fact_rows,
+                                verifications=verifications,
+                                gates_1_3_pass=gates_1_3_pass,
+                            )
+                        summary["v3_candidate_eligibility"] = v3_eligibility
+                        summary["v3_trusted_ticker_count"] = sum(1 for entry in v3_eligibility.values() if entry["eligible"])
                     summary["localization_family"] = LOCALIZATION_FAMILY_V2
-                    summary["v2_candidate_eligibility"] = eligibility
-                    summary["trusted_ticker_count"] = sum(1 for entry in eligibility.values() if entry["eligible"])
                 path = run.run_directory / "analyze" / "summary.json"
                 write_json(path, summary, overwrite=True)
                 run.manifest.register_artifact(path, artifact_type="entity_cell_analysis", stage="analyze", role="output")
@@ -369,7 +425,8 @@ def analyze_e1(run_root: str | Path) -> Path:
     """Materialize the compact E1 summary from a completed run's outputs."""
     root = Path(run_root)
     cells = read_jsonl(root / "e1" / "cells.jsonl")
-    amnesia = read_jsonl(root / "e1" / "amnesia.jsonl")
+    amnesia_path = root / "e1" / "amnesia.jsonl"
+    amnesia = read_jsonl(amnesia_path) if amnesia_path.is_file() else []
     candidates = {row["ticker"]: row["localization_candidates"] for row in cells}
     scores = {
         row["ticker"]: {
@@ -378,7 +435,7 @@ def analyze_e1(run_root: str | Path) -> Path:
         }
         for row in cells
     }
-    amnesia_summary = summarize_amnesia(amnesia)
+    amnesia_summary = summarize_amnesia(amnesia) if amnesia else {}
     summary = {
         "schema_version": 1,
         "artifact_type": "entity_cell_analysis",
@@ -390,19 +447,43 @@ def analyze_e1(run_root: str | Path) -> Path:
     signature_path = root / "e1" / "template_signature.json"
     if signature_path.is_file():
         signature = json.loads(signature_path.read_text(encoding="utf-8"))["cells"]
-        eligibility = {
-            row["ticker"]: v2_candidate_eligibility(
-                held_metrics=row["held_variant_metrics"],
-                surface_control_summary=row["surface_control_summary"],
-                candidate_cells=row["localization_candidates"],
-                template_signature=signature,
-                amnesia_summary=amnesia_summary[f"{row['ticker']}:all_positions"],
-            )
-            for row in cells
-        }
+        if amnesia:
+            eligibility = {
+                row["ticker"]: v2_candidate_eligibility(
+                    held_metrics=row["held_variant_metrics"],
+                    surface_control_summary=row["surface_control_summary"],
+                    candidate_cells=row["localization_candidates"],
+                    template_signature=signature,
+                    amnesia_summary=amnesia_summary[f"{row['ticker']}:all_positions"],
+                )
+                for row in cells
+            }
+            summary["v2_candidate_eligibility"] = eligibility
+            summary["trusted_ticker_count"] = sum(1 for entry in eligibility.values() if entry["eligible"])
         summary["localization_family"] = LOCALIZATION_FAMILY_V2
-        summary["v2_candidate_eligibility"] = eligibility
-        summary["trusted_ticker_count"] = sum(1 for entry in eligibility.values() if entry["eligible"])
+        fact_path = root / "e1" / "fact_amnesia.jsonl"
+        if fact_path.is_file():
+            fact = read_jsonl(fact_path)
+            verifications_path = root / "e1" / "fact_gold_verifications.json"
+            verifications = read_verifications(verifications_path) if verifications_path.is_file() else {}
+            v3_eligibility = {}
+            for row in cells:
+                fact_rows = [value for value in fact if value["ticker"] == row["ticker"]]
+                gates_1_3_pass = not v2_robustness_reasons(
+                    held_metrics=row["held_variant_metrics"],
+                    surface_control_summary=row["surface_control_summary"],
+                    candidate_cells=row["localization_candidates"],
+                    template_signature=signature,
+                )
+                v3_eligibility[row["ticker"]] = v3_candidate_eligibility(
+                    ticker=row["ticker"],
+                    candidate_cells=row["localization_candidates"],
+                    fact_rows=fact_rows,
+                    verifications=verifications,
+                    gates_1_3_pass=gates_1_3_pass,
+                )
+            summary["v3_candidate_eligibility"] = v3_eligibility
+            summary["v3_trusted_ticker_count"] = sum(1 for entry in v3_eligibility.values() if entry["eligible"])
     path = root / "analyze" / "summary.json"
     write_json(path, summary, overwrite=True)
     return path

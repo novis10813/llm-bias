@@ -17,6 +17,8 @@ from llm_bias.core.prompt_input.encoding import input_ids, token_span
 SPLITS = ("discovery", "calibration", "test")
 TECHNOLOGY = "Technology"
 HEADER_VARIANT_COUNT = 12
+from .fact_amnesia import FACT_FRAME_IDS, FACT_FRAME_SPECS
+
 LOCALIZATION_VARIANT_IDS = tuple(range(8))
 HELD_VARIANT_IDS = tuple(range(8, 12))
 BASELINE_RECORD_COUNT = 399
@@ -579,6 +581,49 @@ def _prepare_frame_rows(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]]
     return rows
 
 
+def _prepare_fact_frames(tokenizer: Any, source_rows: Sequence[Mapping[str, Any]], *, split: str) -> list[dict[str, Any]]:
+    """E1 V3 fact frames (raw text, no chat template; see proposal-v3 §3).
+
+    Each ticker gets the three frozen fact frames with its formal name. The
+    name must map to a non-empty content token span under the frozen
+    contained=True rule; otherwise preparation fails closed.
+    """
+    rows = []
+    for source in source_rows:
+        name = str(source["name"])
+        for frame_id, template in FACT_FRAME_SPECS:
+            prompt = template.format(name=name)
+            if prompt.count(name) != 1:
+                raise ValueError("fact frame must contain the company name exactly once")
+            name_start = prompt.index(name)
+            ids, offsets, specials = _token_offsets(tokenizer, prompt)
+            name_positions = _positions_for_range(
+                offsets, specials, name_start, name_start + len(name),
+                limit=len(ids), contained=True,
+            )
+            if not name_positions:
+                raise ValueError(f"fact frame {frame_id} name span is empty for {source['ticker']}")
+            rows.append(
+                {
+                    "schema_version": PREPARATION_SCHEMA_VERSION,
+                    "artifact_type": "entity_cell_fact_frame",
+                    "frame_id": frame_id,
+                    "prompt_id": stable_record_id(source["ticker"], frame_id, split),
+                    "ticker": source["ticker"],
+                    "name": name,
+                    "sector": source["sector"],
+                    "split": split,
+                    "source_row_index": source["source_row_index"],
+                    "prompt": prompt,
+                    "prompt_sha256": sha256_bytes(prompt.encode("utf-8")),
+                    "name_token_span": [min(name_positions), max(name_positions) + 1],
+                    "token_count": len(ids),
+                    "input_ids": ids,
+                }
+            )
+    return rows
+
+
 def _prepare_template_control(tokenizer: Any) -> dict[str, Any]:
     if TEMPLATE_CONTROL_PROMPT.count(TEMPLATE_CONTROL_NAME) != 1:
         raise ValueError("template control must contain the neutral name exactly once")
@@ -747,11 +792,15 @@ def prepare_inputs(
         raise AssertionError("each selected ticker must have exactly three financial prompts")
     frame_variants: list[dict[str, Any]] = []
     template_control: dict[str, Any] | None = None
+    fact_frames: list[dict[str, Any]] = []
     if localization_family == LOCALIZATION_FAMILY_V2:
         frame_variants = _prepare_frame_rows(tokenizer, source_rows, split=split)
         template_control = _prepare_template_control(tokenizer)
+        fact_frames = _prepare_fact_frames(tokenizer, source_rows, split=split)
         if len(frame_variants) != len(source_rows) * FRAME_VARIANT_COUNT:
             raise AssertionError("each selected ticker must have exactly twelve frame variants")
+        if len(fact_frames) != len(source_rows) * len(FACT_FRAME_SPECS):
+            raise AssertionError("each selected ticker must have exactly three fact frames")
     config = {
         "schema_version": PREPARATION_SCHEMA_VERSION,
         "experiment": "entity-cell-localization",
@@ -773,6 +822,7 @@ def prepare_inputs(
         config["frame_localization_variant_ids"] = list(FRAME_LOCALIZATION_VARIANT_IDS)
         config["frame_held_variant_ids"] = list(FRAME_HELD_VARIANT_IDS)
         config["template_control_sha256"] = template_control["prompt_sha256"]
+        config["fact_frame_ids"] = list(FACT_FRAME_IDS)
     result = {
         "header_variants": header_variants,
         "generic_baseline": baseline,
@@ -784,6 +834,7 @@ def prepare_inputs(
     if localization_family == LOCALIZATION_FAMILY_V2:
         result["frame_variants"] = frame_variants
         result["template_control"] = template_control
+        result["fact_frames"] = fact_frames
     return result
 
 
@@ -849,6 +900,31 @@ def validate_prepared_inputs(prepared: Mapping[str, Any]) -> None:
             families = {row["variant_number"]: row.get("variant_family") for row in rows}
             if any(families[index] != "frame" for index in FRAME_LOCALIZATION_VARIANT_IDS):
                 raise ValueError("frame localization variant family is invalid")
+        fact_frames = list(prepared.get("fact_frames", ()))
+        if not fact_frames:
+            raise ValueError("v2-frames preparation is missing fact frames")
+        if config.get("fact_frame_ids") != list(FACT_FRAME_IDS):
+            raise ValueError("fact frame ids do not match the frozen V3 set")
+        fact_by_ticker: dict[str, list[Mapping[str, Any]]] = {}
+        for row in fact_frames:
+            if row.get("artifact_type") != "entity_cell_fact_frame":
+                raise ValueError("fact frame artifact type is invalid")
+            ticker = str(row.get("ticker"))
+            fact_by_ticker.setdefault(ticker, []).append(row)
+            if row.get("frame_id") not in FACT_FRAME_IDS:
+                raise ValueError("fact frame id is outside the frozen set")
+            prompt = str(row.get("prompt", ""))
+            name = str(row.get("name", ""))
+            if prompt.count(name) != 1:
+                raise ValueError("fact frame prompt must contain the company name exactly once")
+            span = row.get("name_token_span")
+            if not isinstance(span, list) or len(span) != 2 or int(span[1]) <= int(span[0]):
+                raise ValueError("fact frame is missing a valid name token span")
+        if set(fact_by_ticker) != set(by_ticker):
+            raise ValueError("fact frames must cover exactly the selected tickers")
+        for ticker, rows in fact_by_ticker.items():
+            if {row["frame_id"] for row in rows} != set(FACT_FRAME_IDS):
+                raise ValueError("each ticker must contain each frozen fact frame exactly once")
             if any(families[index] != "frame_held" for index in FRAME_HELD_VARIANT_IDS):
                 raise ValueError("frame held variant family is invalid")
     if len(financial) != len(by_ticker) * len(FINANCIAL_PROMPT_COLUMNS):
@@ -973,6 +1049,7 @@ def prepare_artifacts(
     if is_v2:
         paths["frame_variants"] = prepare_dir / "frame_variants.jsonl"
         paths["template_control"] = prepare_dir / "template_control.json"
+        paths["fact_frames"] = prepare_dir / "fact_frames.jsonl"
     try:
         for path, artifact_type in (
             (input_path, "entity_cell_source_csv"),
@@ -990,6 +1067,7 @@ def prepare_artifacts(
             if is_v2:
                 counts["frame_variants"] = write_jsonl(paths["frame_variants"], prepared["frame_variants"])
                 write_json(paths["template_control"], prepared["template_control"])
+                counts["fact_frames"] = write_jsonl(paths["fact_frames"], prepared["fact_frames"])
             write_json(paths["config"], prepared["config"])
             metadata = {
                 "schema_version": PREPARATION_SCHEMA_VERSION,
@@ -1016,7 +1094,7 @@ def prepare_artifacts(
                 "raw_runtime_payloads": False,
             }
             metadata["prepared_artifact_sha256"] = {
-                key: sha256_file(paths[key]) for key in ("header_variants", "generic_baseline", "financial_prompts", "e2_donor_contracts", *(["frame_variants"] if is_v2 else []))
+                key: sha256_file(paths[key]) for key in ("header_variants", "generic_baseline", "financial_prompts", "e2_donor_contracts", *(["frame_variants", "fact_frames"] if is_v2 else []))
             }
             write_metadata(paths["metadata"], metadata)
             stage.count(sum(counts.values()))
@@ -1031,6 +1109,7 @@ def prepare_artifacts(
                 (
                     ("frame_variants", "entity_cell_frame_variant"),
                     ("template_control", "entity_cell_template_control"),
+                    ("fact_frames", "entity_cell_fact_frame"),
                 ) if is_v2 else ()
             ),
         ):

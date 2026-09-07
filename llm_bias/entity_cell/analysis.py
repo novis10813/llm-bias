@@ -232,6 +232,26 @@ def select_wrong_entity_cell(
     return candidates[0], True
 
 
+def v2_robustness_reasons(
+    *,
+    held_metrics: Mapping[str, Any],
+    surface_control_summary: Mapping[str, Any],
+    candidate_cells: Sequence[Mapping[str, Any]],
+    template_signature: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    """E1 V2 Gates 1-3 (held overlap, form-robust, template-robust) reasons only."""
+    reasons: list[str] = []
+    if int(held_metrics.get("top5_overlap", 0)) <= 0:
+        reasons.append("held_variant_top5_overlap_zero")
+    if not bool(surface_control_summary.get("form_robust", False)):
+        reasons.append("not_form_robust")
+    cells = {_cell(row) for row in candidate_cells}
+    signature = {(int(row["layer"]), int(row["neuron"])) for row in template_signature}
+    if cells.intersection(signature):
+        reasons.append("in_template_signature")
+    return reasons
+
+
 def v2_candidate_eligibility(
     *,
     held_metrics: Mapping[str, Any],
@@ -244,15 +264,12 @@ def v2_candidate_eligibility(
 
     Cell membership follows the V1 convention: the candidate top-5 set, not only the top-1.
     """
-    reasons: list[str] = []
-    if int(held_metrics.get("top5_overlap", 0)) <= 0:
-        reasons.append("held_variant_top5_overlap_zero")
-    if not bool(surface_control_summary.get("form_robust", False)):
-        reasons.append("not_form_robust")
-    cells = {_cell(row) for row in candidate_cells}
-    signature = {(int(row["layer"]), int(row["neuron"])) for row in template_signature}
-    if cells.intersection(signature):
-        reasons.append("in_template_signature")
+    reasons = v2_robustness_reasons(
+        held_metrics=held_metrics,
+        surface_control_summary=surface_control_summary,
+        candidate_cells=candidate_cells,
+        template_signature=template_signature,
+    )
     if not bool(amnesia_summary.get("trusted_candidate_entity_cell", False)):
         reasons.extend(str(reason) for reason in amnesia_summary.get("exclusion_reasons", []))
     return {
@@ -283,5 +300,5 @@ __all__ = [
     "anonymous_progress", "collision_selectivity_summary", "denominator_eligibility",
     "frame_surface_control_summary", "held_variant_metrics", "select_wrong_entity_cell",
     "summarize_amnesia", "surface_control_summary", "trusted_candidate_eligibility",
-    "v2_candidate_eligibility",
+    "v2_candidate_eligibility", "v2_robustness_reasons",
 ]
