@@ -4,6 +4,15 @@
 renderer。從 repository root 使用 `uv run python scripts/<name>.py` 或
 `bash scripts/<name>.sh`。Canonical command blocks 與參數仍以各 workflow 文件為準。
 
+## Investment-dial auxiliary diagnostic
+
+`investment_dial_fine_a.py` reads the complete V1 calibration run and generates only
+A balanced prompts at nine fixed deltas for L15/n8490. It writes registered per-delta
+responses, summaries and provenance; no B/test generation or refitting. Commands and
+transfer requirements: [A-only diagnostic](investment-dial/diagnostic-fine-a.md).
+Regression coupling: `tests/test_investment_dial_fine_a.py` (CLI, subset guards,
+mocked full lifecycle) and `tests/test_investment_dial.py` (owning workflow mechanics).
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |
