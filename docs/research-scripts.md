@@ -68,6 +68,11 @@ construct check, and writes a standalone analysis run with provenance to
 the source records. Package: `llm_bias/balanced_evidence_gap/`.
 Protocol: [docs/balanced-evidence-gap/proposal-phase2.md](balanced-evidence-gap/proposal-phase2.md) and [docs/balanced-evidence-gap/proposal-phase2-rev2.md](balanced-evidence-gap/proposal-phase2-rev2.md)
 
+Figure renderers: `scripts/plot_balanced_evidence_gap.py`（Phase 1）→
+`docs/assets/balanced-evidence-gap/balanced_evidence_gap.{pdf,png}`；
+`scripts/plot_balanced_evidence_gap_phase2b.py`（2B layer sweep）→
+`docs/assets/balanced-evidence-gap/phase2b_layer_sweep.{pdf,png}`。
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |
