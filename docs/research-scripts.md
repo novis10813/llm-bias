@@ -38,6 +38,16 @@ Explanation renderer: `plot_calibration_v2_explained.py` 產出解釋圖（V1 �
 為何失敗、V2 細 grid 恢復什麼、per-target error 對比）；同源 compact artifacts，
 寫入 `docs/assets/investment-dial/calibration_v2_explained.{pdf,png}`。
 
+## Balanced Evidence Gap (Phase 1 behavioral confirmation)
+
+`scripts/balanced_evidence_gap.py` implements the Phase 1 balanced-evidence
+behavioral confirmation operator. It builds 256 prompts (128 named + 128
+anonymous) from 16 companies in the investment-dial `test` split across 4
+sectors, with fixed `positive_count=2` (2 positive + 2 negative evidence
+items), runs forward inference, and computes per-company margin and
+named-vs-anonymous gap statistics.
+Protocol: [docs/balanced-evidence-gap/proposal.md](balanced-evidence-gap/proposal.md)
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |
