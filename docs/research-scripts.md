@@ -59,8 +59,14 @@ forwards with the L15/n8490 dial readout (H4), and evaluates gate 2A
 (`sweep`, entity-state residual layer sweep over 8 top/bottom directions ×
 32 layers × 4 spans) and 2C (`attribute`, attention-edge zeroing on
 full-attention layers plus MLP gradient×activation attribution inside the
-2B handoff interval). Package: `llm_bias/balanced_evidence_gap/`.
-Protocol: [docs/balanced-evidence-gap/proposal-phase2.md](balanced-evidence-gap/proposal-phase2.md)
+2B handoff interval). The `sweep` subcommand checks gate 2A in the 2A run
+by default, or gate 2A Rev 2 in a re-evaluation run via `--gate-run`.
+`scripts/balanced_evidence_gap_phase2_rev2.py` is the CPU-only Rev 2 gate
+re-evaluation (no model load): it re-analyzes an existing 2A forward run
+against the Phase 1 named-vs-anonymous gap reference with the group
+construct check, and writes a standalone analysis run with provenance to
+the source records. Package: `llm_bias/balanced_evidence_gap/`.
+Protocol: [docs/balanced-evidence-gap/proposal-phase2.md](balanced-evidence-gap/proposal-phase2.md) and [docs/balanced-evidence-gap/proposal-phase2-rev2.md](balanced-evidence-gap/proposal-phase2-rev2.md)
 
 ## Jacobian-lens calibration, evaluation, and promotion
 

@@ -18,6 +18,13 @@ GATE_2A = {
     "bootstrap_seed": 42,
 }
 
+GATE_2A_REV2 = {
+    "iqr_threshold_nats": 0.5,
+    "framing_max_median_nats": 1.5,
+    "spearman_gap_min": 0.3,
+    "group_size": 2,
+}
+
 GATE_2C = {
     "holm_alpha": 0.05,
     "sector_agreement_min": 0.75,
@@ -170,6 +177,84 @@ def evaluate_gate_2a(
     }
     return {
         "gate": "2A",
+        "criteria": criteria,
+        "pass": all(c["pass"] for c in criteria.values()),
+        "phase2b_authorized": all(c["pass"] for c in criteria.values()),
+    }
+
+
+# ── gate 2A Rev 2 (docs/balanced-evidence-gap/proposal-phase2-rev2.md) ───
+
+def select_margin_groups(
+    pure_entity_margins: dict[str, float],
+    group_size: int = GATE_2A_REV2["group_size"],
+) -> tuple[list[str], list[str]]:
+    """(bottom, top) tickers by pure entity margin rank; frozen top-N/bottom-N rule."""
+    if len(pure_entity_margins) < 2 * group_size + 1:
+        raise ValueError(
+            f"margin grouping needs >= {2 * group_size + 1} tickers, got {len(pure_entity_margins)}"
+        )
+    ordered = sorted(pure_entity_margins, key=lambda t: pure_entity_margins[t])
+    return ordered[:group_size], ordered[-group_size:]
+
+
+def evaluate_gate_2a_rev2(
+    *,
+    pure_entity_margins: dict[str, float],
+    phase1_gaps: dict[str, float],
+    framing_pair_deltas: Sequence[float],
+    valid_rate: float,
+) -> dict:
+    """Gate 2A Rev 2: IQR + framing + schema + Spearman vs Phase 1 gap + group construct check."""
+    margins = [pure_entity_margins[t] for t in sorted(pure_entity_margins)]
+    iqr_value = iqr(margins)
+    common = sorted(set(pure_entity_margins) & set(phase1_gaps))
+    if len(common) < 8:
+        raise ValueError(f"gate 2A rev2 needs >=8 companies in both phases, got {len(common)}")
+    rho_gap = spearman(
+        [pure_entity_margins[t] for t in common],
+        [phase1_gaps[t] for t in common],
+    )
+    bottom, top = select_margin_groups(pure_entity_margins)
+    pairwise = {
+        f"{t}>{b}": phase1_gaps[t] - phase1_gaps[b] for t in top for b in bottom
+    }
+    n_positive = sum(1 for d in pairwise.values() if d > 0)
+    framing_median = statistics.median(abs(v) for v in framing_pair_deltas)
+    criteria = {
+        "iqr": {
+            "value": iqr_value,
+            "threshold": GATE_2A_REV2["iqr_threshold_nats"],
+            "pass": iqr_value > GATE_2A_REV2["iqr_threshold_nats"],
+        },
+        "spearman_vs_phase1_gap": {
+            "value": rho_gap,
+            "threshold": GATE_2A_REV2["spearman_gap_min"],
+            "pass": rho_gap > GATE_2A_REV2["spearman_gap_min"],
+            "n_companies": len(common),
+        },
+        "group_construct_check": {
+            "top": list(top),
+            "bottom": list(bottom),
+            "pairwise_gap_diffs": pairwise,
+            "n_positive": n_positive,
+            "n_pairs": len(pairwise),
+            "threshold": "all pairs positive",
+            "pass": n_positive == len(pairwise),
+        },
+        "framing_stability": {
+            "value": framing_median,
+            "threshold": GATE_2A_REV2["framing_max_median_nats"],
+            "pass": framing_median < GATE_2A_REV2["framing_max_median_nats"],
+        },
+        "schema_valid_rate": {
+            "value": valid_rate,
+            "threshold": 1.0,
+            "pass": valid_rate >= 1.0,
+        },
+    }
+    return {
+        "gate": "2A-rev2",
         "criteria": criteria,
         "pass": all(c["pass"] for c in criteria.values()),
         "phase2b_authorized": all(c["pass"] for c in criteria.values()),

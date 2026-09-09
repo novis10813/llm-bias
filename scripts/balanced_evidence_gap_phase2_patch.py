@@ -40,13 +40,21 @@ from llm_bias.balanced_evidence_gap.patch_pipeline import run_phase2b, run_phase
 def _sweep(args: argparse.Namespace) -> None:
     phase2a = Path(args.phase2a_run)
     if not args.smoke:
-        summary = json.loads((phase2a / "analyze" / "summary.json").read_text(encoding="utf-8"))
-        gate = summary["gate_2a"]
+        if args.gate_run:
+            gate_root = Path(args.gate_run)
+            gate_summary = json.loads((gate_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
+            gate = gate_summary["gate_2a_rev2"]
+            gate_name = f"gate 2A Rev 2 ({gate_root.name})"
+        else:
+            summary = json.loads((phase2a / "analyze" / "summary.json").read_text(encoding="utf-8"))
+            gate = summary["gate_2a"]
+            gate_name = "gate 2A (Rev 1)"
         if not gate["pass"]:
             sys.exit(
-                "ERROR: gate 2A did not pass; 2B is not authorized "
-                "(rerun 2A or use a passing run)"
+                f"ERROR: {gate_name} did not pass; 2B is not authorized "
+                "(rerun the gate or use a passing run)"
             )
+        print(f"[phase2b] authorization: {gate_name} pass=True", flush=True)
     run_id = args.run_id or (
         f"phase2b-smoke-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
         if args.smoke else
@@ -116,6 +124,8 @@ def main() -> None:
     p_sweep = sub.add_parser("sweep", help="2B entity-state layer sweep")
     p_sweep.add_argument("--model", required=True)
     p_sweep.add_argument("--phase2a-run", required=True)
+    p_sweep.add_argument("--gate-run", default=None,
+                         help="Rev 2 gate re-evaluation run root (uses gate_2a_rev2); default: Rev 1 gate in the 2A run")
     p_sweep.add_argument("--run-id", default=None)
     p_sweep.add_argument("--artifact-root", default="artifacts")
     p_sweep.add_argument("--smoke", action="store_true")

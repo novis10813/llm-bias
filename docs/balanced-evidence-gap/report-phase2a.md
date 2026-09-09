@@ -102,10 +102,29 @@ H4 的 entity-specific trap 未被觸發。
 
 ## 狀態與後續
 
-- 2A：completed，gate 2A fail（1/4 項未過）。
-- 2B / 2C：未執行（未授權）。
-- 後續取決於新協議版本或收線決定；任何 gate 或參照變更都需新版本
-  proposal，不得回填。
+- 2A：completed，gate 2A（Rev 1）fail（1/4 項未過）。該判定維持，不回填。
+- Gate 2A Rev 2（[proposal-phase2-rev2.md](proposal-phase2-rev2.md)，
+  2026-09-10）：對同一 2A forward records 的 CPU-only 重評
+  （run `phase2a-rev2-gate-01`），5 項全過：IQR 0.570；Spearman vs
+  Phase 1 gap +0.448（> 0.3）；group construct check
+  （top NSC/BLK vs bottom IT/BDX，4/4 pairwise 正向）；framing 0.365；
+  schema 1.0。**2B 獲授權**。
+- 2C：依 2B handoff 區間決定。
+
+## Rev 2 重評記錄
+
+| 判準 | 值 | 門檻 | 結果 |
+|---|---|---|---|
+| IQR（pure entity margin） | 0.570 nats | > 0.5 | 通過 |
+| Spearman vs Phase 1 gap | +0.448 | > 0.3 | 通過 |
+| group construct check（top 2 vs bottom 2 的 Phase 1 gap，4 pairwise） | 4/4 正向（NSC>IT +0.391, NSC>BDX +0.422, BLK>IT +0.563, BLK>BDX +0.594） | 全數正向 | 通過 |
+| framing stability | 0.365 nats | < 1.5 | 通過 |
+| schema valid rate | 1.000 | ≥ 1.0 | 通過 |
+
+描述性：Spearman vs Phase 1 named margin = −0.411（Rev 1 gate 項，
+降為 descriptive，見 Rev 2 協議 §1 的構念診斷）。
+
+run：`artifacts/qwen3.5-4b/balanced-evidence-gap-phase2/runs/phase2a-rev2-gate-01`（prepare ＋ analyze，無 GPU；provenance 含 source records SHA-256）。
 
 ## 再現性
 
@@ -128,3 +147,12 @@ artifacts：`prepare/prompts.jsonl`（64 行）、`forward/results.jsonl`
 （margin、decision、dial 通道值）、`analyze/summary.json`（pure entity
 margins、gate 2A、H4）、`manifest.json`（6 artifacts，SHA-256 全數驗證）。
 所有 artifacts 為 compact 派生值，不含 raw activation/residual。
+
+Rev 2 gate 重評（CPU-only，無 GPU）：
+
+```bash
+uv run --no-sync python scripts/balanced_evidence_gap_phase2_rev2.py \
+    --model .cache/models/qwen3.5-4b \
+    --phase2a-run artifacts/qwen3.5-4b/balanced-evidence-gap-phase2/runs/phase2a-gpu-bf16-01 \
+    --run-id phase2a-rev2-gate-01
+```

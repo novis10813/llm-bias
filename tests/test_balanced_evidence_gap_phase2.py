@@ -20,13 +20,16 @@ from llm_bias.balanced_evidence_gap.analysis import (
     detect_handoff,
     exact_sign_flip_p,
     evaluate_gate_2a,
+    evaluate_gate_2a_rev2,
     evaluate_gate_2c,
     holm_adjusted,
     iqr,
     normalized_transfer,
+    select_margin_groups,
     spearman,
     toward_source_delta,
 )
+from llm_bias.balanced_evidence_gap.rev2 import run_rev2_gate
 from llm_bias.core.prompt_input.encoding import input_ids
 from llm_bias.balanced_evidence_gap.intervention import (
     AttentionEdgeZeroing,
@@ -458,6 +461,113 @@ def test_evaluate_gate_2a_pass_and_failure_modes():
 
     framed = evaluate_gate_2a(**_gate_2a_inputs(framing_pair_deltas=[2.0] * 8))
     assert framed["criteria"]["framing_stability"]["pass"] is False
+
+
+def _gate_2a_rev2_inputs(**overrides):
+    tickers = [f"T{i:02d}" for i in range(16)]
+    pure = {t: float(i) for i, t in enumerate(tickers)}
+    gaps = {t: float(i) + 0.1 for i, t in enumerate(tickers)}
+    inputs = dict(
+        pure_entity_margins=pure,
+        phase1_gaps=gaps,
+        framing_pair_deltas=[0.2] * 8,
+        valid_rate=1.0,
+    )
+    inputs.update(overrides)
+    return inputs
+
+
+def test_select_margin_groups_frozen_rule_and_fail_closed():
+    pure = {f"T{i:02d}": float(i) for i in range(5)}
+    bottom, top = select_margin_groups(pure)
+    assert bottom == ["T00", "T01"] and top == ["T03", "T04"]
+    with pytest.raises(ValueError):
+        select_margin_groups({f"T{i:02d}": float(i) for i in range(4)})
+
+
+def test_evaluate_gate_2a_rev2_pass_and_failure_modes():
+    gate = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs())
+    assert gate["gate"] == "2A-rev2"
+    assert gate["pass"] and gate["phase2b_authorized"]
+    group = gate["criteria"]["group_construct_check"]
+    assert group["top"] == ["T14", "T15"] and group["bottom"] == ["T00", "T01"]
+    assert group["n_positive"] == group["n_pairs"] == 4
+
+    tight = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs(
+        pure_entity_margins={f"T{i:02d}": 0.05 * i for i in range(16)}))
+    assert tight["criteria"]["iqr"]["pass"] is False and tight["pass"] is False
+
+    inverted = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs(
+        phase1_gaps={f"T{i:02d}": 15.0 - i for i in range(16)}))
+    assert inverted["criteria"]["spearman_vs_phase1_gap"]["pass"] is False
+    assert inverted["criteria"]["group_construct_check"]["pass"] is False
+    assert inverted["pass"] is False
+
+    # one inverted pair inside the groups, full ranking still correlated
+    gaps = {f"T{i:02d}": float(i) + 0.1 for i in range(16)}
+    gaps["T01"], gaps["T14"] = gaps["T14"], gaps["T01"]
+    group_only = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs(phase1_gaps=gaps))
+    assert group_only["criteria"]["spearman_vs_phase1_gap"]["pass"] is True
+    assert group_only["criteria"]["group_construct_check"]["pass"] is False
+    assert group_only["pass"] is False
+
+    framed = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs(framing_pair_deltas=[2.0] * 8))
+    assert framed["criteria"]["framing_stability"]["pass"] is False
+
+    invalid = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs(valid_rate=0.99))
+    assert invalid["criteria"]["schema_valid_rate"]["pass"] is False
+
+
+def test_run_rev2_gate_reanalysis(tmp_path):
+    import hashlib
+
+    base = {t: -2.0 + 0.1 * i for i, t in enumerate(ALL_TICKERS)}
+    rows = []
+    for t in ALL_TICKERS:
+        for reverse in (False, True):
+            for order in (0, 1):
+                margin = base[t] + (0.05 if reverse else 0.0) + (0.02 if order else 0.0)
+                rows.append({
+                    "id": f"{t}-r{int(reverse)}-o{order}",
+                    "ticker": t,
+                    "margin": margin,
+                    "reverse": reverse,
+                    "order": order,
+                    "decision": "sell",
+                })
+    phase2a_run = tmp_path / "phase2a-gpu-bf16-01"
+    (phase2a_run / "forward").mkdir(parents=True)
+    results_path = phase2a_run / "forward" / "results.jsonl"
+    results_path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+
+    phase1_summary = tmp_path / "phase1-summary.json"
+    phase1_summary.write_text(json.dumps({
+        "per_company": {
+            t: {"gap_mean": base[t], "named_margin_median": base[t] - 0.5}
+            for t in ALL_TICKERS
+        }
+    }), encoding="utf-8")
+
+    run_root = run_rev2_gate(
+        model_name="fake-model",
+        phase2a_run=phase2a_run,
+        phase1_summary=phase1_summary,
+        run_id="rev2-gate-test-01",
+        artifact_root=tmp_path / "artifacts",
+    )
+    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "complete"
+    assert {s: v["status"] for s, v in manifest["stages"].items()} == {
+        "prepare": "complete", "analyze": "complete",
+    }
+    summary = json.loads((run_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["gate_2a_rev2"]["pass"] is True
+    assert summary["gate_2a_rev2"]["phase2b_authorized"] is True
+    assert summary["n_prompts"] == 64
+    prov = json.loads((run_root / "prepare" / "provenance.json").read_text(encoding="utf-8"))
+    assert prov["phase2a_run"]["results_sha256"] == hashlib.sha256(results_path.read_bytes()).hexdigest()
+    assert prov["phase2a_run"]["n_records"] == 64
+    assert prov["reanalysis_only"] is True
 
 
 def test_detect_handoff_crossover_band_and_fallback():
