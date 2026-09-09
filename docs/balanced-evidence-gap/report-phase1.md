@@ -93,12 +93,13 @@ bootstrap 95% CI）。Renderer：`scripts/plot_balanced_evidence_gap.py`。
 
 ## Phase 2 授權
 
-三判準全過，授權設計 Phase 2 中間層 Path Patching 研究線（另立版本協議）。
-Phase 2 首要設計目標：
-(a) cross-entity probe：固定同一組平衡證據、抽換公司名，量測
-entity-specific margin 差異；(b) 在 Phase 1 確認的 gap 條件下，掃描
-L5–L14 的 attention heads 與 MLP 神經元對 entity gap 的因果貢獻；
-(c) 比對 L15/n8490 dial 的激活量與 entity reputation 的關係。
+三判準全過，授權設計 Phase 2 中間層 Path Patching 研究線。Phase 2 的
+frozen 協議見 [proposal-phase2](proposal-phase2.md)：
+(a) cross-entity probe：固定同一組 shared-evidence template、抽換公司名，
+量測 pure entity margin；(b) entity-state layer sweep：L0–L31 × 4 span
+的 residual resample patching，定位 entity position-transfer interval；
+(c) handoff 區間內的 attention-edge zeroing 與 MLP margin attribution；
+另含 L15/n8490 dial 激活量的 descriptive 相關性測量（H4）。
 
 ## 再現性
 
