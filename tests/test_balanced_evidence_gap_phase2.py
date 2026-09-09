@@ -997,6 +997,43 @@ def _fake_phase2b_run(tmp_path: Path, *, attention: list[int], mlp: list[int]) -
     return run_dir
 
 
+def test_compute_sector_agreement_semantics():
+    sectors = {f"T{i:02d}": ("A" if i < 8 else "B") for i in range(16)}
+    margins = {f"T{i:02d}": float(i) for i in range(16)}
+    # both sectors: neuron tracks margin (positive, top_rho positive) -> 1.0
+    agree = patch_pipeline.compute_sector_agreement(
+        neuron_values={f"T{i:02d}": float(i) for i in range(16)},
+        top_rho=1.0, sectors=sectors, margins=margins,
+    )
+    assert agree == 1.0
+    # one sector inverted -> 0.5
+    vals = {f"T{i:02d}": (float(7 - i) if i < 8 else float(i)) for i in range(16)}
+    assert patch_pipeline.compute_sector_agreement(
+        neuron_values=vals, top_rho=1.0, sectors=sectors, margins=margins,
+    ) == 0.5
+    # degenerate sector (constant neuron values) fails closed as non-agreement
+    vals = {f"T{i:02d}": (0.0 if i < 8 else float(i)) for i in range(16)}
+    assert patch_pipeline.compute_sector_agreement(
+        neuron_values=vals, top_rho=1.0, sectors=sectors, margins=margins,
+    ) == 0.5
+    # constant margins in a sector also fail closed
+    margins2 = dict(margins)
+    for i in range(8):
+        margins2[f"T{i:02d}"] = 1.0
+    agree = patch_pipeline.compute_sector_agreement(
+        neuron_values={f"T{i:02d}": float(i) for i in range(16)},
+        top_rho=1.0, sectors=sectors, margins=margins2,
+    )
+    assert agree == 0.5
+    # sectors with <3 tickers are skipped entirely
+    sectors_small = {f"T{i:02d}": ("S" if i < 2 else ("A" if i < 8 else "B")) for i in range(16)}
+    agree = patch_pipeline.compute_sector_agreement(
+        neuron_values={f"T{i:02d}": float(i) for i in range(16)},
+        top_rho=1.0, sectors=sectors_small, margins=margins,
+    )
+    assert agree == 1.0
+
+
 def test_run_phase2c_smoke_mlp_only_with_fake_model(tmp_path, monkeypatch):
     tokenizer = _CharTokenizer()
     model = _MlpModel(n_layers=2, width=4, mlp_width=32)

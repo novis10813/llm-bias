@@ -10,7 +10,7 @@ import json
 import random
 import statistics
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import torch
 
@@ -527,18 +527,13 @@ def _mlp_arm(
     control_rhos = [float(neuron_rho[n]) for n in control_neurons]
 
     # Sector agreement: sign of the top neuron's per-sector spearman vs global.
-    agreements = []
-    for sector in sorted({r["sector"] for r in records}):
-        sector_tickers = [t for t in tickers if next(r["sector"] for r in records if r["ticker"] == t) == sector]
-        if len(sector_tickers) < 3:
-            continue
-        idx = [tickers.index(t) for t in sector_tickers]
-        sector_rho = float(spearman(
-            stacked[idx, top_neuron].tolist(),
-            [clean[t] for t in sector_tickers],
-        ))
-        agreements.append(sector_rho * top_rho >= 0)
-    sector_agreement = sum(agreements) / len(agreements) if agreements else 0.0
+    sector_map = {r["ticker"]: r["sector"] for r in records}
+    sector_agreement = compute_sector_agreement(
+        neuron_values={t: float(stacked[i, top_neuron]) for i, t in enumerate(tickers)},
+        top_rho=top_rho,
+        sectors=sector_map,
+        margins={t: clean[t] for t in tickers},
+    )
 
     # Sign-flip test: per-ticker deviation of the top neuron's attribution
     # from its mean, in the direction of the margin deviation.
@@ -564,6 +559,35 @@ def _mlp_arm(
         "sign_flip_p": sign_flip_p,
     }
     return records, layer_summary
+
+
+def compute_sector_agreement(
+    *,
+    neuron_values: Mapping[str, float],
+    top_rho: float,
+    sectors: Mapping[str, str],
+    margins: Mapping[str, float],
+) -> float:
+    """Fraction of sectors whose within-sector spearman sign matches the global.
+
+    A sector with fewer than 3 tickers is skipped. A degenerate sector (the
+    neuron or the margin is constant within it) carries no within-sector
+    evidence and fails closed: it counts as non-agreement.
+    """
+    tickers = sorted(neuron_values)
+    agreements: list[bool] = []
+    for sector in sorted(set(sectors.values())):
+        sector_tickers = [t for t in tickers if sectors[t] == sector]
+        if len(sector_tickers) < 3:
+            continue
+        sector_vals = [neuron_values[t] for t in sector_tickers]
+        sector_margins = [margins[t] for t in sector_tickers]
+        if len(set(sector_vals)) == 1 or len(set(sector_margins)) == 1:
+            agreements.append(False)
+            continue
+        sector_rho = spearman(sector_vals, sector_margins)
+        agreements.append(sector_rho * top_rho >= 0)
+    return sum(agreements) / len(agreements) if agreements else 0.0
 
 
 def _top_k(vector: torch.Tensor, k: int) -> list[dict]:
