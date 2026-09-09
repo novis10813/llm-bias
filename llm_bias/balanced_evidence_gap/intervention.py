@@ -336,11 +336,10 @@ def random_match_positions(
 ) -> list[tuple[int, ...]]:
     """Position-matched controls: random same-count non-entity key sets.
 
-    Each sample is a sorted tuple of positions strictly before or at the
-    query position, excluding the entity positions (E3 random_subset
-    semantics).
+    Each sample is a sorted tuple of positions strictly before the query
+    position, excluding the entity positions (E3 random_subset semantics).
     """
-    pool = tuple(p for p in range(query_position + 1) if p not in set(entity_positions))
+    pool = tuple(p for p in range(query_position) if p not in set(entity_positions))
     count = len(entity_positions)
     if count <= 0 or len(pool) < count:
         raise ValueError("not enough non-entity positions for matched controls")

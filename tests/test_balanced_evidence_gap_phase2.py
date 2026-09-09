@@ -727,8 +727,12 @@ def test_random_match_positions_matched_and_deterministic():
     assert len(sets) == 5
     for sample in sets:
         assert len(sample) == 3
-        assert all(0 <= p <= 10 for p in sample)
+        assert all(0 <= p < 10 for p in sample)
         assert not set(sample) & {2, 3, 4}
+    # regression: the query position itself must never be a zero position
+    for seed in range(20):
+        for sample in random_match_positions(10, (2, 3, 4), n_samples=10, seed=seed):
+            assert 10 not in sample
     assert random_match_positions(10, (2, 3, 4), n_samples=5, seed=42) == sets
     assert random_match_positions(10, (2, 3, 4), n_samples=5, seed=43) != sets
     with pytest.raises(ValueError, match="not enough"):
