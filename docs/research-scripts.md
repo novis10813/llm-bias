@@ -48,6 +48,20 @@ items), runs forward inference, and computes per-company margin and
 named-vs-anonymous gap statistics.
 Protocol: [docs/balanced-evidence-gap/proposal.md](balanced-evidence-gap/proposal.md)
 
+## Balanced Evidence Gap (Phase 2 cross-entity probe and patching)
+
+`scripts/balanced_evidence_gap_phase2.py` implements experiment 2A, the
+cross-entity probe. It builds 64 prompts (16 tickers × 2 reverse options ×
+2 evidence orders) from the frozen shared-evidence template, runs clean
+forwards with the L15/n8490 dial readout (H4), and evaluates gate 2A
+(IQR, Spearman vs Phase 1, framing stability).
+`scripts/balanced_evidence_gap_phase2_patch.py` implements experiments 2B
+(`sweep`, entity-state residual layer sweep over 8 top/bottom directions ×
+32 layers × 4 spans) and 2C (`attribute`, attention-edge zeroing on
+full-attention layers plus MLP gradient×activation attribution inside the
+2B handoff interval). Package: `llm_bias/balanced_evidence_gap/`.
+Protocol: [docs/balanced-evidence-gap/proposal-phase2.md](balanced-evidence-gap/proposal-phase2.md)
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |

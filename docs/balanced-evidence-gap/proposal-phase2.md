@@ -55,9 +55,13 @@ Phase 1 確認了行為端點：平衡證據下，named-vs-anonymous gap +0.432 
   `entity_span` 轉移至 `instruction_context` span 的層級區間；對應 causal
   tracing 的 position-transfer interval 概念，但 contrast 是 entity 而
   非 valence。
-- **attention-edge zeroing**：把指定 attention head 在指定層、從 context
-  位置到 entity token 位置的 attention weight 設為 0 的干預；非 causal
-  tracing 既有干預，屬本协议新增。
+- **attention-edge zeroing**：把指定 full-attention head 在指定層、從
+  scoring sequence 最後一個 prompt token（含 decision prefix 的最後 token，
+  即 answer token 的前一位置）對 entity token 位置的 attention weight 設 0
+  （softmax 前加 −inf，其餘 key 重新正規化）的干預；以 head 輸出差額
+  （zero 前後 head value 之差）加到 o_proj 輸入上施實，並要求重構的
+  未干預 head value 與實際 o_proj 輸入在 bf16 容差內一致（fail-closed）；
+  非 causal tracing 既有干預，屬本协议新增。
 - **MLP margin attribution**：$|\partial M / \partial a_{l,k}| \cdot |a_{l,k}|$，
   即在 entity 位置對 MLP 輸出神經元 $k$（層 $l$）的梯度×激活一階歸因；
   非 standalone causal claim（與 baseline-trial attribution 相同界限）。
@@ -121,9 +125,10 @@ Order 變體：原序（上列 1-4）與反序（4-1）。
 - **Spans**（每次 patch 一個 span）：
   - `entity_span`：`Stock Ticker: [X]` 與 `Stock Name: [Y]` 兩行的全部
     token；
-  - `evidence_span`：`— Evidence —` 與 `—` 標記之間（negative control：
-    shared evidence 在 source/target 相同，預期接近 no-op，作為 patching
-    引擎的 sanity control）；
+  - `evidence_span`：`— Evidence —` 與 `—` 標記之間；source/target 證據
+    文字相同，但殘差狀態可能已被 attention 寫入 entity 資訊，故 patching
+    此 span 是**傳播診斷**（量測 entity 訊號已洩漏到證據位置的量），非
+    no-op control；
   - `instruction_context`：證據後的 instruction token，不含
     final_position（與 causal tracing 同定義）；
   - `final_position`：最後一個 prompt token（control）。
@@ -141,21 +146,32 @@ Order 變體：原序（上列 1-4）與反序（4-1）。
 
 ### 4.5 Experiment 2C：Component attribution（handoff 區間內）
 
-只在 2B 確定的 handoff 區間（±1 層）內執行：
+只在 2B 確定的 handoff 區間（±1 層）內執行。注意 Qwen3.5-4B 是混合架構：
+32 層中僅 8 層為 full attention（`L3/L7/L11/L15/L19/L23/L27/L31`，
+`full_attention_interval=4`），其餘 24 層為 linear attention（無可索引的
+attention weight）。因此 attention 干預只能作用於 full attention 層，MLP
+歸因則可作用於所有層。
 
-1. **Attention-edge zeroing**：對每個 head h、每層 l，把
-   `instruction_context` 位置對 `entity_span` token 的 attention weight
-   設 0，量測 8 directions 的 toward-source ΔM；matched control 為同層
-   隨機 10 個 head（固定 seed）。
-2. **MLP margin attribution**：在 entity 位置計算
+1. **Attention-edge zeroing**（僅 full attention 層）：對 handoff 區間（±1 層）
+   內的每個 full attention 層 l、每個 head h，把 `instruction_context`
+   位置對 `entity_span` token 的 attention weight 設 0，量測 8 directions 的
+   toward-source ΔM。Position-matched control（與 entity cell E3 的
+   random_subset 模式同義）：同 head 下改 zero 一個同樣 token 數的隨機
+   非 entity 位置集合（每層 10 個 seed，固定 seed 42）；per-head 主效應 =
+   zero(entity) − zero(random position)，以分离 entity token 的特異性與
+   「任意 token 被 zero」的通用擾動。
+2. **MLP margin attribution**（所有層）：在 entity 位置計算
    $|\partial M / \partial a_{l,k}| \cdot |a_{l,k}|$（對每個 MLP 輸出
-   神經元 k），8 directions 平均；matched control 為同層隨機 10 個神經元。
+   神經元 k，含 linear attention 層），8 directions 平均；matched control
+   為同層隨機 10 個神經元。
 - **Gate 2C**（formal）：
-  1. 至少 1 個 head 或 10 個神經元的 top 效應 mean > matched control
-     mean，且 pair sign-flip test（Holm 調整）p < 0.05；
+  1. attention 臂與 MLP 臂各自獨立判定：至少 1 個 head 或 10 個神經元的 top
+     效應 mean > matched control mean，且 pair sign-flip test（Holm 調整）
+     p < 0.05；
   2. top 效應的 sector-stratified 符號一致率 ≥ 3/4 sector。
-- 若 Gate 2C 失敗：記錄為 null result，不回填修改；component 層結論
-  僅支持 descriptive。
+- 若 handoff 區間內無 full attention 層，attention 臂標記 `not_applicable`
+  （非失敗），只判定 MLP 臂。若 Gate 2C 失敗：記錄為 null result，不回填
+  修改；component 層結論僅支持 descriptive。
 
 ### 4.6 H4 附加測量（descriptive，不 gate）
 
@@ -187,7 +203,7 @@ final_position 的激活值，與 pure entity margin 做 Pearson 相關；並檢
 |---|---:|---|
 | 2A clean | 64 | ~2 min |
 | 2B sweep | 32 layers × 4 span × 8 dirs + 64 clean ≈ 1,088 | ~25 min |
-| 2C edges（3 層 × 16 heads × 8 dirs）+ MLP attribution | ~1,400 | ~35 min |
+| 2C attention（≤2 個 full attention 層 × 16 heads × 2 條件 × 8 dirs）＋ MLP attribution（≤5 層 × 16 公司 × 1 backward） | ~550 + ~80 | ~40 min |
 
 合計 < 1.5 h（不含模型載入）。
 
@@ -202,3 +218,18 @@ final_position 的激活值，與 pure entity margin 做 Pearson 相關；並檢
   該 edge 是唯一通路。
 - 本 Phase 不重選 investment-dial coordinate，也不修改 L15/n8490 的既有
   結論。
+
+## 8. Revision record
+
+- **Rev 1（2026-09-09，首次正式 run 前）**：
+  1. 發現 Qwen3.5-4B 為混合架構（8 層 full attention：L3/L7/L11/L15/L19/
+     L23/L27/L31；24 層 linear attention）。2C attention 臂限定 full
+     attention 層；MLP 臂涵蓋所有層；handoff 區間內無 full attention 層
+     時 attention 臂標記 `not_applicable`。
+  2. 2C attention 臂的 matched control 改為 position-matched control（同
+     head 下 zero 同樣 token 數的隨機非 entity 位置，10 seed），與 entity
+     cell E3 random_subset 模式同義；取代初稿的「同層隨機 10 head」。
+  3. 2B 的 `evidence_span` 重新定位為傳播診斷（非 no-op control）；
+     sanity control 僅為 self-source exact no-op。
+  4. attention query position 明確定義為 scoring sequence（含 decision
+     prefix）的最後一個 prompt token。
