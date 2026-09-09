@@ -2,6 +2,7 @@
 
 Status: auxiliary diagnostic operator implemented; original V1 results remain unchanged.
 This is not a new calibration method, a paper reproduction claim, or an independent test.
+The investment-dial line's paper provenance is recorded in [README](README.md).
 The question is whether linear interpolation between the original delta=0 and delta=4
 samples missed a steep response near zero. This diagnostic does not establish that cause
 in advance.

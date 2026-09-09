@@ -13,6 +13,31 @@ transfer requirements: [A-only diagnostic](investment-dial/diagnostic-fine-a.md)
 Regression coupling: `tests/test_investment_dial_fine_a.py` (CLI, subset guards,
 mocked full lifecycle) and `tests/test_investment_dial.py` (owning workflow mechanics).
 
+Report renderer: `plot_fine_a_curve.py` 重建 [fine-a 報告](investment-dial/report-fine-a.md)
+的曲線圖；只讀取 `fine-a-gpu-bf16-01` 與 parent calibration run 的 compact
+artifacts，寫入 `docs/assets/investment-dial/fine_a_curve.{pdf,png}`。
+
+## Investment-dial calibration V2
+
+`scripts/investment_dial_calibration_v2.py` implements the frozen V2 fine-grid A calibration
+and B reevaluation operator. It verifies fixed V1/fine-a parent manifest digests, model/runtime/
+tokenization identity, exact 340-row/85-company populations, and compact row identities before
+loading the model. It writes only registered compact JSON/JSONL outputs and has a no-output
+`--smoke` preflight. First formal GPU run `calib-v2-gpu-bf16-01` completed 2026-09-09 with
+gate `pass` (RMSE 0.0579, max error 0.0824, `certified=true`);
+report: [V2 report](investment-dial/report-v2.md).
+Regression coupling: `tests/test_investment_dial_calibration_v2.py` (parent guards, exact
+curve assembly, inversion, smoke lifecycle, gate outcomes, artifact lifecycle, and CLI help).
+Canonical contract: [investment-dial calibration V2 proposal](investment-dial/proposal-v2.md).
+
+Report renderer: `plot_calibration_v2.py` 重建 [V2 報告](investment-dial/report-v2.md)
+的組裝曲線、inversion 與 B 比較圖；只讀取 `calib-v2-gpu-bf16-01` 與 V1 run 的
+compact artifacts，寫入 `docs/assets/investment-dial/calibration_v2_curve.{pdf,png}`。
+
+Explanation renderer: `plot_calibration_v2_explained.py` 產出解釋圖（V1 粗 grid
+為何失敗、V2 細 grid 恢復什麼、per-target error 對比）；同源 compact artifacts，
+寫入 `docs/assets/investment-dial/calibration_v2_explained.{pdf,png}`。
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |
