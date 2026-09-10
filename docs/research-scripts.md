@@ -78,6 +78,19 @@ Figure renderers: `scripts/plot_balanced_evidence_gap.py`（Phase 1）→
 gate re-evaluation（gate 實作修正後對已完成 2C run 的存檔記錄重算，
 SHA-256 provenance，無 GPU）。
 
+`scripts/balanced_evidence_gap_phase3.py`：Phase 3 neuron causal
+validation（2C 三 candidate coordinate 的 additive `mlp_addition` grid
+＋ 30 matched controls ＋ dial descriptive arm；stages
+`prepare / pilot / intervene / analyze`；gate 3A）→
+`artifacts/<model-slug>/balanced-evidence-gap-phase3/runs/<run-id>/`。
+Package: `llm_bias/balanced_evidence_gap/neuron_causal.py`。
+Protocol: [docs/balanced-evidence-gap/proposal-phase3.md](balanced-evidence-gap/proposal-phase3.md)（Rev 2 frozen）；
+Report: [docs/balanced-evidence-gap/report-phase3.md](balanced-evidence-gap/report-phase3.md)（gate 3A fail，0/3 confirmed）。
+
+Figure renderers 補充：`scripts/plot_balanced_evidence_gap_phase3.py`
+（Phase 3 ΔM 曲線 vs controls ＋ dial 對照）→
+`docs/assets/balanced-evidence-gap/phase3_neuron_causal.{pdf,png}`。
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |
