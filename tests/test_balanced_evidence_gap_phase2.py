@@ -593,35 +593,52 @@ def test_detect_handoff_crossover_band_and_fallback():
 
 
 def test_evaluate_gate_2c_attention_and_mlp_semantics():
-    mlp_pass = {
-        "top_attribution": 0.8,
-        "control_mean": 0.2,
-        "sector_agreement": 1.0,
-        "sign_flip_p": 0.01,
-        "per_layer": {},
+    # MLP arm: per-layer existence test; a structurally-zero layer must not
+    # contaminate the verdict (regression: cross-layer min/max aggregation).
+    mlp_arm = {
+        "per_layer": {
+            "12": {"top_neuron": 1, "top_spearman": 0.9, "abs_top_spearman": 0.9,
+                   "control_max_abs_rho": 0.6, "sector_agreement": 1.0,
+                   "sign_flip_p": 0.002, "sign_flip_p_adjusted": 0.04},
+            "31": {"top_neuron": 0, "top_spearman": 0.0, "abs_top_spearman": 0.0,
+                   "control_max_abs_rho": 0.0, "sector_agreement": 0.0,
+                   "sign_flip_p": 1.0, "sign_flip_p_adjusted": 1.0},
+        }
     }
+    gate = evaluate_gate_2c(attention_arm=None, mlp_arm=mlp_arm)
+    assert gate["attention_arm"]["status"] == "not_applicable"
+    assert gate["mlp_arm"]["passing_layers"] == [12]
+    assert gate["mlp_arm"]["pass"] is True
+    assert gate["pass"] is True
+
+    # each per-layer criterion is necessary
+    bad_sector = {"12": dict(mlp_arm["per_layer"]["12"], sector_agreement=0.5)}
+    assert evaluate_gate_2c(attention_arm=None, mlp_arm={"per_layer": bad_sector})["pass"] is False
+    bad_p = {"12": dict(mlp_arm["per_layer"]["12"], sign_flip_p_adjusted=0.2)}
+    assert evaluate_gate_2c(attention_arm=None, mlp_arm={"per_layer": bad_p})["pass"] is False
+    bad_top = {"12": dict(mlp_arm["per_layer"]["12"], abs_top_spearman=0.5)}
+    assert evaluate_gate_2c(attention_arm=None, mlp_arm={"per_layer": bad_top})["pass"] is False
+    assert evaluate_gate_2c(attention_arm=None, mlp_arm={"per_layer": {}})["pass"] is False
+
+    # attention arm: existence — a non-top head may pass while the top head fails
     attention = {
         "status": "run",
         "head_effects": {
             "L3H0": {"mean_delta": 0.5, "direction_deltas": [0.5, 0.5], "control_mean_delta": 0.0},
-            "L3H1": {"mean_delta": -0.1, "direction_deltas": [0.1, -0.3], "control_mean_delta": 0.0},
+            "L3H1": {"mean_delta": 0.4, "direction_deltas": [0.4, 0.4], "control_mean_delta": 0.0},
         },
-        "holm_adjusted_p": {"L3H0": 0.25, "L3H1": 1.0},
+        "holm_adjusted_p": {"L3H0": 0.25, "L3H1": 0.01},
         "top_head": "L3H0",
     }
-    gate = evaluate_gate_2c(attention_arm=attention, mlp_arm=mlp_pass)
-    assert gate["attention_arm"]["pass"] is False  # p_adjusted = 0.25 > 0.05
-    assert gate["mlp_arm"]["pass"] is True
-    assert gate["pass"] is True
-
-    attention_strong = dict(attention, holm_adjusted_p={"L3H0": 0.01, "L3H1": 1.0})
-    gate2 = evaluate_gate_2c(attention_arm=attention_strong, mlp_arm=mlp_pass)
+    gate2 = evaluate_gate_2c(attention_arm=attention, mlp_arm={"per_layer": {}})
+    assert gate2["attention_arm"]["top_head"] == "L3H0"
+    assert gate2["attention_arm"]["passing_heads"] == ["L3H1"]
     assert gate2["attention_arm"]["pass"] is True
+    assert gate2["pass"] is True
 
-    mlp_fail = dict(mlp_pass, sector_agreement=0.5)
-    gate3 = evaluate_gate_2c(attention_arm=None, mlp_arm=mlp_fail)
-    assert gate3["attention_arm"]["status"] == "not_applicable"
-    assert gate3["mlp_arm"]["pass"] is False
+    attention_all_fail = dict(attention, holm_adjusted_p={"L3H0": 0.25, "L3H1": 1.0})
+    gate3 = evaluate_gate_2c(attention_arm=attention_all_fail, mlp_arm={"per_layer": {}})
+    assert gate3["attention_arm"]["pass"] is False
     assert gate3["pass"] is False
 
 
@@ -1095,6 +1112,65 @@ def test_analyze_2c_records_attention_paired_difference_semantics():
     assert top["top_head"] == "L3H1"
     assert top["top_effect"] == pytest.approx(0.36)
     assert top["sign_flip_p_adjusted"] < 0.05
+    # both heads show 8/8 direction consistency -> both pass
+    assert set(top["passing_heads"]) == {"L3H0", "L3H1"}
+    # mlp per-layer carries the adjusted p used by the existence test
+    mlp_layer = gate["mlp_arm"]["per_layer"]["1"]
+    assert mlp_layer["sign_flip_p_adjusted"] == pytest.approx(0.001)
+    assert gate["mlp_arm"]["passing_layers"] == [1]
+
+
+def test_run_2c_gate_reanalysis(tmp_path):
+    import hashlib
+
+    from llm_bias.balanced_evidence_gap.gate_reanalysis import run_2c_gate_reanalysis
+
+    src = tmp_path / "phase2c"
+    (src / "attention").mkdir(parents=True)
+    (src / "mlp").mkdir(parents=True)
+    (src / "analyze").mkdir(parents=True)
+    records = []
+    for head in (0, 1):
+        for direction in range(8):
+            records.append({
+                "layer": 15, "head": head, "direction": f"d{direction}",
+                "entity_toward_source_delta_m": 0.5 + 0.01 * head,
+                "control_toward_source_delta_ms": [0.1, 0.2],
+            })
+    att_path = src / "attention" / "records.jsonl"
+    att_path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+    layer_summaries = {
+        "schema_version": "1", "layers": [
+            {"layer": 12, "top_neuron": 7, "top_spearman": 0.9, "abs_top_spearman": 0.9,
+             "control_max_abs_rho": 0.6, "control_mean_rho": 0.05, "sector_agreement": 1.0,
+             "sign_flip_p": 0.002, "control_rhos": []},
+            {"layer": 31, "top_neuron": 0, "top_spearman": 0.0, "abs_top_spearman": 0.0,
+             "control_max_abs_rho": 0.0, "control_mean_rho": 0.0, "sector_agreement": 0.0,
+             "sign_flip_p": 1.0, "control_rhos": []},
+        ]
+    }
+    mlp_path = src / "mlp" / "layer_summaries.json"
+    mlp_path.write_text(json.dumps(layer_summaries), encoding="utf-8")
+    (src / "analyze" / "summary.json").write_text(json.dumps({
+        "attention_layers": [15], "mlp_layers": [12, 31],
+    }), encoding="utf-8")
+
+    run_root = run_2c_gate_reanalysis(
+        model_name="fake-model", phase2c_run=src, run_id="gate-reanalysis-test",
+        artifact_root=tmp_path / "artifacts",
+    )
+    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "complete"
+    summary = json.loads((run_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
+    gate = summary["gate_2c"]
+    # L31's structural zero must not contaminate the verdict
+    assert gate["mlp_arm"]["passing_layers"] == [12]
+    assert gate["mlp_arm"]["pass"] is True
+    assert gate["pass"] is True
+    assert gate["attention_arm"]["passing_heads"] == ["L15H0", "L15H1"]
+    prov = json.loads((run_root / "prepare" / "provenance.json").read_text(encoding="utf-8"))
+    assert prov["source_run"]["attention_records_sha256"] == hashlib.sha256(att_path.read_bytes()).hexdigest()
+    assert prov["source_run"]["attention_n_records"] == 16
 
 
 def test_package_does_not_import_other_experiment_packages():

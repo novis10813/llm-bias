@@ -653,26 +653,24 @@ def analyze_2c_records(
         }
 
     if mlp_layer_summaries:
-        mlp_arm = {
-            "top_attribution": max(s["abs_top_spearman"] for s in mlp_layer_summaries),
-            "control_mean": max(s["control_max_abs_rho"] for s in mlp_layer_summaries),
-            "sector_agreement": min(s["sector_agreement"] for s in mlp_layer_summaries),
-            "sign_flip_p": max(s["sign_flip_p"] for s in mlp_layer_summaries),
-            "per_layer": {
-                str(s["layer"]): {
-                    "top_neuron": s["top_neuron"],
-                    "top_spearman": s["top_spearman"],
-                    "sector_agreement": s["sector_agreement"],
-                    "sign_flip_p": s["sign_flip_p"],
-                }
-                for s in mlp_layer_summaries
-            },
+        ordered = sorted(mlp_layer_summaries, key=lambda s: s["layer"])
+        adjusted = holm_adjusted([s["sign_flip_p"] for s in ordered])
+        per_layer = {
+            str(s["layer"]): {
+                "top_neuron": s["top_neuron"],
+                "top_spearman": s["top_spearman"],
+                "abs_top_spearman": s["abs_top_spearman"],
+                "control_max_abs_rho": s["control_max_abs_rho"],
+                "control_mean_rho": s.get("control_mean_rho"),
+                "sector_agreement": s["sector_agreement"],
+                "sign_flip_p": s["sign_flip_p"],
+                "sign_flip_p_adjusted": adjusted[i],
+            }
+            for i, s in enumerate(ordered)
         }
+        mlp_arm = {"per_layer": per_layer}
     else:
-        mlp_arm = {
-            "top_attribution": 0.0, "control_mean": 0.0,
-            "sector_agreement": 0.0, "sign_flip_p": 1.0, "per_layer": {},
-        }
+        mlp_arm = {"per_layer": {}}
 
     gate = evaluate_gate_2c(attention_arm=attention_arm, mlp_arm=mlp_arm)
     return {

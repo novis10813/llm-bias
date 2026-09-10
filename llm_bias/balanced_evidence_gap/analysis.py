@@ -316,14 +316,21 @@ def evaluate_gate_2c(
     attention_arm: dict | None,
     mlp_arm: dict,
 ) -> dict:
-    """Formal gate over the two 2C arms (proposal §4.5).
+    """Formal gate over the two 2C arms (proposal §4.5, frozen semantics).
+
+    Per-arm existence test (protocol: "至少 1 個 head 或 1 個神經元"):
+    - attention: at least one head with mean paired difference > 0 and
+      Holm-adjusted (across all tested heads) sign-flip p < holm_alpha;
+    - MLP: at least one layer whose top-neuron |spearman| exceeds the max
+      matched control, Holm-adjusted (across all tested layers) sign-flip
+      p < holm_alpha, and sector agreement >= sector_agreement_min.
 
     attention_arm: {"status": "run"|"not_applicable", "head_effects":
-    {key: {"mean_delta", "direction_deltas"}}, "holm_adjusted_p": {key: p},
-    "top_head": key} where direction_deltas are paired differences
-    (entity zeroing − matched position zeroing) per direction.
-    mlp_arm: {"top_attribution": float, "control_mean": float,
-    "sector_agreement": float, "sign_flip_p": float}.
+    {key: {"mean_delta", "direction_deltas", "control_mean_delta"}},
+    "holm_adjusted_p": {key: p}, "top_head": key}.
+    mlp_arm: {"per_layer": {str(layer): {"top_neuron", "top_spearman",
+    "abs_top_spearman", "control_max_abs_rho", "sector_agreement",
+    "sign_flip_p", "sign_flip_p_adjusted"}}}.
     """
     attention: dict
     if attention_arm is None or attention_arm.get("status") == "not_applicable":
@@ -332,38 +339,40 @@ def evaluate_gate_2c(
         effects = attention_arm["head_effects"]
         if not effects:
             raise ValueError("attention arm requires head effects")
+        adj = attention_arm["holm_adjusted_p"]
+        passing_heads = sorted(
+            k for k in effects
+            if effects[k]["mean_delta"] > 0 and adj[k] < GATE_2C["holm_alpha"]
+        )
         top_head = attention_arm.get("top_head") or max(effects, key=lambda k: effects[k]["mean_delta"])
-        p = attention_arm["holm_adjusted_p"][top_head]
-        passed = effects[top_head]["mean_delta"] > 0 and p < GATE_2C["holm_alpha"]
         attention = {
             "status": "run",
+            "n_heads": len(effects),
             "top_head": top_head,
             "top_effect": effects[top_head]["mean_delta"],
-            "sign_flip_p_adjusted": p,
-            "pass": passed,
+            "sign_flip_p_adjusted": adj[top_head],
+            "passing_heads": passing_heads,
+            "pass": bool(passing_heads),
         }
 
-    mlp_top = mlp_arm["top_attribution"]
-    mlp_control = mlp_arm["control_mean"]
-    mlp_sector_agreement = mlp_arm["sector_agreement"]
-    mlp_p = mlp_arm["sign_flip_p"]
-    mlp_passed = (
-        mlp_top > mlp_control
-        and mlp_sector_agreement >= GATE_2C["sector_agreement_min"]
-        and mlp_p < GATE_2C["holm_alpha"]
+    per_layer = mlp_arm.get("per_layer", {})
+    passing_layers = sorted(
+        int(layer) for layer, d in per_layer.items()
+        if d["abs_top_spearman"] > d["control_max_abs_rho"]
+        and d["sign_flip_p_adjusted"] < GATE_2C["holm_alpha"]
+        and d["sector_agreement"] >= GATE_2C["sector_agreement_min"]
     )
+    mlp = {
+        "n_layers": len(per_layer),
+        "passing_layers": passing_layers,
+        "per_layer": per_layer,
+        "pass": bool(passing_layers),
+    }
     attention_passed = attention["pass"] if attention["pass"] is not None else False
     return {
         "gate": "2C",
         "attention_arm": attention,
-        "mlp_arm": {
-            "top_attribution": mlp_top,
-            "control_mean": mlp_control,
-            "sector_agreement": mlp_sector_agreement,
-            "sign_flip_p": mlp_p,
-            "per_layer": mlp_arm.get("per_layer", {}),
-            "pass": mlp_passed,
-        },
-        "pass": bool(attention_passed or mlp_passed),
+        "mlp_arm": mlp,
+        "pass": bool(attention_passed or mlp["pass"]),
         "formal": True,
     }
