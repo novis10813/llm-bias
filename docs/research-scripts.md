@@ -71,7 +71,12 @@ Protocol: [docs/balanced-evidence-gap/proposal-phase2.md](balanced-evidence-gap/
 Figure renderers: `scripts/plot_balanced_evidence_gap.py`（Phase 1）→
 `docs/assets/balanced-evidence-gap/balanced_evidence_gap.{pdf,png}`；
 `scripts/plot_balanced_evidence_gap_phase2b.py`（2B layer sweep）→
-`docs/assets/balanced-evidence-gap/phase2b_layer_sweep.{pdf,png}`。
+`docs/assets/balanced-evidence-gap/phase2b_layer_sweep.{pdf,png}`；
+`scripts/plot_balanced_evidence_gap_phase2c.py`（2C components）→
+`docs/assets/balanced-evidence-gap/phase2c_components.{pdf,png}`。
+`scripts/balanced_evidence_gap_phase2c_gate_reanalysis.py`：CPU-only 2C
+gate re-evaluation（gate 實作修正後對已完成 2C run 的存檔記錄重算，
+SHA-256 provenance，無 GPU）。
 
 ## Jacobian-lens calibration, evaluation, and promotion
 
