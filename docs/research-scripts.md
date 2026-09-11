@@ -91,6 +91,16 @@ Figure renderers 補充：`scripts/plot_balanced_evidence_gap_phase3.py`
 （Phase 3 ΔM 曲線 vs controls ＋ dial 對照）→
 `docs/assets/balanced-evidence-gap/phase3_neuron_causal.{pdf,png}`。
 
+`scripts/balanced_evidence_gap_jlens_neurons.py`：收線後結構診斷——
+Phase 3 三座標＋dial 的 down-projection 行經 canonical J-lens transport
+到 final layer 再 unembed 的 vocabulary readout（無 forward；
+descriptive、non-causal）→
+`artifacts/<model-slug>/balanced-evidence-gap-phase3/runs/<run-id>/`。
+Package: `llm_bias/balanced_evidence_gap/jlens_neurons.py`。
+Protocol: [docs/balanced-evidence-gap/diagnostic-jlens-neurons.md](balanced-evidence-gap/diagnostic-jlens-neurons.md)（frozen 2026-09-10）。
+Renderer: `scripts/plot_balanced_evidence_gap_jlens_neurons.py` →
+`docs/assets/balanced-evidence-gap/jlens_neuron_structure.{pdf,png}`。
+
 ## Jacobian-lens calibration, evaluation, and promotion
 
 | Script | Responsibility | Main outputs | Canonical document |
