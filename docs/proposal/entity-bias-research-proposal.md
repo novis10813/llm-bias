@@ -1,345 +1,91 @@
-# Mechanistic Analysis and Inference-Time Control of Entity Bias in Large Language Models
-
-**Document status:** research proposal and design specification. The proposal
-combines an implemented experimental foundation with future mechanistic and
-intervention work. Claims below are hypotheses and planned evaluations unless
-explicitly marked as current implementation.
-
-## 1. Motivation and problem formulation
-
-Entity information can influence a language-model prediction through several
-mechanisms:
-
-- memorisation of historical events associated with an entity;
-- knowledge of outcomes that occur after the prediction timestamp;
-- entity popularity or frequency in the pretraining corpus;
-- stable positive or negative reputation associated with a company;
-- relationships between companies, executives, products, and locations;
-- legitimate prior information about the entity; and
-- contextual interaction between the entity and the event described in the
-  input.
-
-In financial sentiment analysis, the same semantic content can produce a
-different prediction when a company name is visible, anonymised, or replaced by
-another company. Henry's report, *No Name, No Gain: Unpacking Entity Bias in LLM
-Financial Sentiment*, reports that retaining company identifiers increases
-long--short return predictability. It also reports that smaller models are more
-sensitive to current-state events, while larger models show stronger revisions
-for forward-looking events, and that entity effects become larger for large-cap
-firms in larger models.
-
-Anonymisation establishes that entity information matters, but it removes both
-harmful leakage and potentially useful entity-dependent reasoning. The central
-problem is therefore not simply whether to remove names. It is to determine how
-entity information is represented, when it changes a prediction without support
-from the prompt, and whether that influence can be selectively controlled at
-inference time.
-
-The central research question is:
-
-> How does entity information affect model computation internally, and can the
-> corresponding influence be selectively controlled without retraining the
-> model or destroying legitimate entity-dependent reasoning?
-
-The project distinguishes **entity effect** from **entity bias**. A raw versus
-anonymous gap may combine legitimate prior information, historical reputation,
-training-data memorisation, lexical/tokenization effects, temporal leakage, and
-unsupported entity preferences. Behavioural differences alone are not enough to
-assign a causal or normative interpretation.
-
-## 2. Research objectives
-
-### Objective 1: Identify factors associated with entity bias
-
-Measure how the following variables change the raw--anonymous or raw--swap
-prediction gap:
-
-- entity popularity, media exposure, and market capitalisation;
-- industry and historical entity reputation;
-- model family and model size;
-- mention type, including company, ticker, product, executive, and location;
-- event category and polarity;
-- current-state versus future-action language;
-- temporal distance from the model knowledge cutoff; and
-- direct versus indirect entity reference.
-
-### Objective 2: Trace the internal mechanism
-
-Use causal interpretability and transported representation readouts to identify:
-
-- entity tokens and contextual tokens that influence the output;
-- layers at which entity influence emerges or is amplified;
-- attention heads, MLP blocks, and residual-stream components that transmit the
-  signal; and
-- whether the final prediction depends more on event semantics, entity
-  identity, or stored entity-related information.
-
-### Objective 3: Develop inference-time intervention
-
-Develop a selective intervention that detects excessive or unsupported entity
-influence, modifies the relevant internal representation, and preserves event
-semantics and legitimate entity information without requiring full model
-retraining.
-
-### Objective 4: Evaluate generalisation
-
-Evaluate whether the mechanism transfers across model families and scales, and
-to at least one additional entity-sensitive task such as political stance,
-product recommendation, institutional reputation, or news credibility.
-
-## 3. Research questions
-
-- **RQ1 — Factors:** Which entity, text, temporal, and model factors affect the
-  raw--anonymous prediction gap?
-- **RQ2 — Components:** Which tokens, layers, attention heads, MLP blocks, and
-  residual representations transmit entity influence?
-- **RQ3 — Causality:** Does replacing or patching an internal entity
-  representation directly change the output toward an anonymised or
-  counterfactual condition?
-- **RQ4 — Control:** Can entity-induced prediction changes be reduced without
-  reducing sentiment accuracy, useful entity information, calibration, or
-  output stability?
-- **RQ5 — Shared mechanisms:** Do small and large models, and different model
-  families, use shared or distinct entity-sensitive pathways?
-
-## 4. Evidence strategy and method roles
-
-The project uses four evidence stages:
+# Behavioural Confirmation and Mechanistic Analysis of Entity Influence in Large Language Models
 
-```text
-behavioural decomposition
-    -> causal localisation
-    -> representation interpretation
-    -> selective intervention
-```
+**Status:** revised research program; cross-model and cross-task validation remain required and incomplete. The current contribution is behavioural confirmation and mechanistic analysis. Selective inference-time control is a separate follow-up, not a completion requirement. This program revision changes neither completed experiment protocols nor their gates, verdicts, or run authorizations.
 
-### 4.1 Behavioural counterfactuals
+## 1. Entity influence is the question; harmful bias requires additional evidence
 
-The primary financial dataset holds the filing context and expected outcome
-constant while varying entity identity. The planned condition families are:
+Henry's *No Name, No Gain: Unpacking Entity Bias in LLM Financial Sentiment* motivates studying prediction changes when company identifiers are retained, anonymised, or replaced. Such changes may reflect factual memory, reputation, lexical/tokenization effects, temporal leakage, legitimate priors, or interactions with supplied evidence.
 
-- `real_vs_real`;
-- `real_vs_anonymous`;
-- `real_vs_synthetic`; and
-- `synthetic_vs_synthetic`.
+The core question for this study is: **when does entity identity change a fixed-answer decision, where does the relevant state affect computation, and which findings hold across models and tasks?**
 
-The current V1 materialises five pairing strategies because `real_vs_real` has
-both a same-industry `matched_exposure` strategy and a cross-industry
-neutral/stress strategy. The exact data contract, review gates, and artifact
-schema are maintained in [the archived counterfactual dataset protocol](../archive/counterfactual-dataset-generation.md).
+An **entity effect** is a measured change under an identity contrast. **Entity bias** requires an interpretation beyond that contrast. An **unsupported preference** means an identity-conditioned preference not justified by the supplied evidence under the task's declared decision rule; an anonymous baseline or a margin difference alone does not establish that interpretation. The current experiments do not identify temporal leakage or establish harmful bias.
 
-These contrasts help separate event semantics, entity priors, reputation
-transfer, memorised identity, name-form effects, and temporal leakage. They do
-not by themselves prove that an effect is harmful or unsupported.
+## 2. Objectives and research questions follow the evidence without presupposing success
 
-### 4.2 Activation patching for causal localisation
+| Objective | Question and intended output | Current boundary |
+|---|---|---|
+| 1. Confirm behaviour | RQ1: Under controlled evidence, when do named–anonymous and identity-swap contrasts change fixed-answer margins? Report robustness to the tested prompt forms and evidence ordering. | Market-cap, exposure, temporal and mention-type factor decomposition from the original proposal remains unestablished; it is not a promised completed contribution. |
+| 2. Localise and test mechanisms | RQ2: Which positions, layers and components carry decision-relevant state? RQ3: Which controlled state transfers change the decision, and which candidate mechanisms fail their own controls? | Sufficiency, necessity, local sensitivity and representation readout must remain distinct. |
+| 3. Distinguish mechanisms from controllability | RQ4: How do factual entity memory, entity-conditioned decision transfer and global stance modulation differ in the tested interventions? | RQ4 replaces the original selective-control deliverable; reducing entity influence while preserving useful information remains a follow-up question. |
+| 4. Test generalisation | RQ5: Which behavioural and mechanistic findings are shared or model-/task-specific across model families/scales and a non-financial entity-sensitive task? | Both cross-model and cross-task validation are required. Qwen3.5-4B results alone cannot complete the program. |
 
-For a fixed outcome margin, source and target forwards are compared with a
-patched forward in which a selected residual representation is transferred from
-source to target. The primary quantities are the direct entity effect, the
-representation signal, and the causal patch effect. Bidirectional patching,
-non-entity controls, unrelated or random controls, interpolation controls, and
-paired statistics are required before a layer or component is treated as a
-credible causal mediator.
+## 3. The actual research path retains early methods and changes the later mechanism questions
 
-The current implementation supports residual activation patching and
-variable-length span alignment in the main workflow. Attention-output,
-MLP-output, head-level, and path-level tracing remain future work.
+Early baseline preparation, lens validation, transported readout, activation patching and matched controls followed the original analysis strategy. The original 8-K counterfactual implementation is now [archived](../archive/README.md); its uncompleted review/promotion gates are not retroactively satisfied by active `data/baseline/` experiments.
 
-### 4.3 Jacobian-based mechanistic analysis
+Later experiments distinguish three questions that the original roadmap did not separate sufficiently:
 
-For token representation `h_t` and a task score `s(x)`, token influence can be
-summarised by:
+- **Factual memory versus decisions:** [Entity Cell](../entity-cell-localization/proposal.md) changed from header/frame candidate screening to V3 fact-level amnesia validation. Its decision probes and E4 readouts answer different questions from cell certification. The separate [financial-soundness localisation](../financial-soundness-localization/proposal.md) and [causal validation](../financial-soundness-causal-validation/proposal.md) remain exploratory.
+- **Global stance versus entity differences:** [Investment-dial](../investment-dial/proposal.md) reproduced a global stance-calibration method. [Balanced Evidence Gap](../balanced-evidence-gap/proposal.md) then tested entity-induced decision gaps and their layer/component dependence.
+- **Candidate neurons versus residual state:** [Entity-to-Dial](../entity-to-dial/proposal.md) tested paths suggested by the earlier results and examined L15 instruction-state differences. Its subspace transfer and failed compact-mechanism hypotheses constrain interpretation; they do not establish a selective debiasing method.
 
-```text
-I_t = || d s(x) / d h_t ||_2
-```
+The [roadmap](entity-bias-roadmap.md) maps these lines to the original milestones. The [research directory](../README.md) records experiment relationships; individual protocols remain the source of operational definitions.
 
-For entity positions `E` and contextual positions `C`, compare:
+## 4. Each method answers a separate part of the mechanism question
 
-```text
-I_entity  = sum(I_t for t in E)
-I_context = sum(I_t for t in C)
-R_entity  = I_entity / (I_entity + I_context + epsilon)
-```
+### Behavioural contrasts require matched evidence and a fixed outcome
 
-The same quantities can be evaluated at each layer. Layer-wise plots can reveal
-where entity influence emerges, grows, or is suppressed. Raw--anonymised
-residual differences provide a complementary representation-level signal.
+Balanced Evidence Gap Phase 1 compares named and anonymous versions within company-specific evidence. Its cross-company named margins contain evidence differences. Phase 2A instead holds shared evidence fixed and varies identity. Do not merge these estimands or describe Phase 1 as identical evidence across all companies; see the [Rev 2 protocol](../balanced-evidence-gap/details/proposal-phase2-rev2.md).
 
-Jacobian-lens readouts are **transported representations**: they map an
-intermediate residual state into a vocabulary-space readout using an estimated
-Jacobian. They are useful for interpreting candidate representations and
-comparing raw, anonymous, swapped, and patched conditions. They are not a
-chain-of-thought trace, a discrete reasoning path, an attention map, or
-standalone causal evidence. Causal claims must come from controlled
-interventions and their matched controls.
+The archived four-family/five-strategy counterfactual design remains historical. It is not a required restoration step for the active program. New model/task datasets still require explicit provenance, identity-only contrasts where claimed, task-appropriate answer definitions and independent evaluation units.
 
-### 4.4 Guidance-inspired inference-time intervention
+### Controlled interventions test state transfer and candidate mechanisms
 
-The intervention design is inspired by the controllability framing of classifier
-guidance and classifier-free guidance in diffusion models: a direction and a
-strength parameter provide a dose-response axis. The analogy is methodological,
-not an assertion that transformer residual dynamics are diffusion dynamics.
+Residual span patching, block-contribution patching, neuron intervention and component attribution have now been exercised in separate experiments; they are no longer all future implementation work. Report exactly which operation was tested, with bidirectional conditions, self-source no-op checks and relevant matched controls. A null result for selected neurons does not exclude untested coordinates, positions or joint mechanisms. State-transfer sufficiency is not an exhaustive circuit decomposition.
 
-Candidate intervention directions can be estimated from paired raw--anonymous
-or entity-swap residual differences. Candidate forms include:
+### Jacobian methods interpret representations but do not establish causal paths
 
-1. direct entity-token attenuation as a simple baseline;
-2. removal of a contrastive mean direction;
-3. low-rank projection/subtraction from an entity-difference subspace; and
-4. Jacobian-guided weighting of directions that affect the current output.
+Token/layer gradients measure local first-order sensitivity to a fixed task score. Jacobian-lens readouts transport an intermediate representation into a vocabulary readout. Neither is an attention map, chain-of-thought trace, discrete reasoning path or standalone causal proof. Component nominations require separate causal validation; decoded semantics do not guarantee a controllable decision direction.
 
-An adaptive risk score may combine entity dominance, swap sensitivity,
-raw--anonymous gap, exposure information, and temporal-leakage indicators. Any
-risk score and intervention strength must be calibrated on held-out data rather
-than selected from the evaluation examples.
+### Generalisation must compare mechanisms rather than identical coordinates
 
-Intervention layers should be selected using the causal localisation results,
-then tested with a layer-by-strength sweep. A strong effect at a high-Jacobian
-layer is useful causal corroboration, but does not make the Jacobian readout
-itself causal.
-
-## 5. Evaluation framework
-
-Every intervention evaluation must report the following separately.
-
-### Bias magnitude and steering efficacy
-
-Measure the change in a fixed outcome probability or logit margin after
-intervention. Report both absolute effect and reduction of the raw--anonymous or
-raw--swap gap. Do not interpret differences between unrelated token top-1
-probabilities as causal effects.
-
-### Dose response
-
-Sweep intervention strength `s` or `alpha` and test whether the effect changes
-monotonically or predictably. Report the full curve, not only the strength with
-the largest effect. Repeat the sweep across candidate layers and show a
-layer-by-strength heatmap.
-
-### Specificity and task preservation
-
-Check sentiment accuracy, macro-F1 where applicable, calibration, confidence
-stability, event-semantic retention, legitimate entity information, unrelated
-financial questions, non-entity prompts, output format, coherence, latency,
-and memory overhead.
-
-### Baselines and controls
-
-The original entity-substitution comparison is the unguided behavioural
-baseline. It must be compared with simple attenuation, mean-difference
-subtraction, random-direction controls, non-entity position controls, and
-matched synthetic controls at comparable perturbation norms.
-
-### Statistical discipline
-
-Use content-level paired sampling, bootstrap or sign-flip/permutation tests,
-effect sizes, confidence intervals, and multiple-comparison correction for
-layer/component scans. Exploratory layer selection must be separated from
-confirmatory evaluation data.
-
-## 6. Current maturity and claim boundaries
-
-### Implemented foundation
-
-- model-specific Jacobian-lens fitting and artifact validation;
-- residual activation patching with entity-span alignment;
-- EDGAR 8-K staging and provenance-preserving cleaning; and
-- entity-only counterfactual-data protocol, annotation workflow, review gate,
-  pairing, model-specific rendering, and validation code.
-
-### Active validation
-
-- manual review and promotion of the counterfactual dataset;
-- full variable-length patch integration coverage and model smoke artifacts;
-- residual/representation metrics beyond the existing compact readouts; and
-- paired controls and statistics suitable for confirmatory causal claims.
-
-The counterfactual-data pipeline is implemented, but a draft annotation run is
-not a validated research dataset. No bias conclusion should be based on rows
-that have not passed the review and promotion gates.
-
-### Future research
-
-- attention, MLP, head, and path-level component tracing;
-- guidance-inspired selective intervention and risk gating;
-- systematic layer-by-strength intervention evaluation;
-- cross-model and cross-task generalisation; and
-- the separate [J-space evaluation design](../j-space-evaluation/proposal.md), which is
-  an optional auxiliary preflight for synthetic task-local J-space-candidate
-  comparison rather than part of this proposal.
-
-## 7. Expected contributions
-
-1. A controlled entity-only counterfactual protocol that separates four
-   condition families and five V1 pairing strategies.
-2. A causal and mechanistic analysis that distinguishes direct entity effects,
-   representation signals, and causal transfer.
-3. A layer-aware, guidance-inspired intervention framework with dose-response
-   and specificity evaluation.
-4. A reproducible approach to comparing entity-sensitive pathways across local
-   models, supported by model-specific lens provenance and the same entity-only
-   causal protocol, controls, and statistics for every model.
-
-## 8. Timeline and target venue
-
-The current planning target is **NAACL 2027**, with the following backward-planned
-phases:
-
-1. **Scope alignment:** finalise metrics, evidence roles, and the position of
-   Henry's entity-swap findings as motivation and an unguided baseline. Related
-   documents: [baseline trial proposal](../baseline-trial/proposal.md),
-   [prompt-analysis reproducibility report](../baseline-trial/report-reproducibility.md),
-   and [artifact identity contract](../artifact-contract.md).
-2. **Dataset construction:** complete entity pairs, no-context/with-context
-   probing, specificity holdouts, and external outcome data where required.
-   Related documents: [archived counterfactual dataset protocol](../archive/counterfactual-dataset-generation.md),
-   [archived EDGAR preparation protocol](../archive/edgar-8k-preparation.md), and
-   [Technology header-span sensitivity proposal](../span-sensitivity/proposal.md).
-3. **Mechanistic analysis:** run baseline probing, extract Jacobian signals,
-   localise causal layers, and establish controls. Related experiments:
-   [Jacobian-lens selection](../jacobian-lens-selection/proposal.md),
-   [valence readout](../jspace-valence-readout/proposal.md),
-   [activation patching causal tracing](../activation-patching-causal-tracing/proposal.md),
-   and [sector/context follow-up](../sector-context-followup/proposal.md).
-4. **Intervention pipeline:** implement the selected direction and layer logic,
-   then run strength sweeps. Related experiments: [J-space sector intervention](../jspace-sector-intervention/proposal.md)
-   and [J-space token experiment versions](../jspace-token-experiments/README.md).
-5. **Full evaluation:** measure steering efficacy, dose response, specificity,
-   layer-by-strength interactions, and baseline comparisons. Related reports:
-   [J-space sector intervention held-out report](../jspace-sector-intervention/report.md),
-   [J-space token V2 report](../jspace-token-experiments/report-v2.md), and
-   [B V1 confirmation report](../sector-context-followup/report-confirmation.md).
-6. **Analysis and consolidation:** perform statistical analysis, error analysis,
-   and figure consolidation. Related reports: [activation patching report](../activation-patching-causal-tracing/report.md),
-   [sector/context discovery report](../sector-context-followup/report-discovery.md),
-   and [header-span sensitivity discovery report](../span-sensitivity/report-status.md).
-7. **Draft and advisor review:** prepare the full paper and complete feedback
-   cycles. Status and evidence-readiness are tracked in the
-   [entity-bias roadmap](entity-bias-roadmap.md).
-8. **Revision and submission:** finalise the paper and confirm the applicable ARR
-   cycle and commitment deadline from the official conference sources. The
-   [research-ready gate](entity-bias-roadmap.md#research-ready-gate) determines
-   which results may support the primary claim.
-
-The dates in the planning notes are scheduling assumptions and must be verified
-before they are presented as official submission deadlines.
-
-## 9. References
-
-- Dhariwal, P. and Nichol, A. (2021). *Diffusion Models Beat GANs on Image
-  Synthesis*. NeurIPS 2021. arXiv:2105.05233.
-- Ho, J. and Salimans, T. (2021/2022). *Classifier-Free Diffusion Guidance*.
-  NeurIPS 2021 Workshop on Deep Generative Models and Downstream Applications;
-  arXiv:2207.12598.
-- Henry's report: *No Name, No Gain: Unpacking Entity Bias in LLM Financial
-  Sentiment*. Internal/related report; bibliographic metadata is not specified
-  in the current repository.
-- Gurnee et al. (2026). *Verbalizable Representations Form a Global Workspace
-  in Language Models*. arXiv:2607.15495. This reference motivates the Jacobian
-  lens readout and the working-space concept; it is not a claim that this
-  project directly establishes a global workspace. A separate, optional,
-  non-runnable [J-space evaluation design](../j-space-evaluation/proposal.md) proposes a
-  synthetic task-local preflight for comparing candidate evidence across local
-  models; it does not gate or replace the entity-only causal protocol.
+Retain the original cross-model ambition: compare at least two model scales and, where feasible, different families; complete at least one non-financial entity-sensitive task. Candidate models, task, sampling and acceptance criteria require dedicated protocols before runs. Compare normalised layer depth and analogous operations rather than requiring another model to reproduce L15/N8490 or an eight-dimensional subspace. A valid null or model-specific result is an outcome, not a failed research program.
+
+Validate a model-specific canonical lens for transported readouts; do not make lens use a requirement for every causal intervention. The proposed [J-space evaluation](../j-space-evaluation/proposal.md) remains optional and non-runnable, not a generalisation gate.
+
+## 5. Current evidence supports scoped contributions, not a completed program
+
+| Evidence | Supported interpretation and limit |
+|---|---|
+| [Activation patching report](../activation-patching-causal-tracing/report.md) | Unchanged held-out confirmation supports the evidence→instruction-context→final sufficiency shift under valence contrasts, not an entity-specific or sector-specific mechanism. |
+| [Entity Cell report](../entity-cell-localization/report.md) | V3 confirms four factual entity cells in calibration/hold-out; decision probes separately delimit their decision effects. E4 remains a proposed diagnostic, not a new causal certification. |
+| [Balanced Evidence Gap Phase 2](../balanced-evidence-gap/details/report-phase2.md) and [Phase 3](../balanced-evidence-gap/details/report-phase3.md) | Behavioural gap confirmation and discovery localisation identify an early entity span and later instruction context. Three selected late MLP coordinates fail causal validation, 0/3 confirmed; this does not exclude all single-neuron mechanisms. |
+| [Entity-to-Dial report](../entity-to-dial/report.md) | In the tested Qwen3.5-4B population/directions, L15 k=8 projection recovers a 0.983 effect ratio; Phase F additivity fails. Neither establishes held-out subspace generalisation or selective gap reduction. |
+| [Investment-dial report](../investment-dial/report.md) | V2 calibration passes for global stance modulation; B is reevaluation of previously used companies, not fresh held-out entity-specific validation or numeric replication. |
+| [J-space token V1/V2](../jspace-token-experiments/proposal.md), [sector intervention](../jspace-sector-intervention/report.md), [sector/context B V1](../sector-context-followup/report.md) | V1 shortlist is empty; V2 formal success=false and position specificity is unestablished; sector specificity was not confirmed. These limits remain part of the evidence. |
+
+Formal execution does not make a discovery scan confirmatory. Numerical claims use their owning phase reports; the roadmap records remaining confirmation and generalisation work.
+
+## 6. Expected contributions now centre on behaviour, mechanisms and their limits
+
+1. A reproducible account of entity-induced decision gaps under explicit evidence and identity contrasts, without conflating factual recall, global stance and harmful bias.
+2. Controlled localisation and comparison of decision-relevant positions, layer bands and residual/component interventions, including unsuccessful hypotheses and their tested scope.
+3. An empirical account of the distinction between factual entity memory, entity-conditioned state transfer and global stance modulation; no universal neuron or selective-control success is presumed.
+4. Cross-model and cross-task tests identifying shared findings and differences with model/task-specific provenance. This contribution is **required but not yet established**.
+
+Selective inference-time control remains an independent follow-up. The original mean-difference, low-rank subtraction and Jacobian-weighted ideas are candidates, not validated methods. Any control claim still requires gap reduction, specificity, dose response and task/legitimate-information preservation; a strong transfer effect alone cannot substitute for them.
+
+## 7. Completion depends on evidence quality and generalisation, not intervention success
+
+Use paired independent sampling, effect sizes, uncertainty and scan-appropriate multiple-comparison correction. Separate discovery choices from confirmation. Freeze task definitions and controls before new model/task evaluation, retain negative results, and preserve compact artifacts and provenance without raw activations.
+
+The [research-ready gate](entity-bias-roadmap.md#research-ready-gate) defines program completion. Closed Qwen experiment lines remain closed; subsequent confirmation/generalisation requires independent protocols, not revisions to their frozen gates.
+
+NAACL 2027 remains the original venue planning target. Original dates are retained as historical scheduling assumptions in the roadmap; neither an official deadline nor a new completion date is asserted here.
+
+## 8. References and method boundaries
+
+- Henry, *No Name, No Gain: Unpacking Entity Bias in LLM Financial Sentiment*: motivating internal/related report; complete bibliographic metadata is unavailable in this repository.
+- Gurnee et al. (2026), *Verbalizable Representations Form a Global Workspace in Language Models*, arXiv:2607.15495: Jacobian-lens motivation, not evidence that this project establishes a global workspace.
+- Park et al. (2026), *Your AI, On a Dial: Controlling Investment Bias in LLMs with a Single Neuron*, arXiv:2608.22852: method provenance for the independent investment-dial line.
+- Dhariwal and Nichol (2021), *Diffusion Models Beat GANs on Image Synthesis*, arXiv:2105.05233; Ho and Salimans (2021/2022), *Classifier-Free Diffusion Guidance*, arXiv:2207.12598: original control analogy retained only for follow-up design, not a claim that residual dynamics are diffusion dynamics.

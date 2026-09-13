@@ -1,7 +1,7 @@
 """Entity-to-Dial Phase B — handoff-interval block-level patch.
 
 Runs the 3-stage pipeline (prepare → forward → analyze) defined in
-docs/entity-to-dial/proposal.md §4.3 (Rev 1): 8 directions x 4 layers
+docs/entity-to-dial/details/proposal-phase-abc.md §4.3 (Rev 1): 8 directions x 4 layers
 (L12–15) x 2 components (MLP block vs attention block) patch forwards
 with fp32 block arithmetic, self-source no-op discipline, and gate B
 (MLP path existence + cross-sector sign agreement).

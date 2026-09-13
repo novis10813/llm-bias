@@ -154,3 +154,22 @@ C_{position}=E(\text{sector, evidence})-E(\text{sector, final}).
 \(C_{position}>0\) 才支持 evidence-position specificity。Calibration descriptive estimate 僅為 \(0.0521-0.0469=0.0052\)，因此 held-out 很可能不支持此 claim；仍需按預先定義完整報告。Sector-prototype shuffled-evidence contrast 作為 secondary position control，不改變 primary position estimand。
 
 兩個 estimands 將分別報告 ticker-clustered paired bootstrap interval。Direction specificity 成立時，不自動宣稱 position specificity；position specificity 未成立時，也不抹除 direction contrast 的結果。
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [baseline-trial](../baseline-trial/proposal.md)（資料／產物依賴）：使用 trial-plan CSV 的公司與結構化證據。
+- [jacobian-lens-selection](../jacobian-lens-selection/proposal.md)（資料／產物依賴）：產業座標介入使用 canonical lens 的投影。
+
+**後續**
+
+- [jspace-valence-readout](../jspace-valence-readout/proposal.md)（資料／產物依賴）：共用已固定的 ticker split manifest，不重分 discovery/calibration/test。
+- [span-sensitivity](../span-sensitivity/proposal.md)（資料／產物依賴）：共用 split manifest；以 header 表面替換建立行為基準，不依賴介入成功。
+- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（資料／產物依賴）：V1/V2 沿用 split manifest；各版本保留獨立 config 與 gate。
+- [sector-context-followup](../sector-context-followup/proposal.md)（資料／產物依賴）：A/B/C 沿用 Technology 與 Financial Services split manifest。
+- [entity-cell-localization](../entity-cell-localization/proposal.md)（資料／產物依賴）：E1 V1 沿用 split manifest；不是以 sector intervention verdict 為 gate。
+
+最終／最新結果見本研究的 [report](report.md)。

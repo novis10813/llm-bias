@@ -1,6 +1,6 @@
 """J-lens structural readout of the Phase 3 neuron coordinates.
 
-Post-line-closing diagnostic (docs/balanced-evidence-gap/diagnostic-jlens-neurons.md,
+Post-line-closing diagnostic (docs/balanced-evidence-gap/details/diagnostic-jlens-neurons.md,
 frozen 2026-09-10). For each (layer, neuron) coordinate, the injected
 residual direction (the down-projection row, same channel index as
 ``mlp_addition``) is transported to the final-layer basis with the
@@ -173,7 +173,7 @@ def run_jlens_neurons_diagnostic(
                 "diagnostic_only": True,
                 "raw_runtime_payloads": False,
                 "no_forwards": True,
-                "protocol": "docs/balanced-evidence-gap/diagnostic-jlens-neurons.md (frozen 2026-09-10)",
+                "protocol": "docs/balanced-evidence-gap/details/diagnostic-jlens-neurons.md (frozen 2026-09-10)",
                 "lens": {
                     "path": str(lens.path),
                     "binary_sha256": _sha256(lens.path),

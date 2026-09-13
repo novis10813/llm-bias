@@ -1,14 +1,14 @@
 """Frozen entity-to-dial constants.
 
 All frozen values (dial coordinate, margin groups, thresholds, smoke
-grid) are defined in docs/entity-to-dial/proposal.md (Rev 1); changes
+grid) are defined in docs/entity-to-dial/details/proposal-phase-abc.md (Rev 1); changes
 require a new protocol version, not an edit here.
 """
 from __future__ import annotations
 
 SCHEMA_VERSION = "entity-to-dial-v1"
 DATASET = "entity-to-dial"
-PROTOCOL = "docs/entity-to-dial/proposal.md"
+PROTOCOL = "docs/entity-to-dial/details/proposal-phase-abc.md"
 
 # Investment-dial coordinate (L15/n8490, native intermediate units).
 DIAL_LAYER = 15
@@ -57,7 +57,7 @@ SMOKE_B_LAYERS: tuple[int, ...] = (12, 15)
 SMOKE_C_TICKERS: tuple[str, ...] = ("NSC", "IT")
 
 # ── Phase D (proposal-phase-d.md Rev 1) ─────────────────────────────────────────
-PROTOCOL_D = "docs/entity-to-dial/proposal-phase-d.md"
+PROTOCOL_D = "docs/entity-to-dial/details/proposal-phase-d.md"
 PROTOCOL_D_REV = 1
 
 # Phase D grid (§4.2): L12–31 instruction-span block sweep.
@@ -75,7 +75,7 @@ D2_CONTROLS_N = 10
 D2_CONTROLS_SEED_BASE = 42
 
 # ── Phase E (proposal-phase-e.md Rev 1) ────────────────────────────────────
-PROTOCOL_E = "docs/entity-to-dial/proposal-phase-e.md"
+PROTOCOL_E = "docs/entity-to-dial/details/proposal-phase-e.md"
 PROTOCOL_E_REV = 1
 
 # E1 grid (§4.2): L12–18 joint + full-swap arms.
@@ -105,7 +105,7 @@ E2A_RATIO_TARGET = 0.8
 
 # ── Phase F: dual-path additivity + directional push (proposal-phase-f.md) ──
 
-PROTOCOL_F = "docs/entity-to-dial/proposal-phase-f.md"
+PROTOCOL_F = "docs/entity-to-dial/details/proposal-phase-f.md"
 PROTOCOL_F_REV = 1
 
 # Intervention layer (Phase E's strongest layer; frozen).

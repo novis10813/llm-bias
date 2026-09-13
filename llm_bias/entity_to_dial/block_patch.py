@@ -1,6 +1,6 @@
 """Block-level (attention vs MLP) patch transforms.
 
-Research semantics for docs/entity-to-dial/proposal.md §4.3: block
+Research semantics for docs/entity-to-dial/details/proposal-phase-abc.md §4.3: block
 contribution replacement restricted to entity positions, with fp32
 block arithmetic. Hook lifecycle comes from
 llm_bias.core.inference.interventions. Pipeline self no-ops use direct

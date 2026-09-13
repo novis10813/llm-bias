@@ -1,295 +1,81 @@
-# Entity-bias research roadmap
+# Entity-influence research roadmap
 
-**Status:** active execution roadmap for the entity-bias research program.
+**Status:** revised execution roadmap; program incomplete. Behavioural confirmation and mechanistic analysis are the current main deliverables. Cross-model and cross-task validation are both required. Selective intervention is a separate follow-up and does not gate this round.
 
-This roadmap is the single planning source for the current entity-bias work. It
-separates research design from implementation documentation and separates
-`code/protocol implemented` from `validated artifact/evidence complete`.
-The conceptual rationale is in the [research proposal](entity-bias-research-proposal.md);
-commands, schemas, and artifact contracts remain in the linked execution docs.
+The [research proposal](entity-bias-research-proposal.md) defines the questions and claim limits; the [research directory](../README.md) links all experiment protocols and results. This revision changes program scope, not historical experiment gates or authorizations.
 
-## Scope and dependencies
+## Original milestones remain traceable without being relabelled as completed
 
-The active path is:
+Early work retained the original method order: behavioural analysis, transported readout, causal localisation and matched controls. Later questions expanded into factual-memory/decision differences, global stance modulation, entity-gap localisation and instruction-state subspaces.
 
-```text
-reviewed counterfactual data
-  -> model-specific rendered pairs
-  -> direct / representation / causal baselines
-  -> controls and paired statistics
-  -> selective intervention
-  -> cross-model and cross-task evaluation
-```
-
-The separate [J-space evaluation design](../j-space-evaluation/proposal.md) is an
-optional auxiliary preflight derived from the working-space concept in the
-Jacobian-lens literature. It evaluates synthetic task-local J-space-candidate
-evidence and may make compatibility checks and cross-model protocol diagnostics
-faster. It is not a substitute for entity-only data or domain-specific causal
-patching, and it is not a blocker or evidence gate for the M1–M6 milestones.
-
-## Schedule
-
-The dates below follow the current backward-planned schedule supplied in the
-research proposal. They are planning targets, not completed results or official
-conference deadlines. M1 and M2 may overlap because review/promotion and
-model-specific rendering are both part of the dataset-construction window.
-
-| Milestone | Planned window | Expected completion |
+| Original milestone and planned window | Actual evidence or divergence | Revised planning role |
 |---|---|---|
-| [M1 — Review and promotion closure](#m1--close-review-and-promotion-2026-08-04--2026-08-10) | 2026-08-04 – 2026-08-10 | Promoted, provenance-complete `validated_content.jsonl` |
-| [M2 — Rendered pair readiness](#m2--render-and-validate-model-specific-pairs-2026-08-11--2026-08-17) | 2026-08-11 – 2026-08-17 | Validated model-specific pair manifests and smoke artifacts |
-| [M3 — Mechanistic analysis baseline](#m3--establish-the-entity-bias-baseline-2026-08-18--2026-08-31) | 2026-08-18 – 2026-08-31 | Layer-level Jacobian and causal-localisation results |
-| [M4 — Controls and confirmatory statistics](#m4--add-controls-and-confirmatory-statistics-2026-08-18--2026-08-31) | 2026-08-18 – 2026-08-31 | Control-complete effect, uncertainty, and significance tables |
-| [M5 — Selective intervention evaluation](#m5--implement-and-evaluate-selective-intervention-2026-09-01--2026-09-07) | 2026-09-01 – 2026-09-07 | Guidance-inspired intervention implementation and dose-response results |
-| [M6 — Cross-model and cross-task generalisation](#m6--cross-model-and-cross-task-generalisation-2026-09-08--2026-09-14) | 2026-09-08 – 2026-09-14 | Comparable model/task experiment results and manifests |
-| Analysis and consolidation | 2026-09-15 – 2026-09-21 | Consolidate the [activation patching](../activation-patching-causal-tracing/report.md), [sector/context](../sector-context-followup/report-discovery.md), and [span-sensitivity](../span-sensitivity/report-status.md) results |
-| Draft and advisor review | 2026-09-22 – 2026-09-28 | Draft against the [canonical research proposal](entity-bias-research-proposal.md) and current evidence-readiness table |
-| Revision and submission preparation | 2026-09-29 – 2026-10-11 | Apply the [research-ready gate](#research-ready-gate) before retaining primary claims |
+| M1: 8-K review/promotion, 2026-08-04–08-10 | The [counterfactual dataset workflow](../archive/counterfactual-dataset-generation.md) is archived; promotion is not established by the active baseline runs. | Historical, not completed. Active data provenance and contrast validity replace restoration as the current requirement. |
+| M2: model-specific counterfactual rendering, 2026-08-11–08-17 | Active experiments use their own prepared baseline prompts, tokenization and spans, not the archived four-family dataset. | Historical contract retained in archive; new model/task preparation still needs its own validation. |
+| M3: mechanistic baseline, 2026-08-18–08-31 | Readout and activation patching followed the plan; Entity Cell, Balanced Evidence Gap and Entity-to-Dial extended the mechanism questions. | Substantial Qwen3.5-4B evidence exists, with experiment-specific limits; not completion of the original entity-only contract. |
+| M4: controls and confirmation, 2026-08-18–08-31 | Activation patching held-out confirmation passes; sector/context specificity and selected-neuron hypotheses fail; several scans remain discovery. | Preserve each verdict and require confirmation appropriate to any retained primary claim. |
+| M5: selective intervention, 2026-09-01–09-07 | Sector/token steering did not establish entity selectivity; Investment-dial supports global stance calibration; subspace transfer is not selective removal. | Moved to independent follow-up, not marked passed and not required for this round. |
+| M6: cross-model/task generalisation, 2026-09-08–09-14 | No completed standardised comparison establishes the current mechanism claims across models and tasks. | Required and incomplete; dedicated protocols and runs remain to be planned. |
 
-## Current status
+The original consolidation (2026-09-15–09-21), draft/advisor review (09-22–09-28) and revision/submission preparation (09-29–10-11) windows are historical assumptions, not current completion promises. NAACL 2027 remains the original planning target, not a verified deadline. No replacement schedule is assigned by this revision.
 
-| Workstream | Code/protocol status | Validated evidence status |
+## Current evidence separates completed experiments from established claims
+
+| Research line | Evidence status | Role and limit |
 |---|---|---|
-| Model-specific Jacobian lenses | Qwen fitting, selection, promotion, and pinned-registry workflows exist; Llama usage remains in the archived patching smoke path | Cross-model conclusions and alternative-lens sensitivity/robustness are not established |
-| Residual span patching | Batch mapping, hooks, and variable-length normalized-nearest mapping are implemented under `archive/llm_bias/counterfactual_patching/`; the archived interactive dashboard still rejects differing encoded shapes | Full model smoke coverage and all acceptance artifacts remain pending |
-| Entity-only counterfactual data | Annotation, review bundle, promotion, four families, five pairing strategies, rendering, and validation code are frozen under `archive/llm_bias/counterfactual_data/` | Draft rows still require review/promotion; no unpromoted draft is research-ready |
-| External entity covariates | Market capitalisation, media/corpus exposure, and other continuous attributes are part of the research design | No date-aligned, provenance-complete continuous covariate linkage or coverage/missingness validation exists; current synthetic evidence uses only coarse tier/sector groupings |
-| Representation readout | Compact transported readouts and outcome margins exist | Formal residual-distance/divergence evidence is pending |
-| Causal controls/statistics | Basic non-entity control and exploratory summaries exist; the entity-only patching protocol and code paths are available | Reviewed/promoted pairs, full entity-only patching runs, bidirectional and unrelated/random controls, independent sampling, paired uncertainty, and correction are pending |
-| Entity-specific selective intervention | Research design only | Not implemented or evaluated |
-| J-space sector intervention | Active `jspace-intervention` workflow implements swap/gain, dose-matched controls, valence readout, V1 token causal screening, and V2 outcome-conditioned decision-flip (Draft 1 frozen and implemented; first formal pipeline completed 2026-08-28) | Qwen3.5-4B sector held-out specificity was not supported; V1 token shortlist is empty; V2 Test run 1 returned `success=false`: Buy steering passed, while the sell-direction Holm gate could not pass with only two eligible test tickers; final-position control reproduced both directions, so evidence-position specificity was not established |
-| Activation patching causal tracing | Draft 1 hierarchical residual resample patching and frozen confirmation analysis are implemented in `jspace-intervention` | Discovery localized an evidence → instruction-context → final-position sufficiency shift; the unchanged Qwen3.5-4B held-out confirmation returned `success=true` |
-| Sector and context follow-up | A V1 cross-sector header-state patching, B V1 negative-evidence context overriding, C V1 L16 instruction-context readout, and B V1 frozen confirmation analysis are implemented with separate artifacts | A/B/C discovery runs are recorded. B V1 calibration reproduced the L16 context effect but failed the same-sector peer specificity gate (`success=false`, `test_authorized=false`); held-out test was not run, so no formal sector-conditioned claim is established |
-| Technology header-span sensitivity | V1 header-only condition preparation, fixed Buy/Sell margin scoring, paired analysis, artifact lifecycle, and CLI are implemented | Technology discovery completed on 35 tickers. `same_sector_swap` exceeded the name-form control and is the calibration primary condition; calibration/test protocol remains unfrozen |
-| Entity cell localization and downstream attribution | V1 frozen protocol (header family) and V2 frozen protocol (surface-varying frames) implemented in `llm_bias/entity_cell/` with `entity-cell` CLI, deterministic E2 donor contracts, lifecycle checks, and confirmation evaluator | V1 E1 discovery complete: 0/35 (template-dominated; documented V1 surface-control limitation); E2 discovery complete (descriptive, instruction-dominant late heads); V2 E1 discovery complete: 1/35 trusted candidate (FTNT, shared-top-1 caveat); V2 HFM discovery (6 high-factual-memory entities) complete: 1/6 trusted candidate (AMZN, `(L0, N1476)`), factual amnesia probe (proposed) shows dose-dependent HQ fact collapse with flat controls, decision-level probe (proposed) shows no buy/sell decision flip (entity prior distributed); V2 HFM-2 batch (11 broad entities incl. cross-sector) complete: 0/11 formal trusted (9/11 endpoint-gated), fact-level probe confirms JNJ `(L4, N7676)` (strongest: -8.51 nats HQ collapse, refusal at full suppression) and JPM `(L0, N9025)` (moderate, all-3-frame specific); JNJ/JPM E2/E3 battery (proposed selection, frozen readouts): 0 buy/sell flips incl. one true opposite combo, E3-B null, factual cell dissociated from the decision path; fact probe batch 2 (13 targets; ad-hoc cross-checks against JNJ/AMZN only) shows (L0, N4485) carries HQ/ticker parametric memory for 5+ entities (INTC/QCOM/V/WMT/XOM, KO partial) with no effect on AMZN — second neuron type: shared fact channel; E1 V3 (fact-level amnesia gate + shared fact channel classification) **frozen** after calibration (`entity-cell-e1-v3-hfm2-calibration-v1`: 2 entity cells JNJ `(L4, N7676)`, PLTR `(L2, N5003)`; 3 fact_carrier_unrobust JPM/V/XOM; 3 shared_fact_channel KO/ORCL/WMT; 3 not_eligible INTC/QCOM/UBER) and hold-out validation (`entity-cell-e1-v3-holdout-v1`, 11 new entities LLY/PFE/UNH/BAC/WFC/CVX/COP/BA/CAT/PG/NKE: 2 entity cells BAC `(L0, N7801)`, CAT `(L2, N7997)`; 2 new shared channels L3N5456 LLY↔BAC, L2N5322 WFC↔BAC; (L4, N4184) known calibration channel recurs at BAC; control distributions consistent; gold human-verification pass 18/33, entity-dependent, fail-closed correct); V3 runs are the formal entity-cell determination; shared channel network so far: (L0, N3) 9 entities, (L0, N4485) 4, (L4, N4047) JNJ↔JPM, (L0, N104) WMT↔V, (L3, N7403) INTC↔QCOM, (L2, N8500) INTC↔XOM, (L4, N4184) JPM↔V(+BAC); FTNT factual recall preflight NO-GO; see [version index](../entity-cell-localization/README.md) and the [line-closing report](../entity-cell-localization/report-line-closing.md) |
-| Cross-model/task evaluation | Model loaders and model-specific lens paths exist | No standardised cross-model/task result exists |
-| Optional J-space-candidate preflight | Proposed non-runnable design exists | `jspace_eval` package and CLI are not implemented |
+| [Baseline trial](../baseline-trial/report.md) and [lens selection](../jacobian-lens-selection/report.md) | Reproducibility and instrument reports exist; completion is dataset/run-specific. | Foundation, not entity-bias certification. Lens choice alone does not establish lens robustness. |
+| [Span sensitivity](../span-sensitivity/report.md) | V1 Technology discovery completed; calibration/test protocol unfrozen. | Behavioural header sensitivity, not held-out confirmation. |
+| [Valence readout](../jspace-valence-readout/report.md) | Technology discovery completed. | Representation candidates, not causal proof. |
+| [Sector intervention](../jspace-sector-intervention/report.md) and [J-space token V1/V2](../jspace-token-experiments/proposal.md) | Sector held-out specificity unsupported; V1 shortlist empty; V2 formal success=false, position specificity unestablished. | Limits of these direction/control choices, not proof that all selective intervention is impossible. |
+| [Activation patching](../activation-patching-causal-tracing/report.md) | Draft 1 unchanged held-out confirmation success=true. | Valence-driven evidence→instruction context→final sufficiency shift, not entity-specific validation. |
+| [Sector/context follow-up](../sector-context-followup/report.md) | A/B/C discovery completed; B V1 calibration success=false, held-out test not run. | Context-state effect does not establish sector specificity. |
+| [Entity Cell](../entity-cell-localization/report.md) | Main line closed; V3 four factual cells confirmed in calibration/hold-out; E4 probe completed but proposed. | Factual memory certification and decision probes are separate evidence, not an entity-control success. |
+| [Financial-soundness localisation](../financial-soundness-localization/report.md) and [causal validation](../financial-soundness-causal-validation/report.md) | Exploratory V1 completed; no formal certification. | Related measurement branch; no basis for declaring financial neurons absent. |
+| [Investment-dial](../investment-dial/report.md) | Closed; V2 calibration pass, B reevaluation, not fresh held-out validation. | Global stance modulation; independent method replication, not entity-specific control. |
+| [Balanced Evidence Gap](../balanced-evidence-gap/proposal.md) | Phase 1 behaviour confirmed; Phase 2 discovery completed; Phase 3 causal gate fails, 0/3 confirmed. | Entity gap and layer-band evidence; negative result limited to selected coordinates and interventions. |
+| [Entity-to-Dial](../entity-to-dial/report.md) | Phase A–F completed and closed; L15 k=8 effect ratio 0.983 in tested directions; F1 additivity fails. | Instruction-state subspace transfer, not held-out generalisation, complete circuit recovery or selective gap reduction. |
+| [J-space evaluation](../j-space-evaluation/proposal.md) | Optional, proposed, non-runnable. | Auxiliary design only; not a required milestone. |
 
-## Main-line alignment assessment
+Use the [Balanced Evidence Gap Phase 2 report](../balanced-evidence-gap/details/report-phase2.md) for its estimands and revision history: Phase 1 compares named/anonymous prompts within company-specific evidence; Phase 2A uses shared evidence. Rev 1 failure remains a failure after Rev 2 reevaluation. Formal run completion does not promote discovery results into independent confirmation.
 
-The current experiments follow the proposal's mechanistic-analysis method order:
-behavioural sensitivity → residual causal localisation → transported readout →
-matched-control confirmation. They provide strong M3 evidence and partial M4
-evidence for Qwen3.5-4B:
+## Remaining work is ordered by dependencies, not the old dates
 
-- [Activation patching causal tracing](../activation-patching-causal-tracing/proposal.md)
-  has a held-out `success=true` result for the evidence → instruction-context →
-  final-position sufficiency shift.
-- [Sector/context follow-up B V1](../sector-context-followup/proposal.md) reproduced
-  the L16 context effect in calibration, but its
-  [confirmation report](../sector-context-followup/report-confirmation.md) records
-  `success=false` because the same-sector peer specificity gate failed.
-- [Technology header-span sensitivity](../span-sensitivity/proposal.md) found a
-  behavioural `same_sector_swap` effect in discovery, but calibration/test remain
-  unfrozen.
+### Consolidate the Qwen evidence before choosing transfer claims
 
-These experiments therefore fit the mechanistic-analysis main line, but they do
-not complete the primary entity-bias claim. M1/M2 reviewed entity-only data are
-still missing, sector specificity was not confirmed, and the results have not
-been reproduced across the declared model set. The current defensible claim is
-Qwen3.5-4B identity-conditioned context-state sensitivity under the active
-fixed-evidence task, not validated harmful entity bias or a sector-specific
-mechanism.
+For each proposed primary claim, bind its contrast, population, prompt family, fixed-answer metric, intervention, controls, run ID and evidence status. Separate entity effects from evidence-valence transfer and factual recall. Check summary claims against phase reports, retaining protocol revisions and null results. Record which findings still need independent confirmation; do not reopen closed experiments by editing their gates.
 
-## Data terminology
+**Completion evidence:** a claim-to-run comparison using existing reports, with no unsupported promotion of discovery or normative harmful-bias claims.
 
-The counterfactual dataset has **four condition families**:
+### Define comparable model and task protocols before new runs
 
-- `real_vs_real`
-- `real_vs_anonymous`
-- `real_vs_synthetic`
-- `synthetic_vs_synthetic`
+Select at least two model scales and, where feasible, different families, plus at least one non-financial entity-sensitive task. Models, tasks, samples, splits and decision thresholds are not selected here. Establish task competence, identity contrasts, fixed-answer definitions, data provenance, independent sampling and analogous intervention operations. Validate tokenization/spans and conduct required model-backed smoke tests before formal runs.
 
-V1 materialises **five pairing strategies** because `real_vs_real` has two
-strategies:
+Use normalised depth for layer comparisons. Fit/install and validate separate canonical lenses only for transported-readout arms; test alternative lens conditions before claiming lens robustness. Neither the Qwen layer/channel coordinates nor k=8 is a universal target.
 
-1. same-industry `matched_exposure`;
-2. cross-industry neutral/stress;
-3. identity removal;
-4. memorised identity; and
-5. name-form baseline.
+**Completion evidence:** approved independent protocols, validated prepared inputs and instrument checks. This roadmap itself is not run authorization.
 
-`matched_exposure` is based on historical filing exposure and is not market-cap
-or size matching. The authoritative schema, review gate, and omission behavior
-are documented in [archived 8-K counterfactual entity dataset](../archive/counterfactual-dataset-generation.md).
+### Complete both cross-model and cross-task validation
 
-## Milestones
+Run the selected behavioural contrasts and causal tests with matched controls, paired uncertainty and correction where scanning is involved. Separate discovery selections from confirmation. Each comparison needs task-appropriate model competence and comparable evidence conditions; record failures and exclusions rather than silently changing thresholds.
 
-### M1 — Close review and promotion (2026-08-04 – 2026-08-10)
+**Completion evidence:** model/task-specific manifests, compact results and reports stating which patterns replicate, differ or are unresolved. A valid difference or null result can satisfy the evaluation requirement; identical mechanisms are not required. Neither model loaders nor a second task name alone satisfies this stage.
 
-**Related protocols:** [archived counterfactual dataset protocol](../archive/counterfactual-dataset-generation.md)
-and [archived EDGAR preparation protocol](../archive/edgar-8k-preparation.md).
+## Selective intervention remains a separate research line
 
-- Complete the review bundle and required reviewer fields.
-- Meet the registrant recall, entity precision/recall, grounding, semantic
-  outcome, and identity-leakage gates.
-- Promote only rows that pass the gate and preserve correction provenance.
-- Record rejected and omitted rows instead of silently relaxing constraints.
+The original M5 designs include attenuation, mean-difference subtraction, low-rank removal and Jacobian-weighted directions. Any future efficacy claim still requires dose response, specificity, preservation of task performance and legitimate entity information, and independent evaluation. Do not treat Investment-dial calibration or Entity-to-Dial transfer as satisfying those conditions.
 
-**Exit evidence:** a promoted `validated_content.jsonl`, a review manifest, and a
-provenance record showing that the dataset is not merely an annotation draft.
-
-### M2 — Render and validate model-specific pairs (2026-08-11 – 2026-08-17)
-
-**Related protocols:** [archived counterfactual patching](../archive/counterfactual-patching.md),
-[archived counterfactual dataset rendering](../archive/counterfactual-dataset-generation.md),
-and [artifact identity contract](../artifact-contract.md).
-
-- Build the four condition families and five V1 pairing strategies from promoted
-  content.
-- Materialise forward and reverse pairs.
-- Render tokenizer-specific entity spans for each target model.
-- Validate span boundaries, prompt alignment, identity leakage, sequence limits,
-  and compact artifact contents.
-- Complete deterministic tests for 1→1, 1→2, 2→1, and 2→3 span mappings, plus
-  model-backed smoke artifacts where available.
-
-**Exit evidence:** validated rendered pair manifests for each model, with source
-and target spans, position mappings, omissions, and no raw activations.
-
-### M3 — Establish the entity-bias baseline (2026-08-18 – 2026-08-31)
-
-**Related experiments:** [baseline trial](../baseline-trial/proposal.md),
-[Technology header-span sensitivity](../span-sensitivity/proposal.md),
-[Jacobian-lens selection](../jacobian-lens-selection/proposal.md),
-[J-space valence readout](../jspace-valence-readout/proposal.md),
-[activation patching causal tracing](../activation-patching-causal-tracing/proposal.md),
-and [sector/context follow-up](../sector-context-followup/proposal.md).
-
-- Use a fixed outcome margin such as `logit(positive) - logit(negative)`.
-- Report `direct_entity_effect`, representation signal, and
-  `causal_patch_effect` as separate quantities.
-- Compare raw, anonymous, real-swap, synthetic, and patched conditions under
-  the same context and expected outcome.
-- Run layer-wise Jacobian readouts as transported representation evidence, not
-  as causal claims.
-
-**Exit evidence:** compact per-pair/per-layer results and a reproducible report
-that never mixes factual answer-transfer metrics with bias-pair margins.
-
-### M4 — Add controls and confirmatory statistics (2026-08-18 – 2026-08-31)
-
-**Related reports:** [activation patching held-out confirmation](../activation-patching-causal-tracing/report.md),
-[sector/context discovery](../sector-context-followup/report-discovery.md),
-[B V1 confirmation](../sector-context-followup/report-confirmation.md),
-[J-space sector intervention held-out evaluation](../jspace-sector-intervention/report.md),
-and [Technology header-span sensitivity discovery](../span-sensitivity/report-status.md).
-
-- Run source→target and target→source patches.
-- Add unrelated/random entity, matched synthetic, non-entity position, residual
-  interpolation, and norm-matched controls where supported.
-- Sample at the independent content level, not by treating layer rows as
-  independent observations.
-- Add paired bootstrap and sign-flip/permutation tests, effect sizes,
-  confidence intervals, and multiple-comparison correction for scans.
-- Separate exploratory layer selection from held-out confirmation.
-
-**Exit evidence:** control-complete tables and uncertainty summaries that support
-an appropriately scoped causal statement.
-
-### M5 — Implement and evaluate selective intervention (2026-09-01 – 2026-09-07)
-
-**Related experiments:** [J-space sector intervention](../jspace-sector-intervention/proposal.md),
-[J-space token experiment index](../jspace-token-experiments/README.md),
-[V1 token causal screen](../jspace-token-experiments/proposal-v1.md), and
-[V2 outcome-conditioned decision flip](../jspace-token-experiments/proposal-v2.md).
-
-Only enter this milestone after M1–M4 show a stable entity-specific causal
-signal that is not explained by token form, arbitrary residual perturbation, or
-uncontrolled factual answer changes.
-
-- Implement mean-difference and low-rank direction baselines.
-- Select candidate layers from causal localisation, then run a layer × strength
-  sweep.
-- Add adaptive risk gating only after a held-out calibration design exists.
-- Evaluate steering efficacy, dose response, task preservation, specificity,
-  calibration, coherence, latency, and memory overhead.
-- Compare against unguided entity substitution and random-direction controls.
-
-**Exit evidence:** intervention artifacts with direction provenance, held-out
-calibration, full dose-response curves, and side-effect analysis.
-
-### M6 — Cross-model and cross-task generalisation (2026-09-08 – 2026-09-14)
-
-**Related protocols:** [model-specific Jacobian-lens selection](../jacobian-lens-selection/proposal.md),
-[baseline trial model workflow](../baseline-trial/proposal.md), and the optional
-[J-space candidate preflight](../j-space-evaluation/proposal.md). No completed
-cross-model/task experiment currently satisfies this milestone.
-
-- Fit and validate a separate lens for every model.
-- Use normalised layer depth rather than raw layer number.
-- Compare at least two model scales and, where feasible, multiple families.
-- Complete one non-financial entity-sensitive task only after the financial
-  protocol is stable.
-- Report common mechanisms separately from model-specific results.
-- Repeat the synthetic localization protocol with at least one justified alternative
-  lens condition and report peak-depth, sign, and metric-agreement sensitivity before
-  treating a localization pattern as lens-robust.
-
-**Exit evidence:** a shared protocol, model-specific manifests, and complete
-data→patch→statistics results for the selected model/task set.
-
-## Optional analysis design: J-space-candidate preflight
-
-The separate [J-space evaluation design](../j-space-evaluation/proposal.md) describes a
-future, non-runnable `jspace_eval` tool that may:
-
-- check whether a local decoder exposes the residual, unembedding, gradient, and
-  hook capabilities required by the analysis;
-- assess lens identifiability and baseline task competence;
-- measure readability, causal necessity, and cross-operator transfer as
-  synthetic task-local candidate evidence;
-- segment candidate evidence into comparable layer bands; and
-- emit machine-readable diagnostics that distinguish stable candidates,
-  task-dependent candidates, multiple candidate bands, no detectable candidate
-  evidence, unidentifiable lenses, insufficient competence, and incompatible
-  models.
-
-This is an optional model-comparison aid and preflight diagnostic. It neither
-gates M1–M6 nor qualifies an entity-bias claim. Every cross-model entity-bias
-result still requires that model's complete entity-only causal protocol,
-controls, and statistics. Its conceptual implementation phases are not merged
-into the active roadmap.
+Selective-intervention V1 is independently developed follow-up work, not completed evidence for this program revision. Its owning protocol determines implementation status and run authorization. This revision neither cancels that work nor approves its runs; its success is not necessary for the present mechanism study.
 
 ## Research-ready gate
 
-A result may support a primary entity-bias claim only when all of the following
-are true:
+The program is complete only when:
 
-- source and target differ only in entity identity and share the expected
-  outcome;
-- the rows passed the manual review and promotion gates;
-- direct entity effect, representation signal, and causal transfer are reported
-  separately;
-- bidirectional and matched control conditions are available;
-- uncertainty is estimated with content-level paired statistics;
-- model-specific lens, tokenizer, data, and configuration provenance is
-  complete;
-- the result is reproduced in the declared model set; and
-- artifacts contain compact metrics and provenance, not raw activations or model
-  weights.
+- primary claims specify evidence contrasts, populations and metrics, separating behaviour, causal transfer, factual recall and transported readout;
+- datasets pass their owning protocol's validation, with identity-only differences where claimed; archived 8-K promotion is not silently counted as complete or imposed on unrelated active data;
+- causal claims have the relevant bidirectional, no-op and matched controls, with scope consistent with the tested intervention;
+- uncertainty uses appropriate independent units and scan correction, and discovery is not presented as untouched confirmation;
+- required cross-model **and** cross-task evaluations are complete under their independent protocols, with positive, null and model-/task-specific findings reported;
+- model/tokenizer/configuration/data provenance is complete, lens identity is bound where used, and outputs contain compact derived results rather than raw activations; and
+- claims about harmful bias, useful-information preservation or selective control are omitted unless separately supported.
 
-Until these gates are met, results should be labelled exploratory, operational,
-or draft rather than validated evidence of harmful entity bias.
-
-## Canonical execution documents
-
-- [Counterfactual patching (archived)](../archive/counterfactual-patching.md)
-- [8-K counterfactual entity dataset (archived)](../archive/counterfactual-dataset-generation.md)
-- [Qwen Jacobian-lens selection](../jacobian-lens-selection/proposal.md)
-- [EDGAR 8-K preparation (archived)](../archive/edgar-8k-preparation.md)
-- [J-space sector intervention proposal](../jspace-sector-intervention/proposal.md) and [report](../jspace-sector-intervention/report.md)
-- [J-space valence vocabulary readout proposal](../jspace-valence-readout/proposal.md) and [report](../jspace-valence-readout/report-technology-discovery.md)
-- [J-space token experiment versions](../jspace-token-experiments/README.md)
-- [J-space token causal screen V1 proposal](../jspace-token-experiments/proposal-v1.md) and [report](../jspace-token-experiments/report-v1.md)
-- [J-space outcome-conditioned decision-flip V2 proposal](../jspace-token-experiments/proposal-v2.md) and [report](../jspace-token-experiments/report-v2.md)
-- [Activation patching causal tracing proposal](../activation-patching-causal-tracing/proposal.md) and [report](../activation-patching-causal-tracing/report.md)
-- [Sector and context follow-up proposal](../sector-context-followup/proposal.md), [discovery report](../sector-context-followup/report-discovery.md), and [B V1 confirmation report](../sector-context-followup/report-confirmation.md)
-- [Technology header-span sensitivity proposal](../span-sensitivity/proposal.md) and [discovery report](../span-sensitivity/report-status.md)
-- [Entity cell localization and downstream attribution versions](../entity-cell-localization/README.md): [proposal V1](../entity-cell-localization/proposal-v1.md) / [report V1](../entity-cell-localization/report-v1.md), [proposal V2](../entity-cell-localization/proposal-v2.md) / [report V2](../entity-cell-localization/report-v2.md) (V1 discovery 0/35; V2 discovery 1/35; calibration/test not frozen)
-- [Prompt-analysis reproducibility](../baseline-trial/report-reproducibility.md)
-- [Shared experiment core](../shared-experiment-core.md)
-- [Artifact identity and run manifest contract](../artifact-contract.md)
-- [Research scripts reference](../research-scripts.md)
-- [Repository constraints and verification commands](../../CLAUDE.md)
+The current program does **not** meet this gate: cross-model and cross-task evidence remains missing. Individual Qwen lines may be closed without the overall study being complete. The gate assesses evidence completeness, not whether an intervention succeeds.

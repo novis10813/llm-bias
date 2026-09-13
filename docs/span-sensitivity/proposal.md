@@ -109,3 +109,15 @@ localization 前至少需要：
 3. held-out test 的 condition、metric、prompt columns 與統計方法在 inference 前凍結；
 4. 完整 identity replacement 另有 alias review，不能把 V1 header-only 結果改稱
    entity-only causal effect。
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [jspace-sector-intervention](../jspace-sector-intervention/proposal.md)（資料／產物依賴）：共用 split manifest；以 header 表面替換建立行為基準，不依賴介入成功。
+
+**後續**：尚無已立案的後續研究；不把報告中的建議視為已授權實驗。
+
+最終／最新結果見本研究的 [report](report.md)。

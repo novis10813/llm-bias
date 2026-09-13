@@ -1,6 +1,6 @@
 """Phase 3: causal validation of the 2C entity-specific MLP coordinates.
 
-Frozen protocol: docs/balanced-evidence-gap/proposal-phase3.md (Rev 2).
+Frozen protocol: docs/balanced-evidence-gap/details/proposal-phase3.md (Rev 2).
 Additively perturbs three MLP down-projection coordinates (L19/n6334,
 L20/n6520, L26/n2394) and 30 matched control coordinates on the 16-ticker
 2A canonical prompt set, and tests gate 3A (predicted direction, ticker
@@ -369,7 +369,7 @@ def prepare_stage(
         "moe_width": MOE_WIDTH,
         "controls": {str(k): v for k, v in sorted(controls.items())},
         "baseline_margins": {t: baseline[t] for t in ALL_TICKERS},
-        "protocol": "docs/balanced-evidence-gap/proposal-phase3.md (Rev 2, frozen)",
+        "protocol": "docs/balanced-evidence-gap/details/proposal-phase3.md (Rev 2, frozen)",
     }
     with run.stage("prepare") as stage:
         path = out_dir / "provenance.json"

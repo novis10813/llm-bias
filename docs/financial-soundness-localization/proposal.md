@@ -1,6 +1,6 @@
 # 財務穩健判斷相關神經元定位
 
-**狀態：proposed，探索版 V1；不授權 formal run。** 程式已實作，僅授權 smoke / exploratory；真實模型定位 smoke 已完成，見 [工程記錄](report-smoke.md)，不構成財務神經元認證。完整探索結果見 [探索報告](report-exploratory-v1.md)。目標為 Qwen3.5-4B（.cache/models/qwen3.5-4b，GPU forward 使用 bf16）。
+**狀態：proposed，探索版 V1；不授權 formal run。** 程式已實作，僅授權 smoke / exploratory；真實模型定位 smoke 已完成，見 [工程記錄](details/report-smoke.md)，不構成財務神經元認證。完整探索結果見 [探索報告](report.md)。目標為 Qwen3.5-4B（.cache/models/qwen3.5-4b，GPU forward 使用 bf16）。
 
 ## 1. 三類短句分別探索話題、公司評價與財務判斷
 
@@ -25,7 +25,7 @@ topic 與 company 同時探索 stability、debt burden、liquidity 三種短句�
 | --- | --- | --- |
 | [Geva et al., Transformer Feed-Forward Layers Are Key-Value Memories](https://arxiv.org/abs/2012.14913) | 前饋層輸入模式及輸出詞彙 | 比較財務短句反應；不能由高激活推斷知識儲存 |
 | [Meng et al., Locating and Editing Factual Associations in GPT](https://arxiv.org/abs/2202.05262) | 事實定位與編輯 | 不執行 ROME，不把事實機制等同評價機制 |
-| [Entity-cell V2](../entity-cell-localization/proposal-v2.md) / [V3](../entity-cell-localization/proposal-v3.md) | 自然句定位、事實干預 | 重用方法原則，不沿用實體專屬性及事實崩塌 gate |
+| [Entity-cell V2](../entity-cell-localization/details/proposal-v2.md) / [V3](../entity-cell-localization/details/proposal-v3.md) | 自然句定位、事實干預 | 重用方法原則，不沿用實體專屬性及事實崩塌 gate |
 
 ## 3. 定位只使用 discovery，驗證句式不能回頭挑候選
 
@@ -73,3 +73,17 @@ formal discovery/calibration/test 仍被禁止：先以真實 tokenizer/model �
 ## 7. 新設計不得回填舊版結果
 
 目前是未執行的探索草稿；公司評價干預、Buy/Sell 與真實財報皆不是本輪認證目標。未找到候選也不證明偏好分散。首次 formal run 後凍結協議；prompt family、排名、gate、controls 或 split 改變時，依 [versioning](../documentation-system.md#experiment-versioning) 建立版本索引及 proposal-v1/v2，不覆寫歷史。
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [entity-cell-localization](../entity-cell-localization/proposal.md)（方法參考）：借用 V2/V3 自然句定位原則，不沿用實體專屬性與事實崩塌 gate。
+
+**後續**
+
+- [financial-soundness-causal-validation](../financial-soundness-causal-validation/proposal.md)（資料／產物依賴）：以定位產出的候選座標做獨立干預驗證；不從驗證句式回頭挑候選。
+
+最終／最新結果見本研究的 [report](report.md)。

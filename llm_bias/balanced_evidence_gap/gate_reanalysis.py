@@ -72,7 +72,7 @@ def run_2c_gate_reanalysis(
                     "mlp_layer_summaries_sha256": _sha256(mlp_path),
                     "mlp_n_layers": len(mlp_layer_summaries),
                 },
-                "protocol": "docs/balanced-evidence-gap/proposal-phase2.md §4.5",
+                "protocol": "docs/balanced-evidence-gap/details/proposal-phase2.md §4.5",
             }
             prov_path = run.run_directory / "prepare" / "provenance.json"
             write_json(prov_path, provenance)

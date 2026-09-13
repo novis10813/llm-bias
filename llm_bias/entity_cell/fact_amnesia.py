@@ -1,4 +1,4 @@
-"""E1 V3 fact-level amnesia gate (proposed; see docs/entity-cell-localization/proposal-v3.md).
+"""E1 V3 fact-level amnesia gate (proposed; see docs/entity-cell-localization/details/proposal-v3.md).
 
 Closes the factual recall loop at the protocol level: for each top-5
 localization candidate, measure the collapse of the model's own clean greedy

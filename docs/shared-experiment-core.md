@@ -142,17 +142,17 @@ shared core 的計分 tail 一旦改變，所有下游 margin/方向數值的絕
 - **重驗狀態（2026-09-03，entity_cell 線，Qwen3.5-4B）**：
   - E3 V1：`entity-cell-e3-discovery-v4`（CPU fp32）完成，全部 frozen gates 通過；
     「匿名 = Sell」的 decision-conflict 前提被推翻（真決策下匿名基線為 Buy），324 records 0 flips。
-    見 [`entity-cell-localization/report-e3-v1.md` §6](entity-cell-localization/report-e3-v1.md)。
+    見 [`entity-cell-localization/report-e3-v1.md` §6](entity-cell-localization/details/report-e3-v1.md)。
   - E2：`entity-cell-e2-discovery-v6`（CPU fp32，13,440 DLA records）以真方向重算，
     top-5 head 選擇、排名與 routing labels 全部不變（DLA 放大约 1.4–1.5×）。
-    見 [`entity-cell-localization/report-e2.md` §5](entity-cell-localization/report-e2.md)。
+    見 [`entity-cell-localization/report-e2.md` §5](entity-cell-localization/details/report-e2.md)。
   - E1 V2：`entity-cell-e1-discovery-v4`（GPU bf16，完整四階段全重驗）完成。
     官方原生 GPU bf16 精度下 FTNT 通過全部四道門檻（`form_robust` 在 bf16 官方精度下
     確認為 pass，overlap=0），維持 1/35 trusted 唯一候選；全 35 家 amnesia endpoint gate
     共有 13 家通過（含 v1 的 9 家與 4 家新通過），其餘 12 家皆被 form-robust 或
     template 排除。輔助 CPU fp32 針對性重驗（`entity_cell_amnesia_recheck.py`）作為
     off-device 交叉驗證對照。
-    見 [`entity-cell-localization/report-v2.md` 附錄](entity-cell-localization/report-v2.md)。
+    見 [`entity-cell-localization/report-v2.md` 附錄](entity-cell-localization/details/report-v2.md)。
   - `jspace_intervention` 線的 Qwen3.5 runs 同受影響（絕對 margin/readout 值），為 frozen 線，
     不回填；未來若啟用該線需先以 v2 儀器重驗。
 

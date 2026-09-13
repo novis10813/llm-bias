@@ -1,7 +1,7 @@
 """Entity-to-Dial Phase C — dial-path probe.
 
 Runs the 3-stage pipeline (prepare → forward → analyze) defined in
-docs/entity-to-dial/proposal.md §4.4 (Rev 1): 16 named + 16 anonymous
+docs/entity-to-dial/details/proposal-phase-abc.md §4.4 (Rev 1): 16 named + 16 anonymous
 clean forwards with dual-position dial readout, 16 dial push forwards
 (mlp_addition on L15/n8490 with per-company measured δ), the δ=0 no-op
 check, gate C (direction + ≥25% of the named-vs-anonymous gap), the

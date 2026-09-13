@@ -1,7 +1,7 @@
 """Frozen Phase 2 constants and prompt-family construction.
 
 All frozen values (evidence sentences, companies, variant grid) are defined
-in docs/balanced-evidence-gap/proposal-phase2.md; changes require a new
+in docs/balanced-evidence-gap/details/proposal-phase2.md; changes require a new
 protocol version, not an edit here.
 """
 from __future__ import annotations

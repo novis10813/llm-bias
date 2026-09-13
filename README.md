@@ -26,7 +26,8 @@ target entity activation causally changes the answer distribution.
   `success=true`. The package also implements three sector/context follow-ups:
   A V1 cross-sector header-state patching, B V1 negative-evidence context
   overriding, and C V1 L16 instruction-context readout. Their discovery runs
-  are recorded, but calibration/test gates are not frozen.
+  are recorded; B V1 calibration failed its frozen same-sector peer specificity
+  gate, and held-out test was not run.
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -40,6 +41,9 @@ chain-of-thought or discrete reasoning paths.
 
 ## Documentation map
 
+- [Research directory, status, and experiment relationships](docs/README.md) — start here;
+  each experiment keeps `proposal.md` and `report.md` at the top level, with phase
+  protocols and intermediate records in `details/`.
 - [Documentation and instruction system](docs/documentation-system.md)
 - [Shared experiment core](docs/shared-experiment-core.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
@@ -58,22 +62,22 @@ chain-of-thought or discrete reasoning paths.
 ### Experiment proposals and reports
 
 - [J-space sector intervention proposal](docs/jspace-sector-intervention/proposal.md) and [held-out report](docs/jspace-sector-intervention/report.md)
-- [J-space valence vocabulary readout proposal](docs/jspace-valence-readout/proposal.md) and [Technology discovery report](docs/jspace-valence-readout/report-technology-discovery.md) —
+- [J-space valence vocabulary readout proposal](docs/jspace-valence-readout/proposal.md) and [Technology discovery report](docs/jspace-valence-readout/report.md) —
   positive-vs-negative J-space vocabulary readout that nominates representation
   candidates for later signed steering/gain/swap; transported-representation
   evidence, not causal evidence
-- [J-space token experiment versions](docs/jspace-token-experiments/README.md) —
+- [J-space token experiment versions](docs/jspace-token-experiments/proposal.md) —
   separates completed V1 vocabulary-direction margin screening from the
   implemented (Draft 1) V2 outcome-gradient Buy/Sell decision-flip testing
-  - [V1 proposal](docs/jspace-token-experiments/proposal-v1.md) and [report](docs/jspace-token-experiments/report-v1.md) —
+  - [V1 proposal](docs/jspace-token-experiments/details/proposal-v1.md) and [report](docs/jspace-token-experiments/details/report-v1.md) —
     completed discovery screen; no candidate passed the frozen shortlist gate
-  - [V2 proposal](docs/jspace-token-experiments/proposal-v2.md) and [report](docs/jspace-token-experiments/report-v2.md) —
+  - [V2 proposal](docs/jspace-token-experiments/details/proposal-v2.md) and [report](docs/jspace-token-experiments/report.md) —
     Draft 1 protocol frozen and implemented; the first formal pipeline returned
     `success=false` because the sell-direction Holm gate had only two eligible test
     tickers; final-position control also reproduced the steering effect; includes
     first formal runs for the zero-evidence header-only prior probe and the
     Jacobian-lens decode of the frozen V2 outcome direction
-  - [V2 outcome direction geometric projection](docs/jspace-token-experiments/report-v2-geometry.md) —
+  - [V2 outcome direction geometric projection](docs/jspace-token-experiments/details/report-v2-geometry.md) —
     auxiliary descriptive geometry: per-layer Technology minus Financial Services
     sector state difference projected onto the frozen V2 outcome directions
     (parallel/perpendicular decomposition; not causal evidence)
@@ -82,15 +86,24 @@ chain-of-thought or discrete reasoning paths.
   positive and negative valence prompts to scan layer and prompt-span sufficiency;
   completed evidence-to-context-to-final layer localization; frozen
   calibration and unchanged held-out confirmation both returned `success=true`
-- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) and [discovery report](docs/sector-context-followup/report-discovery.md) —
-  A: cross-sector identity-header state patching, B: cross-sector context overriding
-  under negative evidence, C: L16 instruction-context Jacobian-lens readout; protocols
-  frozen with discovery runs recorded for all three; no calibration or test verdict yet
+- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) and [latest report](docs/sector-context-followup/report.md) —
+  A/B/C discovery completed; B V1 calibration returned `success=false` at the
+  same-sector peer specificity gate, so held-out test was not run. The complete
+  A/B/C discovery results remain in [details](docs/sector-context-followup/details/report-discovery.md).
+- [Entity Cell](docs/entity-cell-localization/proposal.md),
+  [financial-soundness localization](docs/financial-soundness-localization/proposal.md), and
+  [causal validation](docs/financial-soundness-causal-validation/proposal.md) —
+  factual-memory localization and the separate exploratory financial-judgment branch.
+- [Investment-dial](docs/investment-dial/proposal.md),
+  [Balanced Evidence Gap](docs/balanced-evidence-gap/proposal.md), and
+  [Entity-to-Dial](docs/entity-to-dial/proposal.md) —
+  method replication, entity-induced decision-gap confirmation, and subsequent
+  path dissection; see the [research map](docs/README.md) for their distinct evidence and dependencies.
 
 ### Workflow operations
 
-- [Baseline trial proposal](docs/baseline-trial/proposal.md) and [prompt-analysis reproducibility report](docs/baseline-trial/report-reproducibility.md)
-- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) and [report status](docs/span-sensitivity/report-status.md)
+- [Baseline trial proposal](docs/baseline-trial/proposal.md) and [prompt-analysis reproducibility report](docs/baseline-trial/report.md)
+- [Technology header-span sensitivity proposal](docs/span-sensitivity/proposal.md) and [report status](docs/span-sensitivity/report.md)
 - [Qwen Jacobian-lens selection proposal](docs/jacobian-lens-selection/proposal.md) and [selection report](docs/jacobian-lens-selection/report.md)
 - [Interactive prompt-lens dashboard](docs/interactive-prompt-lens-dashboard.md)
 - [Archived workflow operations](docs/archive/README.md) — counterfactual patching,

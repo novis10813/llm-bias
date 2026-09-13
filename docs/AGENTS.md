@@ -6,11 +6,13 @@
 
 ## 文件慣例
 
-- 每個 active experiment 放在 `docs/<experiment-name>/`。單一版本實驗包含 `proposal.md`
-  與對應 report；多版本或分階段演進時，統一使用版本化檔名（`proposal-v1.md`、`proposal-v2.md`
-  等），目錄下不保留無版本號的 `proposal.md`，避免語意混淆。
+- 每個 experiment 放在 `docs/<experiment-name>/`，頂層只保留 `proposal.md` 與
+  `report.md`。分階段原始協議、中間報告與舊索引放 `details/`；完整編排與歷史引用
+  規則見 [`documentation-system.md`](documentation-system.md#詳細文件分類)。
+- 多版本研究的頂層 proposal 是全線入口，不取代 `details/` 的版本化協議；列明上游、
+  後續研究及 proposed 延伸，並連到 [`README.md`](README.md) 的關係總覽。
 - 不同核心假說、因果機制或不同研究階段（例如定位 vs 歸因 vs 干預）應獨立立案或拆分文件，
-  嚴禁將多階段研究路線混裝在單一 proposal 中。
+  不得將多階段 protocol 混裝為一份可執行協議；頂層 proposal 只作分階段導覽。
 - 各版本 workflow 的命令、參數、artifact layout 與 interpretation limits 只在該版本
   對應的 `proposal-vN.md` 維護，版本間不可相互覆蓋或回填假設；README 與 AGENTS 只提供
   摘要和連結。
@@ -37,18 +39,16 @@ Shared core 的 ownership 與 compatibility map 見
 
 多版本或分階段的研究線，在 `docs/<experiment-topic>/` 下採用以下檔案結構：
 
-```text
-docs/<experiment-topic>/
-├── README.md               # 版本路由與矩陣（列出各版 status、primary outcome、evidence 與停止原因）
-├── proposal-v1.md          # 凍結的 V1 協議（完成後禁止原地修改實質邏輯）
-├── report-v1.md            # V1 實驗報告（記錄 run ID、完整數值、成功或失敗結論）
-├── proposal-v2.md          # 若觸發版本分立條件，建立獨立文件
-└── report-v2.md            # V2 實驗報告
-```
+- `proposal.md`：全線問題、階段／版本路由、狀態，以及上游與後續關係。
+- `report.md`：收線報告；尚未收線時使用最新完整報告並標示實際狀態。
+- `details/proposal-v1.md`、`details/proposal-v2.md`：各版本獨立協議；formal run 後凍結實質邏輯。
+- `details/report-v1.md` 等：中間結果與 run provenance；最新完整報告已放頂層時不重複一份。
+- `details/` 亦保存 phase 協議、diagnostic、smoke 紀錄及舊版索引；沒有中間文件則不建立空目錄。
 
 ### Proposal 必備章節與契約要素
 
-每份 `proposal-vN.md` 必須具備以下章節與明確契約，不可省略：
+每份原始 `details/proposal-vN.md`（或單一協議的 `proposal.md`）必須具備以下章節
+與明確契約，不可省略；全線導覽入口不重複這些契約：
 
 1. **核心假說與文獻邊界（Scientific Question & Literature Boundary）**：
    - 明確標註方法參考的文獻出處（論文名稱、演算法、定理或任務設定）。

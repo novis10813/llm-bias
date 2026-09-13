@@ -1,6 +1,6 @@
 """Balanced Evidence Gap — Phase 3: causal validation of 2C coordinates.
 
-Frozen protocol: docs/balanced-evidence-gap/proposal-phase3.md (Rev 1).
+Frozen protocol: docs/balanced-evidence-gap/details/proposal-phase3.md (Rev 1).
 Additive mlp_addition grid on L19/n6334, L20/n6520, L26/n2394 (+ 30
 matched controls, dial descriptive arm) over the 16-ticker 2A canonical
 prompt set; gate 3A.

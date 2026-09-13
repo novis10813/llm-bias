@@ -1,6 +1,6 @@
 # 財務判斷相關候選的因果驗證
 
-**狀態：proposed，探索版 V1，程式已實作，不授權 formal run。** 本提案獨立於 [候選定位](../financial-soundness-localization/proposal.md)。目標模型 Qwen3.5-4B；本輪不包含 Buy/Sell 或真實公司財務真值驗證。真實模型端到端 smoke 已完成，見 [工程記錄](report-smoke.md)；工程通過不構成財務神經元認證。全部 72 個候選的後續結果見 [完整探索報告](report-exploratory-v1.md)。
+**狀態：proposed，探索版 V1，程式已實作，不授權 formal run。** 本提案獨立於 [候選定位](../financial-soundness-localization/proposal.md)。目標模型 Qwen3.5-4B；本輪不包含 Buy/Sell 或真實公司財務真值驗證。真實模型端到端 smoke 已完成，見 [工程記錄](details/report-smoke.md)；工程通過不構成財務神經元認證。全部 72 個候選的後續結果見 [完整探索報告](report.md)。
 
 ## 1. 需要干預改變判斷，才能支持候選參與概念運用
 
@@ -9,7 +9,7 @@
 | 方法來源 | 原始設定 | 本輪適應與限制 |
 | --- | --- | --- |
 | [Meng et al., Locating and Editing Factual Associations in GPT](https://arxiv.org/abs/2202.05262) | 事實關聯的定位、恢復與編輯 | 僅干預已選 MLP 座標，不做權重編輯；財務任務不是單一事實回想 |
-| [Entity-cell V3](../entity-cell-localization/proposal-v3.md) | 以事實回想干預驗證候選 | 正確財務答案取代總部等事實，舊 gate 不移植 |
+| [Entity-cell V3](../entity-cell-localization/details/proposal-v3.md) | 以事實回想干預驗證候選 | 正確財務答案取代總部等事實，舊 gate 不移植 |
 
 「恢復」在本探索版中只指將同題同座標的 clean 值寫回，驗證 hook 可逆及計分一致。這不是獨立的機制證據：在同一位置撤銷抑制本來就應恢復。跨配對替換則提供另一項方向性診斷，但仍不證明概念只存於此座標。
 
@@ -66,3 +66,15 @@ shared workflow 為 prepare → forward → analyze → finalize。共用 mechan
 CLI 目前只授權探索，不以 unit tests 代替模型 preflight。研究結論最多是受測座標、提示詞、劑量與位置下的干預效應；沒有作用不證明神經元與財務無關，更不證明偏好分散。公司名稱效應及 Buy/Sell 留待獨立提案。
 
 首次 formal run 後凍結；若更改候選來源、prompt family、primary outcome、位置/劑量、controls 或 gate，依 [versioning](../documentation-system.md#experiment-versioning) 另立版本，不回填。
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [financial-soundness-localization](../financial-soundness-localization/proposal.md)（資料／產物依賴）：以定位產出的候選座標做獨立干預驗證；不從驗證句式回頭挑候選。
+
+**後續**：尚無已立案的後續研究；不把報告中的建議視為已授權實驗。
+
+最終／最新結果見本研究的 [report](report.md)。

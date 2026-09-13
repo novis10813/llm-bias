@@ -2,7 +2,7 @@
 
 Works on the stored Phase 2A prompt text (the frozen template is never
 re-derived here); character ranges map to tokens via the shared
-token_span mechanic. Protocol: docs/entity-to-dial/proposal.md §4.1–4.2.
+token_span mechanic. Protocol: docs/entity-to-dial/details/proposal-phase-abc.md §4.1–4.2.
 """
 from __future__ import annotations
 

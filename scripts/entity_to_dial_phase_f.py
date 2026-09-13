@@ -1,7 +1,7 @@
 """Entity-to-Dial Phase F — dual-path additivity + directional push.
 
 Runs the 4-stage pipeline (prepare → forward_f1 → forward_f2 → analyze)
-defined in docs/entity-to-dial/proposal-phase-f.md (Rev 1): F1 dual-hook
+defined in docs/entity-to-dial/details/proposal-phase-f.md (Rev 1): F1 dual-hook
 combined patch (v₁ PCA transplant + dial channel transplant in one
 forward, L15, 8 directions; gate F1 = additivity ratio ≥ 0.85) and F2
 neutral-context directional push (anonymous prompt, ±α × base × {v₁,

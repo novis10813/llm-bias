@@ -1,7 +1,7 @@
 """Balanced Evidence Gap — Phase 2B/2C patching operator.
 
 Experiment 2B (entity-state layer sweep) and 2C (component attribution),
-per docs/balanced-evidence-gap/proposal-phase2.md §4.4–§4.5.
+per docs/balanced-evidence-gap/details/proposal-phase2.md §4.4–§4.5.
 
 2B requires a completed 2A run (gate 2A pass authorizes it). 2C requires
 a completed 2B run (its handoff interval selects the layers).

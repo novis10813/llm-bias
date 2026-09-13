@@ -1,7 +1,7 @@
 """Balanced Evidence Gap — Phase 2A cross-entity probe operator.
 
 Runs the 3-stage pipeline (prepare → forward → analyze) defined in
-docs/balanced-evidence-gap/proposal-phase2.md §4.1: 16 tickers × 2 reverse
+docs/balanced-evidence-gap/details/proposal-phase2.md §4.1: 16 tickers × 2 reverse
 options × 2 evidence orders = 64 clean forwards, per-company pure entity
 margins, gate 2A (IQR / Spearman vs Phase 1 / framing stability), and the
 descriptive H4 readout of the investment-dial L15/n8490 coordinate.

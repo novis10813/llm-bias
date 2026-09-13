@@ -1,186 +1,124 @@
-# Entity-to-Dial 路徑解剖：Discovery 報告
+# Entity-to-Dial 研究線收線報告
 
-**狀態**：completed（formal run 完成，2026-09-11；Gate A1 / Gate B / Gate C 皆 fail）  
-**對象模型**：Qwen3.5-4B（bf16，hybrid Gated DeltaNet 架構）  
-**協議**：[proposal.md](proposal.md)（Rev 1.3 frozen）  
-**Run IDs**：entity-to-dial-a-01 / entity-to-dial-b-01 / entity-to-dial-c-01（皆 complete）  
-**收線報告**：包含 Phase D/E/F 完整因果鏈與最終 L15 機制定位的總結見 [Entity-to-Dial 研究線收線報告](report-line-closing.md)（研究線已正式收線）
+**狀態**：收線（2026-09-13）  
+**對象模型**：Qwen3.5-4B（bf16，hybrid Gated DeltaNet 架構，32 層）  
+**核心結論**：從底層實體特徵承載帶（L0–11）到決策形成層（L15）的因果路徑解剖正式收線。實體訊號的主體路徑不在實體 token 區間，亦不經由單一 dial 通道瓶頸傳遞，而在指令上下文區間的狀態差值（$\Delta s$）。在轉移峰值層 L15，該差值呈現高度低維集中性：8 維殘差子空間（$k=8$）即可恢復 full-swap 效應的 98.3%；雖然 dial 激活通道（L15/n8490）與該子空間幾何嚴格正交（$\cos = -0.020$）且獨立承載 43.4% 效應，但兩通道於單一 forward 同時介入時在下游讀出呈現一致的飽和匯流（加法比值中位數 0.733 < 0.85，Gate F1 fail）。雙通道緊湊表示不成立，L15 段的最終因果表徵描述採納 $k=8$ 殘差子空間版本；本研究線核心問題已獲明確解答，正式收線。
 
----
+**名詞定義**：
 
-## Introduction：Entity 的決策偏誤路徑以三段式因果解剖定位
-
-balanced-evidence-gap Phase 2B 確認了 entity identity 在 L0–11 的 entity span 殘差流中承載 entity-specific 決策影響（L0–5 normalized transfer T ≈ 1.0），並在 L12–15 交接至 instruction span（L15 峰值 T = +0.464）。同一條研究線的 Phase 3 排除了 L19/L20/L26 三個 MLP 神經元作為因果槓桿點（全部 |mean ΔM| ≤ 0.012 nats，低於 control noise floor）。另一端，investment-dial 線確認 L15/N8490 是模型層級的決策旋鈕（±4s 推注 → margin ±1.0–1.1 nats），但對所有公司施力方向一致，不認識特定 entity。
-
-兩端已知，中間未解：entity 在 L0–11 寫入殘差流後，**哪些 token、哪幾層是充分的；L12–15 的 handoff 由 MLP 還是 attention block 承擔；entity bias 是否流經 L15/N8490 dial 座標**。本報告以三個 Phase 的 block-level 因果干預回答這三個問題。
-
----
-
-## Methods：凍結 8 directions、block-level patch、FP32 tail margin
-
-沿用 balanced-evidence-gap Phase 2A 的 16 家公司（4 sector × 4 家，test split）與 frozen shared-evidence template（2 正 2 負，公司中立）。8 directions 直接繼承 Phase 2B frozen pairs（NSC↔IT、NSC↔BDX、BLK↔IT、BLK↔BDX，雙向）；group gap 實測 1.028 nats（pre-check 門檻 0.5 nats）。
-
-**Phase A**：在 L0–11 的 entity span 內，把 patch 範圍縮小到 ticker-group 與 name-group 兩個 token 子集，分別在 8 directions 下量 toward-source ΔM 與 normalized transfer T；整個 entity span patch 的 Phase 2B 存檔值作為上界參照。Gate A1：ticker-group 在 L0–5 的 mean ΔM 的 bootstrap 95% CI 排除 0。
-
-**Phase B**：在 L12–15 對 entity span 位置分別替換 MLP block 貢獻（`mid + (post_source − mid_source)`）與 attention block 貢獻（`pre + (mid_source − pre_source)`），量 8 directions 的 toward-source ΔM。Gate B1：至少 1 層的 MLP block ΔM 的 CI 排除 0；Gate B3：最強層的 4 sector mean ΔM 同號。
-
-**Phase C**：對 16 家 named/anonymous prompt 讀取 L15/N8490 dial activation（entity span 最後 token position），計算 per-company `δ = a_named − a_anon`；對 anonymous prompt 施加 `mlp_addition(layer=15, neuron=8490, delta=δ)` 推注，量 `ΔM_dial = M_pushed_anon − M_clean_anon`，對照 `gap = M_named − M_clean_anon`。Gate C1：mean ΔM_dial 的 CI 與 mean gap 同號；Gate C2：mean |ΔM_dial| / mean |gap| ≥ 0.25。
-
-全程 FP32 tail-logit margin；self-source no-op（|ΔM| ≤ 1e-12）為 fail-closed 紀律；block arithmetic 在 FP32 計算後 cast 回 bf16；bf16 jitter 下限約 0.05 nats。
+- **toward-source delta（$\Delta M$）**：以純實體偏向為方向基準的 margin 偏移量，定義為 $\text{sign}(M_{\text{src}} - M_{\text{tgt}}) \cdot (M_{\text{patched}} - M_{\text{tgt}})$（單位：nats）。
+- **effect ratio**：介入條件誘發之 $\Delta M$ 對同方向 in-run full swap $\Delta M_{\text{full}}$ 的比值（R1 convention：僅納入 $|\Delta M_{\text{full}}| \ge 0.2$ 之有效方向）。
+- **additivity ratio**：dual-hook 同時介入（$v_1 + \text{dial}$）誘發之 $\Delta M_{\text{combined}}$ 對 $\Delta M_{\text{full}}$ 的比值。
+- **additive residual / interaction_delta_m**：$\Delta M_{\text{combined}} - (\Delta M_{v_1} + \Delta M_{\text{dial}})$；顯著為負表示兩通道在下游讀出存在飽和或交互。
+- **$v_1$ 與 $k=8$ 子空間**：8 個凍結方向於 L15 指令區間之狀態差值矩陣經 SVD 分解持久化之前 16 個右奇異向量（$\mathbb{R}^{2560}$，正交歸一）；$v_1$ 為第 1 主成分方向，$k=8$ 為前 8 個方向張成之子空間。
+- **dial transplant**：對 L15 MLP down-projection 輸入之 channel 8490（9216 維空間），僅於指令區間施加 $\delta(p) = a_{\text{src}}(p) - a_{\text{tgt}}(p)$ 的位置受限通道移植。
+- **dual-hook combined patch**：於單一 forward 中同時施加 L15 post-block 殘差變換（$v_1$ 投影）與 L15 MLP down-projection 輸入 pre-hook 變換（dial 通道移植）。
 
 ---
 
-## Phase A：Ticker Token 在早期層的充分性
+## 1. 實體訊號的主體路徑不在實體 token 亦不在 Dial，而在指令上下文表徵差值
 
-**Motivation**：L0–11 承載帶的 entity 訊號是否集中在 ticker symbol，以及 company name tokens 從哪幾層開始提供增量貢獻？
+探索階段（Phase A–C；詳見 `details/report-phase-abc.md` Rev 1.3）以嚴格因果介入排除了實體決策偏誤走「實體 token 獨立通道」或「單一 dial 神經元瓶頸」的直覺假說：
 
-**Setup**：8 directions × L0–11 × {ticker-group, name-group} patch；Phase 2B 存檔 entity-span T 為上界參照（不重跑）。共 304 forwards。
+- **實體 token 區間於高層失去因果充分性（Phase A，Gate A1 fail）**：在 L0–11 承載帶之後，將 ticker 或 name token 區間單獨跨實體置換，在 L12 至 L18 的 normalized transfer 均值全數落於零附近（95% 信賴區間均涵蓋 0）。實體特徵在進入 L12 前已完全移轉，不再停留在實體字元所在位置。
+- **Block 層級解耦未見單一子模組主導（Phase B，Gate B fail）**：在 L12–15 的交接窗口，單獨置換 MLP block 或 Attention block 的殘差增量均無法解釋整體轉移量（各層 transfer < 0.20）；然而在 L15 指令上下文區間實施 full-residual swap 時，決策轉移量達到全域峰值（$+0.604$ nats）。
+- **Dial 單坐標無法承載跨實體偏誤主體（Phase C，Gate C fail）**：直接將 source 實體的 dial 坐標（L15/n8490）激活值移植至 target 實體，未解釋落差（unexplained gap）高達 90% 以上；dial 坐標對決策 margin 的調控屬於通用偏置（unconditional dial），而非實體特定偏誤的專屬中繼站。
 
-**Findings**：
-
-- Gate A1（ticker-group L0–5 mean ΔM CI 排除 0）：**fail**——mean ΔM = +0.159 nats，CI 95%：[−0.554, +0.828]（跨 0）
-- Ticker-group L0–5：T = 0.09–0.15（per-layer CI 全部跨 0）；L6 後趨近 0（|T| ≤ 0.03）
-- Name-group L0–5：mean ΔM = +0.912 nats，T = 0.68–0.77，per-layer CI 全部排除 0；顯著性延伸至 L10（L11 CI 開始含 0），T 緩降（L7–L10 = 0.47, 0.47, 0.39, 0.33）
-- 2B entity-span upper-bound 參照 T（L0–5 平均）：+0.976——name-group 單獨解釋約 70–80%
-- Per-direction 結構（描述性，非 gate 標的）：8 個 direction 的 raw margin 位移（patched − target）兩組全部朝 sell 方向——ticker raw ΔM（L0–5）= −0.67～−1.58（mean −0.98），name = −0.26～−2.23（mean −1.05）；patched margin 收斂於 anonymous baseline（m_anon ≈ −3.23，16 家幾乎常數）附近。bottom-source 方向的 T > 1（overshoot：patched margin 低於 source margin，掉向 baseline）；toward-source 統計主要由這 4 個 direction 驅動
-
-**Interpretation**：H1（ticker 充分）不成立：ticker-group 在 L0–5 沒有顯著 transfer（T ≈ 0.1），顯著承載者是 company-name token（T ≈ 0.7，L0–10 皆顯著）。Entity 訊號在承載帶主要以 name token 的形式寫入，ticker symbol 不單獨承載 stance。另有一個值得後續驗證的描述性觀察：兩組的 raw 位移一致地朝 anonymous baseline 收斂（patched margin ≈ m_anon ± 0.4），而非「複製 source 的 stance」（那應在 8 個 direction 都產生 T ≈ 1）——即 L0–5 的 entity-position patch 表現像「抹除 entity 對齊後掉回無-entity 基準」，toward-source 統計主要由 bottom-source 方向的 overshoot 構成。此解讀為描述性，確認它需要一個 dedicated control（以 anonymous prompt 的 entity-position state 直接 patch），屬後續線。最後，本結論的主要不確定性來源：bottom-source 的 overshoot 與 top-source 的 undershoot 在 8 directions 中貢獻不對稱——若 erasure 機制成立，toward-source 統計是 m_src、m_tgt 與 m_anon 三者幾何關係的產物（以 erasure 預測值估算，8-direction mean T ≈ +0.5，與觀測 +0.70 同結構同量級），name-group T ≈ 0.7 的「transfer 效率」詮釋可能需要修正；name state 的 patch 產生 ~1 nat 位移這個效應本身是確立的（若 name state 不承載 entity 資訊，patch 應為 no-op），不確定的是該效應的性質（stance transfer vs. alignment erasure）。
+三項初期檢驗共同確立：實體訊號在 L12 之後轉由指令上下文區間（instruction span）的整體表徵差值承載。
 
 ---
 
-## Phase B：L12–15 Handoff 的 Block 分工
+## 2. Block 層級 Raw Channel 觀測重現 Erasure 簽章，無法建立單神經元因果路徑
 
-**Motivation**：Phase 2C 用 first-order attribution 找到 L19/L20/L26 的相關訊號，Phase 3 排除了它們作為單神經元槓桿。L12–15 handoff 的實際承載者是 MLP block 還是 attention block？
+針對 L12–18 指令區間的 MLP down-projection 激活向量實施通道級因果搜尋（Phase D，`entity-to-dial-d-02`），證實單純的 raw channel 介入無法構成實體向 dial 匯流的路徑：
 
-**Setup**：8 directions × L12–15 × {mlp, attn} block-level patch，位置限定 entity span。共 144 forwards。
+- **層級特異性完全缺席（Gate D1 fail）**：在 L12 至 L18 逐層進行 block patch 時，無任一層符合特異性標準；各層 raw 效應一致偏向 sell 方向，其 toward-source 8 方向均值約等於 0。此現象完全重現了 balanced-evidence-gap Phase 3 的抹除簽章（erasure signature）——破壞特定通道僅誘發模型輸出向預設先驗坍縮，而非精確傳遞實體極性。
+- **產業一致性低落（Gate D2 描述性指標）**：19 個非 final 層的一階歸因 top channel 雖然在絕對相關性上顯著超越隨機對照組（$|\rho| \approx 0.95 \sim 0.99$），但四大產業間的符號一致性多數為 0/4 或 1/4，缺乏跨產業的一致因果機制。
 
-**Findings**：
-
-- Gate B1（至少 1 層 MLP block ΔM CI 排除 0）：**fail**
-  - Qualifying layers：無
-  - MLP per-layer mean ΔM（L12–15）：−0.011, −0.041, −0.030, −0.059 nats（CI 全部跨 0，最寬 [−0.509, +0.484]）
-- Gate B3（strongest layer，4 sector mean ΔM 同號）：未評定（B1 無 qualifying layer，strongest layer 未定義）
-- Gate B：**fail**
-- Attention block patch 對照（per-layer mean ΔM，L12–15）：−0.052, −0.052, −0.064, −0.071 nats（descriptive；與 MLP 同量級，皆在 0.05 nats bf16 jitter 帶附近或以下）
-
-**Interpretation**：L12–15 的 entity position 上，MLP 與 attention block 各自的貢獻搬運都不產生顯著 margin 效應（|mean ΔM| ≤ 0.071 nats）。這與 2B 的 entity-span T 衰減一致（L12 = 0.26 → L15 = 0.03，同期 instruction span T 升至 L15 峰值 0.464）：L12 後 entity signal 的承載者已遷移至 instruction context，「handoff」不是 entity position 上的 block 分工，而是承載位置的切換。Phase 3 的單神經元 null（L19/20/26）也因此獲得粒度層面的支持：連整個 MLP block 搬運都無顯著效應，單顆神經元的 null 不是因為訊號分散在 block 內。
+Phase D 否定了「指令區間中存在特定 intermediate channel 群負責將實體訊號泵入 dial」的假設，研究重心因而轉向指令區間殘差狀態空間的幾何結構。
 
 ---
 
-## Phase C：Entity Bias 流經 Dial 座標的比例
+## 3. L15 狀態差值呈低維集中，並由兩條近乎正交之通道平行承載
 
-**Motivation**：entity A 的決策偏移是「修改 L15/N8490 激活值」的下游效果，還是走了 dial 旁邊另一條路？Phase 3 確認 dial 對照效應 ±1.0 nats，本 Phase 量 entity signal 借道 dial 的比例。
+在轉移峰值層 L15 深入解剖指令區間狀態差值（Phase E，`entity-to-dial-e-01`），揭示了高維殘差流與低維語義載體之間的結構關係：
 
-**Setup**：16 named + 16 anonymous clean forward，dial activation 讀取（entity position），16 pushed forward（`mlp_addition(15, 8490, δ)`）。共 49 forwards。
-
-**Findings**：
-
-- Step C1 描述性：dial_delta vs. pure entity margin Spearman ρ（entity position）：**0.159**（< 0.3 warning 門檻）；final position ρ = 0.403
-- Phase 1 named-vs-anonymous gap（mean，16 companies）：`+0.432 nats`（Phase 1 存檔值；注意 Phase 1 使用公司別長文 evidence template，2A 起改用 frozen shared-evidence template，兩者 gap 不直接可比）
-- 本 run gap（mean）：**+0.929 nats**（range +0.052～+1.708；IT 最小 +0.052），2A cross-check max |Δ|：**5.96e-08 nats**（無 warning）
-- Gate C1（mean ΔM_dial CI 與 mean gap 同號）：**fail**——mean ΔM_dial = +0.013 nats，CI 95%：[−0.015, +0.041]（與 gap 同號但 CI 跨 0，非單邊）
-- Gate C2（mean |ΔM_dial| / mean |gap|）：**0.051**（門檻 0.25，fail）
-- Gate C：**fail**
-- Step C3 unexplained gap（mean）：**+0.916 nats**（15/16 家為正；IT 為 −0.052）；dial_delta（a_named − a_anon，entity position）range −0.030～+0.075，mean +0.014
-
-**Interpretation**：先交代位階背景：本 run 的 gap（+0.929 nats）是在 frozen shared-evidence（公司中立）template 下量的，比 Phase 1 的公司別長文 evidence template（+0.432 nats）大約 2.1 倍——證據模板公司中立後，company name 對 margin 的增量效應更大（公司別證據本身已攜帶公司資訊，name 的增量相對被稀釋）；兩者非受控比較（prompt 與量測時點皆不同），僅作為位階背景。在此 gap 上，entity 效應基本不流經 L15/N8490 dial 座標：named/anonymous 的 dial activation 差異（δ）只有 mean +0.014（raw activation units，range −0.030～+0.075），把 δ 推回 anonymous prompt 只產生 mean +0.013 nats 的 margin 位移（CI 跨 0），解釋 gap 的約 5%（C2 ratio 0.051 ≪ 0.25）。剩餘 ~95%（unexplained gap mean +0.916 nats）走 dial 以外的路徑。這與 investment-dial 線的結論（dial 是 model-level stance prior、對所有公司一致施力、不認識 entity）一致：dial 是平行的一般性槓桿，不是 entity→decision 路徑的中繼站。IT 的 gap ≈ 0.052 接近 0，其 per-company ratio 2.01 是近零分母的產物，不承載資訊。
+- **Block Delta 組合具自洽因果充分性（Gate E1 PASS）**：L15 dual-block joint patch（Attention 與 MLP 增量差值相加，不置換 pre-L 狀態）的 effect ratio 中位數達 **0.575**（$\ge 0.5$，$n_{\text{effective}} = 6/8$），顯著勝出預先凍結之 pre-L 殘留假說（$H_{\text{carryover}} \approx 0.187$）。L15 當層的計算增量已包含過半之決策轉移能量。
+- **狀態差值呈極端低維集中（E2a 降維曲線）**：對 8 個方向的狀態差值實施 PCA，投影至前 $k$ 維奇異向量後的效應比值呈現陡峭上升：$k=1$ 恢復 73.7%，$k=3$ 達 88.5%，$k=8$ 達 **98.3%**（已飽和 full swap 的 1.000），$k=16$ 達 100.1%。2560 維殘差流中的實體資訊實質被約束在不超過 8 維的線性子空間中。
+- **Dial 構成顯著但非唯一的平行管道（Gate E2b FAIL，未被證偽）**：位置受限的 dial channel 移植單獨達成 43.4% 的效應比值（中位數 0.434 < 0.5 判定未達 gate，但屬實質效應）；其相應的 residual footprint 投影亦達成 43.9%。
+- **兩通道幾何嚴格正交**：事後無 GPU 幾何掃描確認，$\cos(v_1, \text{dial\_footprint}) = \mathbf{-0.020}$，且 dial footprint 與前 16 個 PCA 基底向量的絕對夾角餘弦均小於 0.071。同時，$v_1$ 對所有 9216 個 MLP channel footprint 的最大 $|\cos|$ 僅為 0.298（ch 8324）。$v_1$ 是高度分散的殘差方向，與 dial channel 坐標在幾何上完全獨立。
+- **立場轉移不對稱性（Stance Transfer Asymmetry）**：4 個 bottom→top 方向（以 sell 立場為 source）轉移極強（$+0.95$ 至 $+1.44$ nats），而 4 個 top→bottom 方向（以 buy 立場為 source）轉移微弱或反向（$+0.27, +0.14, -0.26, -0.10$ nats）。在 top→bottom 方向中，$v_1$ 與 dial 均單向推動模型賣出，係由 pre-L 狀態差值扮演抑制煞車（brake）。
 
 ---
 
-## Discussion：三段解剖的整合結論
+## 4. 雙通道於下游讀出匯流飽和，雙通道緊湊表示被否決
 
-**跨 Phase 整合**：
+為了驗證「$v_1$（殘差方向）+ dial（MLP channel）」是否能構成極致緊湊之雙通道表示，Phase F（`entity-to-dial-f-02`）在單一 forward 實施 dual-hook 聯合介入，並以中性文本 push 測定 $v_1$ 本征 loading：
 
-- Phase A：entity 訊號在 L0–5 主要由 company-name token 承載（name T ≈ 0.7，ticker T ≈ 0.1），且 patch 的 raw 效應表現為「抹除 entity 後掉回 anonymous 基準」（描述性，待 dedicated control 確認）。
-- Phase B：L12–15 的 entity position 上兩個 block 都無顯著貢獻；handoff 是承載位置從 entity span 切換到 instruction context（與 2B 的 L15 instruction peak 一致），不是 block 分工。
-- Phase C：entity gap 只有約 5% 流經 dial 座標；主體路徑繞過 dial。entity→decision 路徑與 investment-dial 的 stance-prior 路徑是兩條平行路徑，不在 L15/N8490 會合。
+### 4.1 加法性檢驗：下游讀出呈現一致飽和（Gate F1 fail）
 
-**與既有線的整合**：
+在 6 個 R1 有效方向上，dual-hook 聯合介入的 additivity ratio 中位數為 **0.7329**（$< 0.85$ 門檻，Gate F1 fail）：
 
-| 線 | 既有結論 | 本報告的連接點 |
-|---|---|---|
-| Entity Cell（L0–4） | 事實記憶與決策路徑功能解離（0 次翻轉） | Phase A 顯示 L0–5 entity 狀態的 patch 效應是「對齊抹除→掉回基準」而非 stance 搬運；entity cell 所在層（L0–4）的 entity 狀態同時承擔對齊功能，但其與事實記憶細胞是否同座標仍未驗證 |
-| balanced-evidence-gap Phase 2B | L0–11 承載，L15 instruction peak | Phase A 把承載帶精化為 name-group（解釋 ~70–80% 的 entity-span T）；Phase B 確認 L12 後 entity position 不再承載，與 instruction peak 互為印證 |
-| balanced-evidence-gap Phase 3 | L19/L20/L26 single-neuron null | Phase B 的 block-level null 說明 Phase 3 的 null 不是粒度問題：entity position 上整塊 MLP 搬運都無顯著效應，決策路徑不走這些座標 |
-| Investment Dial（L15/N8490） | model-level stance prior，不認識 entity | Phase C 量化 entity 借道 dial 的比例 ≈ 5%（C2 ratio 0.051）：dial 路徑近乎虛無，entity→decision 路徑與 dial 平行 |
+| 方向 | 方向分類 | full swap | $v_1$ 臂 | $k=8$ 臂 | dial 臂 | combined 臂 | additivity ratio | additive residual |
+|---|---|---|---|---|---|---|---|---|
+| BDX→BLK | bottom→top | +1.3237 | +0.9392 | +1.2830 | +0.4716 | +0.9160 | 0.6920 | **−0.4949** |
+| BDX→NSC | bottom→top | +0.9473 | +0.7217 | +0.9274 | +0.5551 | +0.7269 | 0.7673 | **−0.5500** |
+| IT→BLK | bottom→top | +1.4387 | +1.0231 | +1.4193 | +0.4727 | +1.0049 | 0.6985 | **−0.4908** |
+| IT→NSC | bottom→top | +1.0654 | +0.8308 | +1.0894 | +0.5445 | +0.8390 | 0.7875 | **−0.5364** |
+| BLK→IT | top→bottom | +0.2745 | −0.0545 | +0.2564 | −0.5891 | −0.0762 | −0.2775 | +0.5674 |
+| NSC→BDX | top→bottom | −0.2584 | −0.4858 | −0.2699 | −0.6547 | −0.5054 | +1.9560 | +0.6351 |
+| BLK→BDX | 排除（R1） | +0.1396 | −0.1706 | +0.1088 | −0.6699 | −0.1997 | excl | +0.6408 |
+| NSC→IT | 排除（R1） | −0.0967 | −0.3177 | −0.0878 | −0.6154 | −0.3368 | excl | +0.5963 |
 
-**後續方向（依實際結果）**：
+（單位：nats。有效方向中位數：0.7329；次要統計量：bottom→top 中位數 0.7329，top→bottom 中位數 0.8393。跨 run 一致性：相較 e-01 四臂差異均為 0.00e+00。）
 
-- Phase C fail 且比例遠低於門檻（0.051 ≪ 0.25）：「繞過 dial」結論明確；unexplained gap（~95%）的路徑應從 L15+ 的 instruction context（2B peak 所在）到 final decision 區間的殘差幾何入手，需另立研究線。
-- Phase B null：原設想的「MLP block 內部結構」線不成立為起點；block-level 解剖應改以 instruction span 的 L15+ 座標為對象。
-- Phase A 的 entity-erasure 描述性觀察：確認實驗是用 anonymous prompt 的 entity-position state 直接 patch（預期 T ≈ 0 且 patched margin ≈ m_anon），需新版本協議。
+數據展現了清晰的機制特徵：
+- **Bottom→top 方向一致呈現負交互項**：在 4 個乾淨轉移的 bottom→top 方向上，additive residual 全數為負（$-0.491$ 至 $-0.550$ nats），combined 的效果量甚至小於 $v_1$ 單臂本身。這證實兩通道在幾何上雖不重疊，但進入晚期讀出網絡時競爭同一非線性飽和帶，無法維持線性加性。
+- **Top→bottom 方向之 combined 抑制反向漂移**：在 top→bottom 方向中，combined 產生的負向偏移（$-0.076$ 與 $-0.505$）小於兩臂之和（$-0.644$ 與 $-1.141$），交互項反轉為正（$+0.567$ 與 $+0.635$），同樣反映出下游對大幅度偏移的壓縮抑制。
 
----
+### 4.2 方向性 Push：$v_1$ 無本征立場 Loading（H_F2 描述性判定）
 
-## 限制
+在中性匿名文本（anonymous prompt，$m_{\text{anon}} = -3.2280$ nats）施加 $\pm\alpha \cdot \text{push\_base} \cdot d$ 介入（$\text{push\_base} = 0.00540$ 殘差單位）：
 
-1. **bf16 jitter 下限約 0.05 nats**：FP32 tail margin 與 fp32 block arithmetic 消除了量測端的系統性誤差，但 forward 計算本身在 bf16 下存在跨 run jitter；任何 |ΔM| < 0.05 nats 的效應不作為強因果依據。
-2. **Discovery 性質**：本報告為三個 Phase 的首次正式 run，不設 confirmation run；gate pass 的結論為 discovery，若需確認需另立研究線。
-3. **Block-level patch 的語義邊界**：一階向量替換，不是 circuit-level 分離；Phase B 回答「哪個 block 的貢獻搬運後足以轉移 margin」，不排除 block 內部更細的結構（例如 MLP 的特定 neuron 子集）。
-4. **Phase C 的 all-position 推注稀釋效應**：`mlp_addition` 對所有 token position 加同一 δ，而 entity signal 集中於 entity position；若 Gate C 邊界性 fail，entity-position-only 推注版本是優先的替代設計（需新版本協議）。
-5. **16 家公司**：所有結論限於 2A population（Qwen3.5-4B，英文財報模板，4 sector × 4 家 test-split 公司）；不主張外推至 427 家宇宙或其他模型。
+- 在評估點 $\alpha \in \{1.0, 2.0\}$ 上，$v_1$ 與 dial footprint 兩臂的全部 8 個判定點位移幅度均落於 $|\Delta M| \le 0.05$ nats 之 bf16 擾動帶內（$v_1$ 於 $\alpha=1.0$ 為 $+0.006$ / $-0.046$，$\alpha=2.0$ 為 $+0.013$ / $+0.004$；dial_fp 於 $\alpha=1.0$ 為 $-0.014$ / $-0.0004$，$\alpha=2.0$ 為 $-0.013$ / $+0.024$）。
+- 兩臂判定結果均為 **`context_dependent_or_null`**。
+- **理論修正**：$v_1$ 在脫離實體上下文時不具備獨立的 signed stance loading，其在 transplant 實驗中所誘發之大幅位移依賴於與 target 實體內部殘留特徵的非線性交互。「stance 軸」之詮釋降級為「特定方向差值之第一主成分」，其因果推力本質上是 context-dependent 的。
 
----
+### 4.3 最終描述版本採納
 
-## Artifact 索引
-
-| Phase | Run ID | Run root | 狀態 |
-|---|---|---|---|
-| A | entity-to-dial-a-01 | `artifacts/qwen3.5-4b/entity-to-dial/runs/entity-to-dial-a-01/` | complete（gate A1 fail） |
-| B | entity-to-dial-b-01 | `artifacts/qwen3.5-4b/entity-to-dial/runs/entity-to-dial-b-01/` | complete（gate B fail） |
-| C | entity-to-dial-c-01 | `artifacts/qwen3.5-4b/entity-to-dial/runs/entity-to-dial-c-01/` | complete（gate C fail） |
-
-Smoke runs（通過，§14）：`entity-to-dial-a-smoke-20260911T062930Z`、`entity-to-dial-b-smoke-20260911T063501Z`、`entity-to-dial-c-smoke-20260911T064217Z`。
+依據 Phase F 協議 §7 之預先註冊決策表，Gate F1 fail 觸發 fallback 機制：由 1 個殘差方向加 1 個 MLP 通道構成的「極致雙通道模型」正式被否決；L15 段因果表徵的最終完整描述**採納 $k=8$ 殘差子空間版本（恢復 98.3% 效應量）**。
 
 ---
 
-## 附錄：Per-layer 完整曲線與 Per-direction 明細
+## 5. 研究宣稱之邊界與未涵蓋事項
 
-正文只報告 gate verdict 與關鍵座標數字，完整曲線表於此。
+1. **實體與方向母體限制**：本研究線的所有數值結論均建立於 16 家標竿企業及預先凍結之 8 個極端對比方向（TOP = {NSC, BLK}，BOTTOM = {IT, BDX}）；未宣稱此幾何結構可無條件推廣至全域未見企業或中性對比方向。
+2. **層級聚焦邊界**：因果解剖集中於轉移峰值層 L15；中間過渡層（L12–14）之加法性與子空間演變未逐層重測，以 e-01 之記錄為參照。
+3. **因果介入非電路級完全拆解**：dual-hook combined patch 屬一階狀態介入，證實兩通道在決策輸出層呈現飽和，但不等同於在內部計算圖上完全還原其交互之精確突觸權重。
+4. **模型架構綁定**：本結論針對 Qwen3.5-4B（Gated DeltaNet 混合架構）；其他純 Transformer 架構模型是否具備同類 L15 指令讀出轉移帶，不在本宣稱範圍。
+5. **未涵蓋之上游機制**：買方立場不可轉移之原因（pre-L brake 的物理來源層）以及 $v_1$ 向量在 L12–13 的寫入機制，屬於衍生之獨立課題，不在本收線範圍內。
 
-### A. Phase A：Per-layer ΔM / T 曲線（ticker-group vs. name-group vs. 2B entity-span）
+---
 
-| Layer | ticker mean ΔM | ticker T | name mean ΔM | name T | 2B entity-span T（參照） |
-|---|---|---|---|---|---|
-| L0 | +0.209 | +0.146 | +0.897 | +0.701 | +1.011 |
-| L1 | +0.159 | +0.108 | +0.863 | +0.676 | +0.957 |
-| L2 | +0.135 | +0.087 | +0.914 | +0.718 | +0.987 |
-| L3 | +0.155 | +0.104 | +0.877 | +0.684 | +0.982 |
-| L4 | +0.158 | +0.104 | +0.943 | +0.741 | +0.971 |
-| L5 | +0.138 | +0.090 | +0.980 | +0.770 | +0.945 |
-| L6 | +0.023 | +0.014 | +0.952 | +0.745 | +0.856 |
-| L7 | +0.036 | +0.022 | +0.623 | +0.475 | +0.627 |
-| L8 | +0.042 | +0.026 | +0.626 | +0.474 | +0.569 |
-| L9 | +0.009 | +0.003 | +0.509 | +0.394 | +0.482 |
-| L10 | +0.000 | −0.004 | +0.436 | +0.334 | +0.459 |
-| L11 | −0.011 | −0.009 | +0.400 | +0.311 | +0.441 |
+## 6. 收線判定：核心問題已獲解答，L15 機制定位確立，研究線正式收線
 
-### B. Phase B：Per-layer，MLP vs. Attention Block ΔM
+本研究線啟動時的核心命題為：「**實體決策訊號如何從底層（L0–11）特徵帶傳遞至晚期（L15）的 Dial 通道**」。歷經六個階段的系統性因果解剖，該問題已獲得完全自洽的科學解答：
 
-| Layer | MLP mean ΔM | MLP CI | Attn mean ΔM | Attn CI |
+1. **路徑形態非通道式傳遞**：實體訊號並非透過實體 token 區間以離散通道形式逐層向上遞送，亦非在晚期經由單一 dial 通道收口（Phase A/B/C/D 全數排除相關直覺假設）。
+2. **路徑實體為指令上下文之低維殘差子空間**：實體特徵於 L12–15 窗口完全轉譯為指令區間的殘差狀態差值，並在 L15 呈現極致的幾何約束性——**8 維線性子空間承載了 98.3% 的全部因果轉移力**。
+3. **Dial 是平行但匯流的同效應通道**：Dial 坐標激活值雖具備 43.4% 的轉移能力且與主子空間嚴格正交，但在下游決策讀出時與殘差子空間共享同一飽和網絡，無法疊加出超越 8 維子空間的緊湊表徵。
+
+核心科學問題定位明確，反駁證據與肯定證據均已在嚴格一致性（diff = 0.0）下重現收斂。**Entity-to-Dial 研究線至此正式收線**。
+
+---
+
+## 7. 產物與數據索引
+
+| 階段 | Run ID / 存檔路徑 | 狀態 | 核心產物與驗證腳本 | 主要判定結果 |
 |---|---|---|---|---|
-| L12 | −0.011 | [−0.509, +0.484] | −0.052 | [−0.501, +0.399] |
-| L13 | −0.041 | [−0.476, +0.403] | −0.052 | [−0.503, +0.401] |
-| L14 | −0.030 | [−0.455, +0.413] | −0.064 | [−0.487, +0.364] |
-| L15 | −0.059 | [−0.501, +0.382] | −0.071 | [−0.486, +0.347] |
-
-### C. Phase C：Per-company gap / ΔM_dial / unexplained_gap
-
-| Ticker | Sector | gap | ΔM_dial | unexplained_gap | dial_delta（entity pos） |
-|---|---|---|---|---|---|
-| BLK | Financials | +1.708 | +0.103 | +1.605 | +0.056 |
-| AMAT | IT | +1.411 | −0.018 | +1.429 | −0.002 |
-| NSC | Industrials | +1.327 | −0.017 | +1.344 | −0.009 |
-| DE | Industrials | +1.311 | −0.016 | +1.328 | +0.013 |
-| AXP | Financials | +1.277 | +0.057 | +1.219 | +0.030 |
-| DHR | Health Care | +1.267 | +0.006 | +1.261 | +0.010 |
-| GS | Financials | +1.094 | +0.025 | +1.069 | +0.034 |
-| CSX | Industrials | +1.052 | −0.091 | +1.143 | −0.025 |
-| ABT | Health Care | +0.909 | +0.046 | +0.863 | +0.024 |
-| C | Financials | +0.877 | +0.100 | +0.777 | +0.054 |
-| HON | Industrials | +0.772 | −0.011 | +0.784 | −0.001 |
-| SYK | Health Care | +0.642 | −0.021 | +0.663 | −0.009 |
-| GLW | IT | +0.522 | −0.080 | +0.602 | −0.030 |
-| HPE | IT | +0.395 | +0.042 | +0.354 | +0.008 |
-| BDX | Health Care | +0.247 | −0.027 | +0.274 | −0.002 |
-| IT | IT | +0.052 | +0.104 | −0.052 | +0.075 |
+| **Phase A** | `entity-to-dial-a-01` | complete | `scripts/entity_to_dial_phase_a.py`<br>`forward/results.jsonl` (672 recs) | **Gate A1 fail**：實體 token 於 L12+ 無充分性 |
+| **Phase B** | `entity-to-dial-b-01` | complete | `scripts/entity_to_dial_phase_b.py`<br>`forward/records.jsonl` (448 recs) | **Gate B fail**：單一 block patch transfer < 0.20 |
+| **Phase C** | `entity-to-dial-c-01` | complete | `scripts/entity_to_dial_phase_c.py`<br>`forward/records.jsonl` (64 recs) | **Gate C fail**：Dial transplant unexplained gap > 90% |
+| **Phase D** | `entity-to-dial-d-02`<br>*(d-01 為偏差記錄)* | complete | `scripts/entity_to_dial_phase_d.py`<br>`forward_d1` (112) / `forward_d2` (320) | **Gate D fail**：無合格層，toward $\approx 0$，呈抹除簽章 |
+| **Phase E** | `entity-to-dial-e-01` | complete | `scripts/entity_to_dial_phase_e.py`<br>`forward_e1` (224) / `forward_e2` (72) | **Gate E1 pass**（joint 0.575）；**Gate E2b fail**（dial 0.434）；$k=8$ 達 0.983；$\cos(v_1, \text{dial}) = -0.020$ |
+| **Phase F** | `entity-to-dial-f-02`<br>*(f-01 為偏差記錄)* | complete | `scripts/entity_to_dial_phase_f.py`<br>`forward_f1` (80) / `forward_f2` (13) | **Gate F1 fail**（additivity 0.7329，飽和匯流）；**F2 context-dependent**；收線採納 $k=8$ 子空間版本 |

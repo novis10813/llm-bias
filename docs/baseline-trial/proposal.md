@@ -163,3 +163,19 @@ bash scripts/visualize_prompt_analysis.sh
 context、換 entity identity、固定 buy/sell outcome options 的 logit margin），
 接 `counterfactual_patching`。需要新的 pair 建構＋review gate（參照
 8-K workflow），且要先決定證據文字中重複出現的 ticker 名稱換哪些位置。
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [jacobian-lens-selection](../jacobian-lens-selection/proposal.md)（資料／產物依賴）：逐層 readout 使用 validated canonical lens；不是由 baseline workflow 隱式 fitting。
+
+**後續**
+
+- [jspace-sector-intervention](../jspace-sector-intervention/proposal.md)（資料／產物依賴）：使用 trial-plan CSV 的公司與結構化證據。
+- [jspace-valence-readout](../jspace-valence-readout/proposal.md)（資料／產物依賴）：從 trial-plan 結構化證據建立正負 valence pairs。
+- [activation-patching-causal-tracing](../activation-patching-causal-tracing/proposal.md)（資料／產物依賴）：沿用 trial rows 的正負證據配對；residual patch 本身不要求 lens。
+
+最終／最新結果見本研究的 [report](report.md)。
