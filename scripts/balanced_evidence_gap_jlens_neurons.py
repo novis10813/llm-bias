@@ -4,7 +4,7 @@
 # ///
 """J-lens structural readout of the Phase 3 neuron coordinates.
 
-Reads docs/balanced-evidence-gap/diagnostic-jlens-neurons.md (frozen
+Reads docs/balanced-evidence-gap/details/diagnostic-jlens-neurons.md (frozen
 2026-09-10). For each (layer, neuron) coordinate, transports the
 down-projection row to the final-layer basis with the canonical Jacobian
 lens and decodes it with the model's unembed path. No forwards, no

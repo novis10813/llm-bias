@@ -1,6 +1,6 @@
 """Single-forward decision margin + dial activation probe.
 
-Protocol: docs/entity-to-dial/proposal.md §4.4. One no-grad forward
+Protocol: docs/entity-to-dial/details/proposal-phase-abc.md §4.4. One no-grad forward
 yields the FP32-tail decision margin and the L15/n8490 down-projection
 input channel (dial activation, native units) at the requested absolute
 positions. Values are transient; callers reduce to scalars immediately.

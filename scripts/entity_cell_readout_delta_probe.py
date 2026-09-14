@@ -1,6 +1,6 @@
 """Entity-cell E4 residual-stream suppression readout probe (proposed; not a frozen protocol).
 
-See docs/entity-cell-localization/proposal-e4.md for the full definition.
+See docs/entity-cell-localization/details/proposal-e4.md for the full definition.
 
 For each frozen V3 entity cell, compare the layer-wise transported
 representation readout of the residual stream at the fact-frame readout

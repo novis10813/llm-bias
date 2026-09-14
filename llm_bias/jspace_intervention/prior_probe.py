@@ -1,6 +1,6 @@
 """V2 zero-evidence header-only prior probe (readout-only diagnostic).
 
-Protocol: ``docs/jspace-token-experiments/proposal-v2.md`` (section
+Protocol: ``docs/jspace-token-experiments/details/proposal-v2.md`` (section
 "Zero-Evidence Header-Only Prior Probe").  Every condition uses the same
 neutral evidence body; only the header ticker and sector label vary.  At the
 scoring prompt's final token position the probe reports, per fitted layer,

@@ -1,4 +1,4 @@
-"""Entity-to-dial phase pipelines (protocol docs/entity-to-dial/proposal.md Rev 1).
+"""Entity-to-dial phase pipelines (protocol docs/entity-to-dial/details/proposal-phase-abc.md Rev 1).
 
 Phase A: token-group x layer sufficiency map (192 group patch forwards).
 Phase B: handoff-interval block-level (MLP vs attention) patch.

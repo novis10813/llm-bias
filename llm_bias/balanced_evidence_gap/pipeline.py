@@ -2,7 +2,7 @@
 
 Stages: prepare → forward → analyze. Reuses the shared ArtifactRun
 manifest lifecycle and core prompt/scoring mechanics. The frozen protocol
-is docs/balanced-evidence-gap/proposal-phase2.md.
+is docs/balanced-evidence-gap/details/proposal-phase2.md.
 """
 from __future__ import annotations
 

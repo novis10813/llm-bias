@@ -29,6 +29,9 @@ commands 或取代各 workflow 文件。
 - `investment_dial/`：擁有 arXiv:2608.22852 的 Qwen3.5-4B 本地方法復現；
   `investment-dial` CLI 分開提供工程檢查、梯度篩選、A/B 校準與獨立公司評估。
   使用 JSON decision/reason、全 token 加法；不得把合成工程輸入當作 baseline 結果。
+- `selective_intervention/`：擁有 V1 推論期 entity-difference 子空間移除、對照與
+  gate 評估；operator 為 `scripts/selective_intervention_v1.py`，協議見
+  [V1 proposal](../docs/selective-intervention/details/proposal-v1.md)。
 - `entity_cell/`：擁有 entity-cell localization、attention attribution 與
   suppression intervention 工作流；CLI 入口為 `entity-cell`。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、

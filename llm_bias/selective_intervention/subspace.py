@@ -1,6 +1,6 @@
 """Subspace removal transform, calibration centers, and basis utilities.
 
-Protocol: docs/selective-intervention/proposal-v1.md §4. For a selected
+Protocol: docs/selective-intervention/details/proposal-v1.md §4. For a selected
 position set P the transform maps, at the intervened layer's post-block
 residual ``h`` (``[1, sequence, d]``):
 

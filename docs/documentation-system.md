@@ -20,7 +20,7 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 |---|---|---|---|
 | root `AGENTS.md` | 所有 coding agents | 專案 scope、全域規則、檔案放置、直接子層入口、常用驗證 | 完整 CLI 操作手冊、整棵目錄樹 |
 | 子目錄 `AGENTS.md` | 修改該目錄的 agents | 該目錄特有的 ownership、慣例、局部驗證、直接子層入口 | root 已定義的通用規則 |
-| `docs/<experiment-name>/*.md` | 維護者與實驗執行者 | 實驗 proposal、report、artifact schema、研究語意、操作步驟與限制 | 無 code 或 artifact 依據的推測 |
+| `docs/<experiment-name>/` 與 `details/` | 維護者與實驗執行者 | 頂層研究入口與最終／最新報告；details 保存原始協議、分階段結果、artifact schema 與操作限制 | 無 code 或 artifact 依據的推測 |
 | `README.md` | 新使用者 | setup、active workflows、quickstart、文件地圖 | 重複 canonical workflow 的完整參數表 |
 | `CLAUDE.md` | Claude Code 相容入口 | root 規則的工具特定摘要與必要相容內容 | 與 root `AGENTS.md` 衝突的第二套政策 |
 
@@ -29,11 +29,21 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 
 ## 詳細文件分類
 
-- `docs/<experiment-name>/`：active experiment 的 canonical 目錄。每個目錄至少包含
-  `proposal.md` 與一份 `report*.md`。Proposal 保存問題、protocol、controls、estimands、
-  gates、artifact contract 與 CLI；report 保存 dated runs、數值、verdict 與限制。
-- 版本化研究線可用 `proposal-v1.md`、`report-v1.md` 等檔名，並以 `README.md` 作
-  index/router。版本號必須同時出現在 run/config/report identity。
+- `docs/<experiment-name>/`：研究線的 canonical 目錄，頂層只保留 `proposal.md` 與
+  `report.md`。已收線者使用收線報告；未收線者保留最新完整報告，明寫 discovery、
+  exploratory 或 proposed 等實際狀態，不因檔名統一而視為完成。
+- 單一協議的 `proposal.md` 保存問題、protocol、controls、estimands、gates、artifact
+  contract 與 CLI。多版本或分階段研究的 `proposal.md` 是全線入口，說明研究問題、
+  階段順序、狀態與原始協議連結；它不合併各階段 CLI，不取代 frozen protocol，亦不
+  構成新實驗版本或 formal run 授權。
+- `docs/<experiment-name>/details/`：保存版本化／分階段原始 proposal、階段 report、
+  diagnostic、smoke 紀錄與舊版 README。原始協議仍是對應版本的 source of truth；
+  移入此處不代表 obsolete 或 frozen。尚在 proposed 的延伸必須在頂層入口明列。
+  沒有中間文件的研究不建立空目錄。Run outputs 留在 `artifacts/`，圖表留在既有
+  `assets/`，本次整理不搬移或改寫歷史 artifacts。
+- `docs/README.md`：16 條研究線的閱讀入口、狀態與前後關係。關係分為「資料／產物
+  依賴」、「研究承接」與「方法參考」；每條關係要附來源文件，不以日期先後推定依賴。
+  各研究的 `proposal.md` 列上游與後續研究，連回總覽。
 - `docs/proposal/`：跨實驗研究計畫與 roadmap，不保存單一 active experiment 的完整
   protocol 或 dated results。
 - `docs/archive/`：已移至 `archive/` 的 frozen workflow 文件。文件保留還原與
@@ -52,12 +62,23 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 family 或 success gate，建立新的 version 文件，不在舊文件中把新 protocol 寫成
 「下一步」後混用結果。版本化研究線使用：
 
-- 一個不帶版本號的 index/router，列出各版本 status、primary outcome、implementation
-  與 evidence；
-- 每個版本一份詳細文件，檔名帶 `-v1`、`-v2`；
-- root `AGENTS.md` 與 README 連到 index，並在容易混淆時直接列出各版本；
+- 頂層 `proposal.md` 作為不帶版本號的 index/router，列出各版本 status、primary
+  outcome、implementation 與 evidence；
+- 每個版本在 `details/` 保存詳細文件，檔名帶 `-v1`、`-v2`；分階段協議保留原有
+  phase identity，不將最後一階段改名冒充全線協議；
+- root `AGENTS.md` 與 README 連到頂層入口，特定版本的協議引用直接指向 `details/`；
 - run/config/report 明確寫 version。第一次 formal run 後若改 estimand 或 gate，建立新
   version，不回填舊版本。
+
+## 文件搬移與歷史引用
+
+搬移文件時修正 Markdown 相對連結、圖片路徑、內文文件路徑，以及程式／script 中的
+協議引用。原始 protocol 的 gates、數字、版本、run ID 與命令保持不變；頂層入口新增
+的說明與原始協議分開維護。舊路徑與新路徑可由 Git rename history 追查。
+
+已產出的 artifacts 與其 provenance 不回寫。程式中供未來輸出使用的 protocol 路徑
+改指目前文件位置，不改 schema 或實驗 identity。此次頂層入口統一只改文件編排，
+不觸發研究版本變更。
 
 ## Source of truth
 

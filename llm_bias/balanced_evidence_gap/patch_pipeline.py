@@ -2,7 +2,7 @@
 
 Stages for 2B: prepare-pairs → sweep → analyze.
 Stages for 2C: prepare-arms → attention/MLP → analyze.
-Protocol: docs/balanced-evidence-gap/proposal-phase2.md §4.4–§4.5.
+Protocol: docs/balanced-evidence-gap/details/proposal-phase2.md §4.4–§4.5.
 """
 from __future__ import annotations
 

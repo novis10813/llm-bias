@@ -203,12 +203,12 @@ Run 遵循 `prepare → forward → analyze` stages 與 manifest finalization。
 `artifacts/<model-slug>/cross-sector-header-patching/prepared/`）；B 重用 A 的 prepared
 records，因此 `cross-sector-context-overriding/` 沒有 slug-level prepared 目錄。
 
-Discovery run records 見 [實驗報告](report-discovery.md)。
+Discovery run records 見 [實驗報告](details/report-discovery.md)。
 
 ## B V1: Frozen Confirmation Design
 
 本節定義 B V1 cross-sector context overriding 的 calibration 與 held-out test gate。
-Discovery 結果見 [report-discovery.md](report-discovery.md) §3。
+Discovery 結果見 [report-discovery.md](details/report-discovery.md) §3。
 
 本節在讀取 calibration 或 test outputs 前凍結，凍結後不修改 primary contrast、
 thresholds、layers、spans 或統計方法。若需修改，建立 B V2。
@@ -375,3 +375,19 @@ uv run jspace-intervention run-cross-sector-context-overriding \
   --run-id cross-sector-context-test-$(date -u +%Y%m%d) \
   --layers 14-21
 ```
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [activation-patching-causal-tracing](../activation-patching-causal-tracing/proposal.md)（研究承接）：依 evidence→instruction context→final 的層級轉移，設計 A/B/C 延伸。
+- [jspace-sector-intervention](../jspace-sector-intervention/proposal.md)（資料／產物依賴）：A/B/C 沿用 Technology 與 Financial Services split manifest。
+- [jacobian-lens-selection](../jacobian-lens-selection/proposal.md)（資料／產物依賴）：僅 C 的 L16 transported readout 需要 canonical lens；A/B 是 residual patch。
+
+**後續**：尚無已立案的後續研究；不把報告中的建議視為已授權實驗。
+
+A/B/C 的完整 discovery 結果見[階段報告](details/report-discovery.md)；頂層 [report](report.md) 是 B V1 calibration 結果，不代表 A/C 已執行 confirmation。
+
+最終／最新結果見本研究的 [report](report.md)。

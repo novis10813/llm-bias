@@ -1,7 +1,7 @@
 """Entity-to-Dial Phase E — dual-block joint discrimination + state-direction patch.
 
 Runs the 4-stage pipeline (prepare → forward_e1 → forward_e2 → analyze)
-defined in docs/entity-to-dial/proposal-phase-e.md (Rev 1): E1 dual-block
+defined in docs/entity-to-dial/details/proposal-phase-e.md (Rev 1): E1 dual-block
 joint patch + full-swap reference arm (L12–18, gate E1 = joint ratio at
 L15) and E2 state-direction patch at L15 (PCA sweep, dial channel
 transplant gate E2b, residual footprint descriptive).

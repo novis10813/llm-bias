@@ -1,6 +1,6 @@
 """Estimators and pre-registered gates for Phase 2 (pure functions).
 
-Gate definitions are frozen in docs/balanced-evidence-gap/proposal-phase2.md
+Gate definitions are frozen in docs/balanced-evidence-gap/details/proposal-phase2.md
 §4.3 and §4.5. These functions are deterministic and side-effect free.
 """
 from __future__ import annotations
@@ -183,7 +183,7 @@ def evaluate_gate_2a(
     }
 
 
-# ── gate 2A Rev 2 (docs/balanced-evidence-gap/proposal-phase2-rev2.md) ───
+# ── gate 2A Rev 2 (docs/balanced-evidence-gap/details/proposal-phase2-rev2.md) ───
 
 def select_margin_groups(
     pure_entity_margins: dict[str, float],

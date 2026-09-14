@@ -1,7 +1,7 @@
 """Selective-intervention V1 — L15 k=8 subspace removal (protocol-v1 Rev 1).
 
 Runs the 3-stage pipeline (prepare → forward → analyze) defined in
-docs/selective-intervention/proposal-v1.md (Rev 1, frozen): clean
+docs/selective-intervention/details/proposal-v1.md (Rev 1, frozen): clean
 bit-exact 2A reference, strength sweep (dose), centering / position /
 layer / random-subspace controls, anonymous + dial probes; gates
 G1a/G1b (efficacy), G2 (specificity), G3/G4 (task preservation).

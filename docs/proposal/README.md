@@ -1,35 +1,28 @@
-# Research proposals and planning
+# Research program and planning
 
-This directory contains the cross-experiment research program and roadmap. It is
-not the source of single-experiment protocols, CLI instructions, artifact schemas,
-or dated results; those live in `docs/<experiment-name>/` proposal and report files.
+This directory defines the cross-experiment questions, expected contributions and completion requirements. Experiment protocols, gates, run results and artifact contracts remain in their owning experiment directories.
 
-## Active research program
+## This round targets behaviour and mechanisms; generalisation is still required
 
-- [Mechanistic Analysis and Inference-Time Control of Entity Bias](entity-bias-research-proposal.md) — the canonical research proposal, including motivation, research questions, mechanistic analysis, intervention design, evaluation, and the NAACL 2027 planning target.
-- [Entity-bias roadmap](entity-bias-roadmap.md) — the dependency-ordered execution roadmap and current evidence-readiness gates.
+- [Behavioural Confirmation and Mechanistic Analysis of Entity Influence](entity-bias-research-proposal.md): revised objectives, RQ1–RQ5, evidence roles and expected contributions. Selective inference-time control is an independent follow-up, not a required success outcome.
+- [Research roadmap](entity-bias-roadmap.md): original M1–M6 versus the actual research path, current evidence and remaining work. Cross-model **and** cross-task validation remain required and incomplete.
+- [Research directory and experiment relationships](../README.md): all experiment entrances and upstream/downstream relationships. Each experiment keeps `proposal.md` and `report.md` at the top level; `details/` retains phase protocols and intermediate records.
 
-## Execution sources
+This revision does not mark the original 8-K milestones as completed, promote discovery to confirmation, or rewrite frozen protocols. Closed Qwen3.5-4B lines do not imply that the overall program is complete. The original NAACL 2027 schedule remains historical planning context, not a verified deadline.
 
-The proposal documents point to these canonical operational sources rather than
-copying their commands or schemas:
+## Evidence is organised by the question it answers
 
-- [Counterfactual patching](../archive/counterfactual-patching.md) (archived)
-- [8-K counterfactual entity dataset](../archive/counterfactual-dataset-generation.md) (archived)
-- [EDGAR 8-K preparation](../archive/edgar-8k-preparation.md) (archived)
-- [Qwen Jacobian-lens selection proposal](../jacobian-lens-selection/proposal.md) and [report](../jacobian-lens-selection/report.md)
-- [J-space sector intervention proposal](../jspace-sector-intervention/proposal.md) and [report](../jspace-sector-intervention/report.md)
-- [J-space valence vocabulary readout proposal](../jspace-valence-readout/proposal.md) and [Technology discovery report](../jspace-valence-readout/report-technology-discovery.md)
-- [J-space token experiment versions](../jspace-token-experiments/README.md)
-- [J-space token causal screen V1 proposal](../jspace-token-experiments/proposal-v1.md) and [report](../jspace-token-experiments/report-v1.md)
-- [J-space outcome-conditioned decision-flip V2 proposal](../jspace-token-experiments/proposal-v2.md) and [report](../jspace-token-experiments/report-v2.md)
-- [Activation patching causal tracing proposal](../activation-patching-causal-tracing/proposal.md) and [report](../activation-patching-causal-tracing/report.md)
-- [Sector and context follow-up proposal](../sector-context-followup/proposal.md) and [discovery report](../sector-context-followup/report-discovery.md)
-- [Baseline trial proposal](../baseline-trial/proposal.md) and [prompt-analysis reproducibility report](../baseline-trial/report-reproducibility.md)
-- [Technology header-span sensitivity proposal](../span-sensitivity/proposal.md) and [report status](../span-sensitivity/report-status.md)
-- [J-space evaluation design](../j-space-evaluation/proposal.md) and [report status](../j-space-evaluation/report-status.md) (optional proposed preflight)
-- [Interactive prompt-lens dashboard](../interactive-prompt-lens-dashboard.md)
-- [Shared experiment core](../shared-experiment-core.md)
-- [Artifact identity and run manifest contract](../artifact-contract.md)
-- [Research scripts reference](../research-scripts.md)
-- [Repository development and research constraints](../../CLAUDE.md)
+| Question | Canonical sources |
+|---|---|
+| Inputs, instrument provenance and behavioural sensitivity | [Baseline trial](../baseline-trial/proposal.md), [lens selection](../jacobian-lens-selection/proposal.md), [span sensitivity](../span-sensitivity/proposal.md) |
+| Evidence representations, steering and context-state effects | [Valence readout](../jspace-valence-readout/proposal.md), [sector intervention](../jspace-sector-intervention/proposal.md), [J-space token V1/V2](../jspace-token-experiments/proposal.md), [activation patching](../activation-patching-causal-tracing/proposal.md), [sector/context follow-up](../sector-context-followup/proposal.md) |
+| Factual memory and financial-judgment probes | [Entity Cell](../entity-cell-localization/proposal.md), [financial-soundness localisation](../financial-soundness-localization/proposal.md), [causal validation](../financial-soundness-causal-validation/proposal.md) |
+| Global stance, entity gaps and their causal paths | [Investment-dial](../investment-dial/proposal.md), [Balanced Evidence Gap](../balanced-evidence-gap/proposal.md), [Entity-to-Dial](../entity-to-dial/proposal.md) |
+
+Independent follow-up: [Selective-intervention V1](../selective-intervention/proposal.md) has completed formal run `selective-intervention-v1-gpu-bf16-01`; its [report](../selective-intervention/report.md) records G1a/G1b/G2 pass and G3/G4 fail, a full-strength negative result rather than selective-control success.
+
+Cross-model/task protocols still need to be defined. [J-space evaluation](../j-space-evaluation/proposal.md) remains optional, proposed and non-runnable; it does not gate their execution. Archived 8-K/counterfactual workflows remain under the [archive documentation](../archive/README.md), not the active execution path.
+
+## Operational contracts stay outside the research plan
+
+See [shared core](../shared-experiment-core.md), [artifact identity](../artifact-contract.md), [research scripts](../research-scripts.md), [interactive dashboard](../interactive-prompt-lens-dashboard.md), [documentation rules](../documentation-system.md) and [repository guidance](../../AGENTS.md). The program documents do not duplicate CLI commands, schemas or per-run numerical tables.

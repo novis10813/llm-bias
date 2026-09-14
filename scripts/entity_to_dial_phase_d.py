@@ -1,7 +1,7 @@
 """Entity-to-Dial Phase D — instruction-span block sweep + signed attribution.
 
 Runs the 4-stage pipeline (prepare → forward_d1 → forward_d2 → analyze)
-defined in docs/entity-to-dial/proposal-phase-d.md (Rev 1): 8 directions
+defined in docs/entity-to-dial/details/proposal-phase-d.md (Rev 1): 8 directions
 x 20 layers (L12–31) x 2 components (MLP block vs attention block)
 instruction-span patch forwards with fp32 block arithmetic, self-source
 no-op discipline, final-position sanity, gate D (MLP path existence +

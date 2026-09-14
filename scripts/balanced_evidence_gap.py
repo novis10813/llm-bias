@@ -16,7 +16,7 @@ Formal run:
         --model .cache/models/qwen3.5-4b \\
         --run-id balanced-gap-gpu-bf16-01
 
-See docs/balanced-evidence-gap/proposal.md for full protocol.
+See docs/balanced-evidence-gap/details/proposal-phase1.md for full protocol.
 """
 
 from __future__ import annotations

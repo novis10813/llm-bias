@@ -1,7 +1,7 @@
 """Entity-to-Dial Phase A — token-group x layer sufficiency map.
 
 Runs the 3-stage pipeline (prepare → forward → analyze) defined in
-docs/entity-to-dial/proposal.md §4.2 (Rev 1): 8 directions x 12 layers x
+docs/entity-to-dial/details/proposal-phase-abc.md §4.2 (Rev 1): 8 directions x 12 layers x
 2 token-groups (ticker/name) patch forwards, self-source no-op discipline,
 gate A (ticker-group L0–5 sufficiency), and the 2B entity-span
 upper-bound reference.

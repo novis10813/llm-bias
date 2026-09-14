@@ -431,3 +431,20 @@ layers, spans, thresholds, contrasts, or the test gate. If calibration fails,
 the Draft 1 test is not run. The frozen machine-readable config is:
 
 `artifacts/qwen3.5-4b/jspace-causal-tracing/configs/position-transfer-confirmation-v1.json`
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（研究承接）：V2 未建立位置特異性，改用模型自然狀態差定位決策充分性。
+- [baseline-trial](../baseline-trial/proposal.md)（資料／產物依賴）：沿用 trial rows 的正負證據配對；residual patch 本身不要求 lens。
+
+**後續**
+
+- [sector-context-followup](../sector-context-followup/proposal.md)（研究承接）：依 evidence→instruction context→final 的層級轉移，設計 A/B/C 延伸。
+- [balanced-evidence-gap](../balanced-evidence-gap/proposal.md)（研究承接）：明確證據下 header 效應弱，改在多空對稱條件確認 entity 影響。
+- [entity-to-dial](../entity-to-dial/proposal.md)（方法參考）：沿用 bidirectional residual patch、固定答案 margin 與 self-source no-op 契約。
+
+最終／最新結果見本研究的 [report](report.md)。

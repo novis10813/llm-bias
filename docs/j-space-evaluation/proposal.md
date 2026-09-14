@@ -598,3 +598,13 @@ The core acceptance standard is not that the tool prints a layer range. It must
 separate positive synthetic task-local J-space-candidate evidence, absence of
 detectable candidate evidence, unreliable lens estimates, insufficient task
 competence, and incompatible models.
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**：屬跨實驗 [research program](../proposal/README.md) 的 optional proposed 輔助設計，不 gate active milestones。
+
+**後續**：屬跨實驗 [research program](../proposal/README.md) 的 optional proposed 輔助設計，不 gate active milestones。
+
+最終／最新結果見本研究的 [report](report.md)。

@@ -1,6 +1,6 @@
 """Selective-intervention V1 pipeline: prepare → forward → analyze.
 
-Protocol: docs/selective-intervention/proposal-v1.md (Rev 1, frozen
+Protocol: docs/selective-intervention/details/proposal-v1.md (Rev 1, frozen
 2026-09-13). One run covers the full arm matrix: clean bit-exact
 reference, strength (dose) sweep, centering / position / layer /
 random-subspace controls, and the anonymous + dial probes. No raw

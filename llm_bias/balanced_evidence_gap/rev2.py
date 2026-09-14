@@ -1,4 +1,4 @@
-"""Phase 2 Rev 2 gate re-evaluation (docs/balanced-evidence-gap/proposal-phase2-rev2.md).
+"""Phase 2 Rev 2 gate re-evaluation (docs/balanced-evidence-gap/details/proposal-phase2-rev2.md).
 
 CPU-only re-analysis of an existing 2A forward run: no model load, no new
 inference. The 2A margin is a deterministic logit computation, so the gate
@@ -94,7 +94,7 @@ def run_rev2_gate(
                     "path": str(phase1_summary),
                     "sha256": _sha256(phase1_summary),
                 },
-                "gate_protocol": "docs/balanced-evidence-gap/proposal-phase2-rev2.md",
+                "gate_protocol": "docs/balanced-evidence-gap/details/proposal-phase2-rev2.md",
             }
             prov_path = run.run_directory / "prepare" / "provenance.json"
             write_json(prov_path, provenance)
@@ -130,7 +130,7 @@ def run_rev2_gate(
             summary = {
                 "schema_version": SCHEMA_VERSION,
                 "artifact_type": "balanced_evidence_gap_phase2_rev2_analysis",
-                "protocol": "docs/balanced-evidence-gap/proposal-phase2-rev2.md",
+                "protocol": "docs/balanced-evidence-gap/details/proposal-phase2-rev2.md",
                 "n_prompts": len(rows),
                 "gate_2a_rev2": gate,
                 "descriptive": {

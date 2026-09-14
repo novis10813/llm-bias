@@ -1,6 +1,6 @@
 """Phase D signed attribution: per-position MLP derivatives + top-channel stats.
 
-Protocol: docs/entity-to-dial/proposal-phase-d.md §4.3 (Rev 1).
+Protocol: docs/entity-to-dial/details/proposal-phase-d.md §4.3 (Rev 1).
 
 ``mlp_position_derivative`` mirrors the core ``mlp_summed_derivatives``
 hook lifecycle (pre-hook on the dense MLP down-projection input,

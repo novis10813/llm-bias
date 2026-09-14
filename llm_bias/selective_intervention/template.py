@@ -1,14 +1,14 @@
 """Frozen selective-intervention V1 constants.
 
 All frozen values (arm grid, centers, gates, smoke grid) are defined in
-docs/selective-intervention/proposal-v1.md (Rev 1, frozen 2026-09-13);
+docs/selective-intervention/details/proposal-v1.md (Rev 1, frozen 2026-09-13);
 changes require a new protocol version, not an edit here.
 """
 from __future__ import annotations
 
 SCHEMA_VERSION = "selective-intervention-v1"
 DATASET = "selective-intervention"
-PROTOCOL = "docs/selective-intervention/proposal-v1.md"
+PROTOCOL = "docs/selective-intervention/details/proposal-v1.md"
 PROTOCOL_REV = 1
 
 DECISION_PREFIX = '{"decision": "'

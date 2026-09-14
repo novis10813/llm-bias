@@ -1,6 +1,6 @@
 """Gap / spread metrics and pre-registered gates for selective-intervention V1.
 
-Protocol: docs/selective-intervention/proposal-v1.md §7. All inputs are
+Protocol: docs/selective-intervention/details/proposal-v1.md §7. All inputs are
 reduced margin statistics (nats) computed by the pipeline from the
 per-prompt forward records.
 """

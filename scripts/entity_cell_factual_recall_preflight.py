@@ -22,7 +22,7 @@ Device: load_model uses cuda:0 (bfloat16) when CUDA is available, else CPU
 (fp32). Select the physical card with CUDA_VISIBLE_DEVICES, e.g.
 `CUDA_VISIBLE_DEVICES=0 uv run python scripts/entity_cell_factual_recall_preflight.py ...`.
 
-Definition and status: see docs/entity-cell-localization/README.md
+Definition and status: see docs/entity-cell-localization/details/README.md
 ("Proposed: factual recall preflight").
 
 Usage (from the repo root):

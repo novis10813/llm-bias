@@ -1,7 +1,7 @@
 """Balanced Evidence Gap — Phase 2 Rev 2 gate re-evaluation operator.
 
 CPU-only re-analysis of an existing 2A forward run under the Rev 2 protocol
-(docs/balanced-evidence-gap/proposal-phase2-rev2.md): gate 2A with the
+(docs/balanced-evidence-gap/details/proposal-phase2-rev2.md): gate 2A with the
 Phase 1 gap (named-vs-anonymous) as the construct reference, plus the
 group construct check. No model load, no GPU, no new inference.
 

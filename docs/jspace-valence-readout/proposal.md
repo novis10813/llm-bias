@@ -161,4 +161,20 @@ uv run jspace-intervention run-valence-readout \
 
 單一指令完成 prepare → forward → analyze → finalize。
 
-結果與限制見 [Technology discovery 報告](report-technology-discovery.md)。
+結果與限制見 [Technology discovery 報告](report.md)。
+
+## 與其他研究的前後關係
+
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+
+**上游**
+
+- [baseline-trial](../baseline-trial/proposal.md)（資料／產物依賴）：從 trial-plan 結構化證據建立正負 valence pairs。
+- [jacobian-lens-selection](../jacobian-lens-selection/proposal.md)（資料／產物依賴）：詞彙 transported readout 使用 canonical lens。
+- [jspace-sector-intervention](../jspace-sector-intervention/proposal.md)（資料／產物依賴）：共用已固定的 ticker split manifest，不重分 discovery/calibration/test。
+
+**後續**
+
+- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（資料／產物依賴）：V1 直接消費提名的 vocabulary candidates；V2 改用 outcome-gradient，不沿用 V1 direction source。
+
+最終／最新結果見本研究的 [report](report.md)。
