@@ -10,6 +10,10 @@ This directory defines the cross-experiment questions, expected contributions an
 
 This revision does not mark the original 8-K milestones as completed, promote discovery to confirmation, or rewrite frozen protocols. Closed Qwen3.5-4B lines do not imply that the overall program is complete. The original NAACL 2027 schedule remains historical planning context, not a verified deadline.
 
+## Progress reports trace the research questions across experiments
+
+- [AI on a Dial 方法復現後：公司身分決策差異的定位與介入](progress-after-investment-dial.md)：給指導教授與研究同儕的進度報告，涵蓋方法復現後的 Balanced Evidence Gap、Entity-to-Dial A–F 與 Selective-intervention V1（截至 2026-09-14）。此跨實驗摘要不取代各線的 canonical protocol/report。
+
 ## Evidence is organised by the question it answers
 
 | Question | Canonical sources |
