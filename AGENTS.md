@@ -22,7 +22,8 @@ frozen；還原方式見 [`archive/README.md`](archive/README.md)。
 
 全線入口：[J-space token V1/V2](docs/jspace-token-experiments/proposal.md)、
 [Entity Cell](docs/entity-cell-localization/proposal.md)、[Investment-dial](docs/investment-dial/proposal.md)、
-[Balanced Evidence Gap](docs/balanced-evidence-gap/proposal.md)、[Entity-to-Dial](docs/entity-to-dial/proposal.md)。
+[Balanced Evidence Gap](docs/balanced-evidence-gap/proposal.md)、[Entity-to-Dial](docs/entity-to-dial/proposal.md)、
+[公司身分的中間概念](docs/entity-concept-decision/proposal.md)（收線 2026-09-15：[收線報告](docs/entity-concept-decision/report.md)。可分離公司概念前提被多輪真實模型開發否決（L15 k=8 與 L8–L26、4/16 家一致 null）；研究問題曾轉向 stance 通道並取得收斂描述——1D stance 方向 L15 解釋 margin 變異 60%（≠ entity signal、因果探查為弱槓桿）、軸分解顯示 L15 狀態 99.5% 共享、決策是微小（0.5%）公司間差的高增益非線性讀出，不存在低維局部線性因果軸。原三階段 pipeline 未實作／formal 未授權）。
 以下特定版本連結保留直達原始協議／證據，方便查核：
 
 - [Baseline trial proposal](docs/baseline-trial/proposal.md) / [prompt-analysis reproducibility report](docs/baseline-trial/report.md)

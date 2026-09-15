@@ -49,6 +49,7 @@ full-strength gate fail，見 [V1 報告](selective-intervention/report.md)。
 | Balanced Evidence Gap：Phase 1–3 收線；行為／層帶定位通過，Phase 3 0/3 confirmed。 | [proposal](balanced-evidence-gap/proposal.md) · [report](balanced-evidence-gap/report.md) |
 | Entity-to-Dial：Phase A–F 收線；F1 fail，L15 採 k=8 子空間描述。 | [proposal](entity-to-dial/proposal.md) · [report](entity-to-dial/report.md) |
 | Selective-intervention：V1 formal `selective-intervention-v1-gpu-bf16-01` completed；G1a/G1b/G2 pass、G3/G4 fail，full-strength 負結果。 | [proposal](selective-intervention/proposal.md) · [report](selective-intervention/report.md) |
+| 公司身分的中間概念：收線（2026-09-15）；可分離公司概念前提被否決，stance 通道收斂描述（1D 讀數方向 L15 解釋 margin 變異 60%、≠ entity signal、弱因果槓桿；決策是微小公司間差的高增益非線性讀出）。 | [proposal](entity-concept-decision/proposal.md) · [report](entity-concept-decision/report.md) |
 
 ## 前後關係各有來源，不串成單一成功路線
 
@@ -88,3 +89,6 @@ V1→V2、Phase 1→2→3、Phase A→F 與 E1→E4 的線內順序，見各頂�
 | [balanced-evidence-gap](balanced-evidence-gap/proposal.md) → [selective-intervention](selective-intervention/proposal.md) | 資料／產物依賴 | V1 使用 Phase 2A 的 16 公司、64 prompts 與 archived margins。 [依據](selective-intervention/details/proposal-v1.md) |
 | [entity-to-dial](entity-to-dial/proposal.md) → [selective-intervention](selective-intervention/proposal.md) | 資料／產物依賴 | V1 使用 e-01 的 L15 k=8 basis，測試移除子空間分量；transfer 效果不預設 removal 成功。 [依據](selective-intervention/details/proposal-v1.md) |
 | [investment-dial](investment-dial/proposal.md) → [selective-intervention](selective-intervention/proposal.md) | 方法參考 | V1 沿用 L15/N8490 與 ±4 native-unit push 作 dial probe。 [依據](selective-intervention/proposal.md) |
+| [entity-to-dial](entity-to-dial/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | 沿用 e-01 固定 k=8 基底，新增獨立概念驗證，不把基底直接命名成語義。 [依據](entity-concept-decision/details/design-and-validation.md) |
+| [balanced-evidence-gap](balanced-evidence-gap/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | 舊 2A prompts 僅作 discovery／重現；確認需另留公司與模板。 [依據](entity-concept-decision/details/design-and-validation.md) |
+| [jacobian-lens-selection](jacobian-lens-selection/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | Phase 1 以既有 canonical lens 提名；介入不以讀出代替因果驗證。 [依據](entity-concept-decision/details/proposal-phase1.md) |
