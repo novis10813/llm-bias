@@ -82,6 +82,8 @@
   與 CLI。
 - `test_prompt_input.py`、`test_core_inference.py`、`test_core_analysis.py`、
   `test_core_artifacts.py`：shared workflow 核心子套件。
+- `test_entity_concept_materials.py`、`test_entity_concept_directions.py`：Phase 1
+  基礎工具的材料驗證、等家族權重方向 fitting 與退化處理；無模型、無 GPU。
 - `test_continuation_scoring.py`：buy/sell margin 與 KL 計算。
 - `test_lens_artifacts.py`、`test_lens_install.py`、`test_lens_loader.py`、
   `test_lens_promotion.py`、`test_lens_registry.py`：canonical lens 安裝、存取與
