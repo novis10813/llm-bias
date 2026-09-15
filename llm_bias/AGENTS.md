@@ -34,7 +34,7 @@ commands 或取代各 workflow 文件。
   [V1 proposal](../docs/selective-intervention/details/proposal-v1.md)。
 - `entity_cell/`：擁有 entity-cell localization、attention attribution 與
   suppression intervention 工作流；CLI 入口為 `entity-cell`。
-- `entity_concept_decision/`：Phase 1 基礎工具；無 CLI／runner；材料驗證與等家族權重概念方向 fitting 依 [Phase 1 協議](../docs/entity-concept-decision/details/proposal-phase1.md) 與[實作 spec](../docs/entity-concept-decision/details/implementation-phase1-foundations.md) 定義。
+- `entity_concept_decision/`：Phase 1 基礎工具與 development runner；無 CLI；材料驗證、概念方向 fitting 與 caller-owned `prepare → forward → analyze` development workflow 由 [implementation](../docs/entity-concept-decision/details/implementation-phase1-development.md) 定義。runner 接受任意概念集合（`concept_ids`）並做通用 stance 正交化；`development_materials` 含 round-1（C+S）與 round-2（表格格式，任意概念）兩種 builder。runner 只接受已載入模型、tokenizer、CPU basis 與明確 development provenance，不是 formal audit pipeline。
 - `counterfactual_patching/`、`synthetic_entity_bias/`、`ten_k_change_data/`、
   `edgar_preparation/`：已隨程式移至 `archive/llm_bias/`（frozen），操作文件在
   `docs/archive/`。
