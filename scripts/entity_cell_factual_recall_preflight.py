@@ -15,7 +15,9 @@ Entity surfaces follow data/all_constituents_2020_2025.csv as used by the
 entity-cell experiments: FTNT=Fortinet, ADI=Analog Devices,
 MU=Micron Technology, FTV=Fortive. An ad-hoc screen can override the entity
 set via --entities (one TICKER:Name shell argument per ticker; multiple
-surface variants per ticker separated by '|'). The anonymous control is
+surface variants per ticker separated by '|') and the frame set via --frames
+(one ID:template shell argument per frame; the template must contain {name}
+exactly once). The anonymous control is
 scored once per frame, not per entity.
 
 Device: load_model uses cuda:0 (bfloat16) when CUDA is available, else CPU
@@ -34,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from typing import Any
 
@@ -97,6 +100,18 @@ def parse_entities(spec: list[str] | None) -> dict[str, list[str]]:
     return out
 
 
+def parse_frames(spec: list[str] | None) -> list[tuple[int, str]]:
+    if not spec:
+        return list(CLOZE_FRAMES)
+    frames: list[tuple[int, str]] = []
+    for token in spec:
+        variant_id, template = token.split(":", 1)
+        if template.count("{name}") != 1:
+            raise SystemExit(f"frame {variant_id} template must contain {{name}} exactly once")
+        frames.append((int(variant_id), template))
+    return frames
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=".cache/models/qwen3.5-4b")
@@ -104,9 +119,12 @@ def main() -> None:
     parser.add_argument("--tickers", nargs="+", default=None, choices=None)
     parser.add_argument("--entities", nargs="+", default=None,
                         help="TICKER:Name arguments ('|' joins surface variants); overrides the built-in set")
+    parser.add_argument("--frames", nargs="+", default=None,
+                        help="ID:template arguments; overrides the built-in frame set")
     args = parser.parse_args()
 
     entities = parse_entities(args.entities)
+    frames = parse_frames(args.frames)
     if args.tickers:
         unknown = [t for t in args.tickers if t not in entities]
         if unknown:
@@ -119,7 +137,7 @@ def main() -> None:
 
     def score(surface: str) -> list[dict]:
         frame_rows = []
-        for variant_id, template in CLOZE_FRAMES:
+        for variant_id, template in frames:
             prompt = template.format(name=surface)
             ids = input_ids(tokenizer, prompt, add_special_tokens=True)
             dist = next_log_distribution(model, ids, device)
@@ -170,15 +188,17 @@ def main() -> None:
         "transformers_version": transformers.__version__,
         "tickers": sorted(entities),
         "entities": entities,
-        "frames": [{"variant_id": v, "template": t} for v, t in CLOZE_FRAMES],
+        "frames": [{"variant_id": v, "template": t} for v, t in frames],
         "top_k": TOP_K,
         "greedy_tokens": GREEDY_TOKENS,
         "elapsed_seconds": round(time.time() - started, 1),
         "rows": rows,
     }
-    with open(args.output, "w") as fh:
+    output_path = args.output
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w") as fh:
         json.dump(output, fh, indent=1)
-    print(f"written {args.output}")
+    print(f"written {output_path}")
 
 
 if __name__ == "__main__":
