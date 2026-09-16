@@ -24,6 +24,7 @@ channel；V2 endpoint gate 被推翻、V3 fact gate 凍結）。
 | **[E2](proposal-e2.md)** / [報告](report-e2.md) | 8 個 Full-Attention 層的 source-resolved DLA 歸因 | Identity vs Instruction 10:1 routing 標籤與加法重構誤差 | `entity-cell run-attribution --e2-layers 3 7 11 15 19 23 27 31` | **Discovery 結案**：128 heads 全部為 instruction-dominant；選出 5 個 heads 作為 E3-B 衰減組。v2 儀器重驗：top-5 選擇與 routing labels 全部不變（見報告附錄） |
 | **[E3 V1](proposal-e3-v1.md)** / [報告](report-e3-v1.md) | 上游單元壓制 + 跨 Ticker 特異性對照 + 下游注意力路徑衰減 | 實體專屬性對比（FTNT vs 同撞車組 ADI/MU vs 異組 FTV） | `entity-cell run-intervention --peer-tickers ADI MU FTV` | **Discovery 完成**：實體專屬性成立。v2 儀器重驗：全部 frozen gates 通過；匿名基線在真決策下為 Buy（非 decision conflict）、0 flips（見報告 §6） |
 | **E4（proposed）** / [proposal-e4](proposal-e4.md) / [報告](report-e4-readout-delta.md) | 4 個 frozen V3 entity cells 的 residual stream 逐層 transported readout，clean vs 壓抑（−3.0）+ matched-random / wrong-entity 控制 | first_divergence_layer（\|Δ\| ≥ 0.5 首層）、控制組 max \|Δ\| ≤ 0.3、endpoint 錨點對 frozen V3 | `entity_cell_readout_delta_probe.py`（proposed probe operator） | **Probe 完成**（`readout_delta_probe_v1.json`）：entity 內容在 cell 層後 1–8 層首次可測、L16–L29 最強；JNJ F0 L29 clean 讀出 NJ 城市群、壓抑後整群換成加州城市群（控制組逐 token 與 clean 相同）；新觀察：2 個 frame 中間層 readout 有明確差異但輸出不變（BAC F3、PLTR F0）。promotion 條件已滿足，維持 proposed |
+| **E5（proposed）** / [proposal-e5](proposal-e5.md) | 4 個 frozen V3 entity cells 單顆壓抑下的輸出層事實覆蓋輪廓（cell × 事實類別：HQ 雙句框 / 代號 / 年份 / 交易所 / 競爭對手，18 pairs） | 参考門檻（描述性非 gate）：collapse ≤ −0.5 = carried、控制組 ≤ 0.3；一致性錨點對 frozen V3（diff ≤ 0.1，> 0.3 中止） | `entity_cell_fact_coverage_probe.py`（proposed probe operator，待實作） | **Protocol 擬定（proposed，未執行）**：兩輪 clean preflight 完成（`e5-preflight/`，`entity_cell_factual_recall_preflight.py --frames`），18 (entity, frame) pairs 與 gold 綁定已凍結於協議 §3.3；CEO / 產業 / 產品類別因 gold 不可用剔除（§3.4）；正式 run 未授權 |
 
 ---
 
@@ -51,6 +52,7 @@ channel；V2 endpoint gate 被推翻、V3 fact gate 凍結）。
 - Fact probe batch 2（shared slots + 剩餘 6 家候選）: `fact-probe-batch2/`（13 個 probe outputs + `targets.json`；proposed probe operator，[E1 V3 proposal §9](proposal-v3.md) 校準數據來源）
 - E1 V3: `entity-cell-prepare-hfm2-v2` (complete, 含 fact_frames.jsonl), `entity-cell-e1-v3-hfm2-calibration-v1` (complete, calibration；gold 人驗 30/33), `entity-cell-prepare-holdout-v1` (complete), `entity-cell-e1-v3-holdout-v1` (complete, hold-out 11 家新 entity；gold 人驗 18/33；input 持久化於 `data/entity-cell/holdout-v1-*`)；V3 正式 run 含 `e1/fact_gold_verifications.json` 與 `analyze/summary.json` 的 `v3_candidate_eligibility`（見 [收線報告](../report.md)）
 - E4（proposed probe）: `readout_delta_probe_v1.json`（同 directory 根層，非 run dir；4 個 frozen cells × 10 frame pairs × 4 條件 × 32 層，見 [E4 報告](report-e4-readout-delta.md)）
+- E5（proposed probe，preflight）: `e5-preflight/e5_fact_coverage_preflight_v1.json`（9 框初版）與 `e5-preflight/e5_fact_coverage_preflight_v2_revised_frames.json`（6 框修正版）（同 directory 根層下的 preflight 子目錄；4 家 entity × 多事實類別 × clean baseline 的 recall 篩選，由 `entity_cell_factual_recall_preflight.py --entities --frames` 產出，見 [E5 proposal](proposal-e5.md) §3.3/§3.4）
 
 ## 測量儀器註記（Instrument Note）
 
