@@ -445,6 +445,6 @@ the Draft 1 test is not run. The frozen machine-readable config is:
 
 - [sector-context-followup](../sector-context-followup/proposal.md)（研究承接）：依 evidence→instruction context→final 的層級轉移，設計 A/B/C 延伸。
 - [balanced-evidence-gap](../balanced-evidence-gap/report.md)（研究承接）：明確證據下 header 效應弱，改在多空對稱條件確認 entity 影響。
-- [entity-to-dial](../entity-to-dial/proposal.md)（方法參考）：沿用 bidirectional residual patch、固定答案 margin 與 self-source no-op 契約。
+- [entity-to-dial](../entity-to-dial/report.md)（方法參考）：沿用 bidirectional residual patch、固定答案 margin 與 self-source no-op 契約。
 
 最終／最新結果見本研究的 [report](report.md)。

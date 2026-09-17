@@ -65,10 +65,10 @@ L15 instruction span 狀態差與該差異的上游因果來源。
   本線把零證據量測擴到 503 家。
 - [investment-dial](../investment-dial/report.md)（方法參考）：JSON 格式的 prompt
   family、fixed answer-token margin 慣例、全域立場 prior 的背景結果。
-- [entity-concept-decision](../entity-concept-decision/proposal.md)（方法參考）：
+- [entity-concept-decision](../entity-concept-decision/report.md)（方法參考）：
   stance 軸 derive 與正交化方法（Phase 2 沿用）；其「決策 = 微小公司間差的高增益
   讀出」結論是 Phase 2 解讀的背景。
-- [entity-to-dial](../entity-to-dial/proposal.md)（方法參考）：state difference 與
+- [entity-to-dial](../entity-to-dial/report.md)（方法參考）：state difference 與
   span × 層 patching 方法（Phase 3 沿用）。
 
 **輔助診斷**

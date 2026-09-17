@@ -15,11 +15,11 @@
 | 研究 | 狀態 | 一句話發現 | 查證／執行 |
 |---|---|---|---|
 | Entity Cell（主線） | 已收線 | 壓制單一神經元會損害公司的部分事實、也發現多家公司共用的事實通道，但受測買賣決策未翻轉，不能稱為完全忘記公司。 | [報告](entity-cell-localization/report.md) · [V3 協議](entity-cell-localization/details/proposal-v3.md) |
-| 公司身分的中間概念（探索） | 已收線 | 在受測公司與層中，未找到能與買賣立場分離的公司概念；能預測立場的方向也未展現相應的強干預效果。 | [報告](entity-concept-decision/report.md) · [協議](entity-concept-decision/proposal.md) |
+| 公司身分的中間概念（探索） | 已收線 | 在受測公司與層中，未找到能與買賣立場分離的公司概念；能預測立場的方向也未展現相應的強干預效果。 | [報告](entity-concept-decision/report.md) · [Phase 1 協議](entity-concept-decision/details/proposal-phase1.md) |
 | Balanced Evidence Gap（Phase 1–3） | 已收線 | 相同多空證據下，換公司名稱會穩定改變買賣傾向，但歸因挑出的三個神經元在干預中都未勝過對照。 | [報告](balanced-evidence-gap/report.md) · [Phase 3 協議](balanced-evidence-gap/details/proposal-phase3.md) |
-| Entity-to-Dial（Phase A–F） | 已收線 | 第 15 層的 8 維狀態差子空間可恢復近乎全部置換效果，但「一個殘差方向加一個 dial 神經元」的可加表示未通過檢驗。 | [報告](entity-to-dial/report.md) · [協議](entity-to-dial/proposal.md) |
+| Entity-to-Dial（Phase A–F） | 已收線 | 第 15 層的 8 維狀態差子空間可恢復近乎全部置換效果，但「一個殘差方向加一個 dial 神經元」的可加表示未通過檢驗。 | [報告](entity-to-dial/report.md) · [Phase F 協議](entity-to-dial/details/proposal-phase-f.md) |
 | Investment-dial（方法復現） | 已收線 | 在本模型與任務上，調整單一神經元能連續調節整體買賣立場並達到預設校準目標，完成方法復現，未以複製原論文數值為目標。 | [報告](investment-dial/report.md) · [V2 協議](investment-dial/details/proposal-v2.md) |
-| Selective-intervention V1 | 已完成 | 移除公司間差異子空間能讓決策落差減半，但全強度干預也改變整體及匿名提示的買賣傾向，未達到無副作用的要求。 | [報告](selective-intervention/report.md) · [協議](selective-intervention/proposal.md) |
+| Selective-intervention V1 | 已完成 | 移除公司間差異子空間能讓決策落差減半，但全強度干預也改變整體及匿名提示的買賣傾向，未達到無副作用的要求。 | [報告](selective-intervention/report.md) · [V1 協議](selective-intervention/details/proposal-v1.md) |
 | Evidence-insensitivity | 進行中 | Phase 1 在本模板下發現，Qwen 對 503 家公司的零證據提示全選 sell，加入正面證據仍多數選 sell，而把正項移到末尾會使大量決策翻轉。 | [Phase 1 報告](evidence-insensitivity/details/report-phase1.md) · [階段／協議](evidence-insensitivity/proposal.md) |
 | 財務穩健定位（探索） | 已完成 | 找到跨句式反應方向相近的財務判斷候選神經元，但尚未確認它們專門處理財務概念。 | [報告](financial-soundness-localization/report.md) · [協議](financial-soundness-localization/proposal.md) |
 | 財務穩健因果驗證（探索） | 已完成 | 抑制上述候選的影響與隨機神經元對照相近，本次未支持單一候選具有財務專屬的因果作用。 | [報告](financial-soundness-causal-validation/report.md) · [協議](financial-soundness-causal-validation/proposal.md) |
@@ -89,17 +89,17 @@
 | [investment-dial](investment-dial/report.md) → [balanced-evidence-gap](balanced-evidence-gap/report.md) | 資料／產物依賴 | 沿用 test split、prompt 格式與 L15/N8490 dial 對照；檢查全域立場調控之外的 entity 差異。 [依據](balanced-evidence-gap/details/proposal-phase1.md) |
 | [activation-patching-causal-tracing](activation-patching-causal-tracing/proposal.md) → [balanced-evidence-gap](balanced-evidence-gap/report.md) | 研究承接 | 明確證據下 header 效應弱，改在多空對稱條件確認 entity 影響。 [依據](balanced-evidence-gap/details/proposal-phase1.md) |
 | [jspace-token-experiments](jspace-token-experiments/proposal.md) → [balanced-evidence-gap](balanced-evidence-gap/report.md) | 研究承接 | V2 零證據 prior probe 未確認 entity 分歧，改測平衡證據；不沿用 V2 direction。 [依據](balanced-evidence-gap/details/proposal-phase1.md) |
-| [balanced-evidence-gap](balanced-evidence-gap/report.md) → [entity-to-dial](entity-to-dial/proposal.md) | 資料／產物依賴 | 承接 Phase 2B 的承載帶、L15 峰值與存檔對照，Phase 3 null 限定單神經元假說。 [依據](entity-to-dial/details/proposal-phase-abc.md) |
-| [investment-dial](investment-dial/report.md) → [entity-to-dial](entity-to-dial/proposal.md) | 資料／產物依賴 | 沿用 L15/N8490 與 additive intervention 語義，檢查 entity 訊號是否經由 dial。 [依據](entity-to-dial/details/proposal-phase-abc.md) |
-| [activation-patching-causal-tracing](activation-patching-causal-tracing/proposal.md) → [entity-to-dial](entity-to-dial/proposal.md) | 方法參考 | 沿用 bidirectional residual patch、固定答案 margin 與 self-source no-op 契約。 [依據](entity-to-dial/details/proposal-phase-abc.md) |
-| [balanced-evidence-gap](balanced-evidence-gap/report.md) → [selective-intervention](selective-intervention/proposal.md) | 資料／產物依賴 | V1 使用 Phase 2A 的 16 公司、64 prompts 與 archived margins。 [依據](selective-intervention/details/proposal-v1.md) |
-| [entity-to-dial](entity-to-dial/proposal.md) → [selective-intervention](selective-intervention/proposal.md) | 資料／產物依賴 | V1 使用 e-01 的 L15 k=8 basis，測試移除子空間分量；transfer 效果不預設 removal 成功。 [依據](selective-intervention/details/proposal-v1.md) |
-| [investment-dial](investment-dial/report.md) → [selective-intervention](selective-intervention/proposal.md) | 方法參考 | V1 沿用 L15/N8490 與 ±4 native-unit push 作 dial probe。 [依據](selective-intervention/proposal.md) |
-| [entity-to-dial](entity-to-dial/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | 沿用 e-01 固定 k=8 基底，新增獨立概念驗證，不把基底直接命名成語義。 [依據](entity-concept-decision/details/design-and-validation.md) |
+| [balanced-evidence-gap](balanced-evidence-gap/report.md) → [entity-to-dial](entity-to-dial/report.md) | 資料／產物依賴 | 承接 Phase 2B 的承載帶、L15 峰值與存檔對照，Phase 3 null 限定單神經元假說。 [依據](entity-to-dial/details/proposal-phase-abc.md) |
+| [investment-dial](investment-dial/report.md) → [entity-to-dial](entity-to-dial/report.md) | 資料／產物依賴 | 沿用 L15/N8490 與 additive intervention 語義，檢查 entity 訊號是否經由 dial。 [依據](entity-to-dial/details/proposal-phase-abc.md) |
+| [activation-patching-causal-tracing](activation-patching-causal-tracing/proposal.md) → [entity-to-dial](entity-to-dial/report.md) | 方法參考 | 沿用 bidirectional residual patch、固定答案 margin 與 self-source no-op 契約。 [依據](entity-to-dial/details/proposal-phase-abc.md) |
+| [balanced-evidence-gap](balanced-evidence-gap/report.md) → [selective-intervention](selective-intervention/report.md) | 資料／產物依賴 | V1 使用 Phase 2A 的 16 公司、64 prompts 與 archived margins。 [依據](selective-intervention/details/proposal-v1.md) |
+| [entity-to-dial](entity-to-dial/report.md) → [selective-intervention](selective-intervention/report.md) | 資料／產物依賴 | V1 使用 e-01 的 L15 k=8 basis，測試移除子空間分量；transfer 效果不預設 removal 成功。 [依據](selective-intervention/details/proposal-v1.md) |
+| [investment-dial](investment-dial/report.md) → [selective-intervention](selective-intervention/report.md) | 方法參考 | V1 沿用 L15/N8490 與 ±4 native-unit push 作 dial probe。 [依據](selective-intervention/details/proposal-v1.md) |
+| [entity-to-dial](entity-to-dial/report.md) → [公司身分的中間概念](entity-concept-decision/report.md) | 資料／產物依賴（proposed） | 沿用 e-01 固定 k=8 基底，新增獨立概念驗證，不把基底直接命名成語義。 [依據](entity-concept-decision/details/design-and-validation.md) |
 | [balanced-evidence-gap](balanced-evidence-gap/report.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 研究承接 | 共享平衡證據下的 entity gap 現象動機化「entity × evidence」交互量測；共享證據設計與 identity-stripped 慣例沿用。 [依據](evidence-insensitivity/details/proposal-phase1.md) |
 | [jspace-token-experiments](jspace-token-experiments/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 資料／產物依賴 | 零證據 header-only 模板與強 sell prior 觀察（6 tickers）；零證據量測擴到 503 家。 [依據](evidence-insensitivity/details/proposal-phase1.md) |
-| [entity-concept-decision](entity-concept-decision/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 方法參考 | stance 軸 derive 與正交化方法於 Phase 2 沿用；不重測已收線結論。 [依據](evidence-insensitivity/proposal.md) |
-| [entity-to-dial](entity-to-dial/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 方法參考 | state difference 與 span × 層 patching 方法於 Phase 3 沿用。 [依據](evidence-insensitivity/proposal.md) |
-| [jacobian-lens-selection](jacobian-lens-selection/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | Phase 1 以既有 canonical lens 提名；介入不以讀出代替因果驗證。 [依據](entity-concept-decision/details/proposal-phase1.md) |
+| [entity-concept-decision](entity-concept-decision/report.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 方法參考 | stance 軸 derive 與正交化方法於 Phase 2 沿用；不重測已收線結論。 [依據](evidence-insensitivity/proposal.md) |
+| [entity-to-dial](entity-to-dial/report.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 方法參考 | state difference 與 span × 層 patching 方法於 Phase 3 沿用。 [依據](evidence-insensitivity/proposal.md) |
+| [jacobian-lens-selection](jacobian-lens-selection/proposal.md) → [公司身分的中間概念](entity-concept-decision/report.md) | 資料／產物依賴（proposed） | Phase 1 以既有 canonical lens 提名；介入不以讀出代替因果驗證。 [依據](entity-concept-decision/details/proposal-phase1.md) |
 
 </details>

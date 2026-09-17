@@ -65,7 +65,7 @@ Run the selected behavioural contrasts and causal tests with matched controls, p
 
 The original M5 designs include attenuation, mean-difference subtraction, low-rank removal and Jacobian-weighted directions. Any future efficacy claim still requires dose response, specificity, preservation of task performance and legitimate entity information, and independent evaluation. Do not treat Investment-dial calibration or Entity-to-Dial transfer as satisfying those conditions.
 
-[Selective-intervention V1](../selective-intervention/proposal.md) is independent follow-up work. Formal run `selective-intervention-v1-gpu-bf16-01` is now complete: G1a/G1b/G2 pass, but G3/G4 fail, so the frozen decision table yields a full-strength negative result. Its [report](../selective-intervention/report.md) preserves that verdict; this completed test does not mark M5 passed. Its success remains unnecessary for the present mechanism study, and this roadmap authorizes no further runs.
+[Selective-intervention V1](../selective-intervention/report.md) is independent follow-up work. Formal run `selective-intervention-v1-gpu-bf16-01` is now complete: G1a/G1b/G2 pass, but G3/G4 fail, so the frozen decision table yields a full-strength negative result. Its [report](../selective-intervention/report.md) preserves that verdict; this completed test does not mark M5 passed. Its success remains unnecessary for the present mechanism study, and this roadmap authorizes no further runs.
 
 ## Research-ready gate
 
