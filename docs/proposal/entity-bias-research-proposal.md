@@ -26,7 +26,7 @@ Early baseline preparation, lens validation, transported readout, activation pat
 Later experiments distinguish three questions that the original roadmap did not separate sufficiently:
 
 - **Factual memory versus decisions:** [Entity Cell](../entity-cell-localization/report.md) changed from header/frame candidate screening to V3 fact-level amnesia validation. Its decision probes and E4 readouts answer different questions from cell certification. The separate [financial-soundness localisation](../financial-soundness-localization/proposal.md) and [causal validation](../financial-soundness-causal-validation/proposal.md) remain exploratory.
-- **Global stance versus entity differences:** [Investment-dial](../investment-dial/proposal.md) reproduced a global stance-calibration method. [Balanced Evidence Gap](../balanced-evidence-gap/proposal.md) then tested entity-induced decision gaps and their layer/component dependence.
+- **Global stance versus entity differences:** [Investment-dial](../investment-dial/report.md) reproduced a global stance-calibration method. [Balanced Evidence Gap](../balanced-evidence-gap/report.md) then tested entity-induced decision gaps and their layer/component dependence.
 - **Candidate neurons versus residual state:** [Entity-to-Dial](../entity-to-dial/proposal.md) tested paths suggested by the earlier results and examined L15 instruction-state differences. Its subspace transfer and failed compact-mechanism hypotheses constrain interpretation; they do not establish a selective debiasing method.
 
 The [roadmap](entity-bias-roadmap.md) maps these lines to the original milestones. The [research directory](../README.md) records experiment relationships; individual protocols remain the source of operational definitions.

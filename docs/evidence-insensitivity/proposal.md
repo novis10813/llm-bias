@@ -57,13 +57,13 @@ L15 instruction span 狀態差與該差異的上游因果來源。
 
 **上游**
 
-- [balanced-evidence-gap](../balanced-evidence-gap/proposal.md)（研究承接）：共享
+- [balanced-evidence-gap](../balanced-evidence-gap/report.md)（研究承接）：共享
   平衡證據下的 entity gap 現象（16 家 64/64 sell、~1.5 nats spread）動機化本線；
   其共享證據設計與 identity-stripped 慣例被沿用。
 - [jspace-token-experiments](../jspace-token-experiments/proposal.md)（資料／產物
   依賴）：零證據 header-only 模板與強 sell prior 觀察（6 tickers，M −3.39～−4.93）；
   本線把零證據量測擴到 503 家。
-- [investment-dial](../investment-dial/proposal.md)（方法參考）：JSON 格式的 prompt
+- [investment-dial](../investment-dial/report.md)（方法參考）：JSON 格式的 prompt
   family、fixed answer-token margin 慣例、全域立場 prior 的背景結果。
 - [entity-concept-decision](../entity-concept-decision/proposal.md)（方法參考）：
   stance 軸 derive 與正交化方法（Phase 2 沿用）；其「決策 = 微小公司間差的高增益

@@ -35,8 +35,8 @@ Phase A–C 的 null 是對各自路徑假說的排除，不是對所有可能�
 
 **上游**
 
-- [balanced-evidence-gap](../balanced-evidence-gap/proposal.md)（資料／產物依賴）：承接 Phase 2B 的承載帶、L15 峰值與存檔對照，Phase 3 null 限定單神經元假說。
-- [investment-dial](../investment-dial/proposal.md)（資料／產物依賴）：沿用 L15/N8490 與 additive intervention 語義，檢查 entity 訊號是否經由 dial。
+- [balanced-evidence-gap](../balanced-evidence-gap/report.md)（資料／產物依賴）：承接 Phase 2B 的承載帶、L15 峰值與存檔對照，Phase 3 null 限定單神經元假說。
+- [investment-dial](../investment-dial/report.md)（資料／產物依賴）：沿用 L15/N8490 與 additive intervention 語義，檢查 entity 訊號是否經由 dial。
 - [activation-patching-causal-tracing](../activation-patching-causal-tracing/proposal.md)（方法參考）：沿用 bidirectional residual patch、固定答案 margin 與 self-source no-op 契約。
 
 **後續**：[selective-intervention V1](../selective-intervention/proposal.md)（資料／產物依賴）使用 e-01 的 L15 k=8 basis 測試子空間分量移除。Formal run 已完成，G1a/G1b/G2 pass、G3/G4 fail；不把本線 transfer 效果視為 removal 成功，亦不授權新 run。

@@ -21,7 +21,7 @@ This revision does not mark the original 8-K milestones as completed, promote di
 | Inputs, instrument provenance and behavioural sensitivity | [Baseline trial](../baseline-trial/proposal.md), [lens selection](../jacobian-lens-selection/proposal.md), [span sensitivity](../span-sensitivity/proposal.md) |
 | Evidence representations, steering and context-state effects | [Valence readout](../jspace-valence-readout/proposal.md), [sector intervention](../jspace-sector-intervention/proposal.md), [J-space token V1/V2](../jspace-token-experiments/proposal.md), [activation patching](../activation-patching-causal-tracing/proposal.md), [sector/context follow-up](../sector-context-followup/proposal.md) |
 | Factual memory and financial-judgment probes | [Entity Cell](../entity-cell-localization/report.md), [financial-soundness localisation](../financial-soundness-localization/proposal.md), [causal validation](../financial-soundness-causal-validation/proposal.md) |
-| Global stance, entity gaps and their causal paths | [Investment-dial](../investment-dial/proposal.md), [Balanced Evidence Gap](../balanced-evidence-gap/proposal.md), [Entity-to-Dial](../entity-to-dial/proposal.md) |
+| Global stance, entity gaps and their causal paths | [Investment-dial](../investment-dial/report.md), [Balanced Evidence Gap](../balanced-evidence-gap/report.md), [Entity-to-Dial](../entity-to-dial/proposal.md) |
 
 Independent follow-up: [Selective-intervention V1](../selective-intervention/proposal.md) has completed formal run `selective-intervention-v1-gpu-bf16-01`; its [report](../selective-intervention/report.md) records G1a/G1b/G2 pass and G3/G4 fail, a full-strength negative result rather than selective-control success.
 

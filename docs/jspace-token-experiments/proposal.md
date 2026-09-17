@@ -42,6 +42,6 @@ V1 的 shortlist empty 是 vocabulary screen 的結果，不是 V2 的 direction
 **後續**
 
 - [activation-patching-causal-tracing](../activation-patching-causal-tracing/proposal.md)（研究承接）：V2 未建立位置特異性，改用模型自然狀態差定位決策充分性。
-- [balanced-evidence-gap](../balanced-evidence-gap/proposal.md)（研究承接）：V2 零證據 prior probe 未確認 entity 分歧，改測平衡證據；不沿用 V2 direction。
+- [balanced-evidence-gap](../balanced-evidence-gap/report.md)（研究承接）：V2 零證據 prior probe 未確認 entity 分歧，改測平衡證據；不沿用 V2 direction。
 
 最終／最新結果見本研究的 [report](report.md)。
