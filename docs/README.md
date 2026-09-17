@@ -50,6 +50,7 @@ full-strength gate fail，見 [V1 報告](selective-intervention/report.md)。
 | Entity-to-Dial：Phase A–F 收線；F1 fail，L15 採 k=8 子空間描述。 | [proposal](entity-to-dial/proposal.md) · [report](entity-to-dial/report.md) |
 | Selective-intervention：V1 formal `selective-intervention-v1-gpu-bf16-01` completed；G1a/G1b/G2 pass、G3/G4 fail，full-strength 負結果。 | [proposal](selective-intervention/proposal.md) · [report](selective-intervention/report.md) |
 | 公司身分的中間概念：收線（2026-09-15）；可分離公司概念前提被否決，stance 通道收斂描述（1D 讀數方向 L15 解釋 margin 變異 60%、≠ entity signal、弱因果槓桿；決策是微小公司間差的高增益非線性讀出）。 | [proposal](entity-concept-decision/proposal.md) · [report](entity-concept-decision/report.md) |
+| Evidence-insensitivity：Phase 1 **completed**（2026-09-16）；S&P 500 全人口（503 家）共用 company-agnostic 證據下的證據不敏感性行為篩選與分組（50 responsive / 453 fixed-sell、503/503 零證據 sell、order-swap recency 效應；cross-model 診斷確認現象為模型特性）；Phase 2（capture-layer 組間對比）frozen（Rev 1.1，雙模型 Qwen＋Gemma）；Phase 3（上游因果定位）planned。 | [proposal](evidence-insensitivity/proposal.md) / [Phase 1 報告](evidence-insensitivity/details/report-phase1.md) |
 
 ## 前後關係各有來源，不串成單一成功路線
 
@@ -90,5 +91,8 @@ V1→V2、Phase 1→2→3、Phase A→F 與 E1→E4 的線內順序，見各頂�
 | [entity-to-dial](entity-to-dial/proposal.md) → [selective-intervention](selective-intervention/proposal.md) | 資料／產物依賴 | V1 使用 e-01 的 L15 k=8 basis，測試移除子空間分量；transfer 效果不預設 removal 成功。 [依據](selective-intervention/details/proposal-v1.md) |
 | [investment-dial](investment-dial/proposal.md) → [selective-intervention](selective-intervention/proposal.md) | 方法參考 | V1 沿用 L15/N8490 與 ±4 native-unit push 作 dial probe。 [依據](selective-intervention/proposal.md) |
 | [entity-to-dial](entity-to-dial/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | 沿用 e-01 固定 k=8 基底，新增獨立概念驗證，不把基底直接命名成語義。 [依據](entity-concept-decision/details/design-and-validation.md) |
-| [balanced-evidence-gap](balanced-evidence-gap/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | 舊 2A prompts 僅作 discovery／重現；確認需另留公司與模板。 [依據](entity-concept-decision/details/design-and-validation.md) |
+| [balanced-evidence-gap](balanced-evidence-gap/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 研究承接 | 共享平衡證據下的 entity gap 現象動機化「entity × evidence」交互量測；共享證據設計與 identity-stripped 慣例沿用。 [依據](evidence-insensitivity/details/proposal-phase1.md) |
+| [jspace-token-experiments](jspace-token-experiments/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 資料／產物依賴 | 零證據 header-only 模板與強 sell prior 觀察（6 tickers）；零證據量測擴到 503 家。 [依據](evidence-insensitivity/details/proposal-phase1.md) |
+| [entity-concept-decision](entity-concept-decision/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 方法參考 | stance 軸 derive 與正交化方法於 Phase 2 沿用；不重測已收線結論。 [依據](evidence-insensitivity/proposal.md) |
+| [entity-to-dial](entity-to-dial/proposal.md) → [Evidence-insensitivity](evidence-insensitivity/proposal.md) | 方法參考 | state difference 與 span × 層 patching 方法於 Phase 3 沿用。 [依據](evidence-insensitivity/proposal.md) |
 | [jacobian-lens-selection](jacobian-lens-selection/proposal.md) → [公司身分的中間概念](entity-concept-decision/proposal.md) | 資料／產物依賴（proposed） | Phase 1 以既有 canonical lens 提名；介入不以讀出代替因果驗證。 [依據](entity-concept-decision/details/proposal-phase1.md) |
