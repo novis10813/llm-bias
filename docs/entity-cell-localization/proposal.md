@@ -21,14 +21,15 @@ Qwen3.5-4B 是否存在承載特定公司客觀事實的 MLP 實體神經元？�
 | **E2：Full-attention DLA attribution** | [協議](details/proposal-e2.md) · [報告](details/report-e2.md) | **Discovery completed、descriptive**：128 heads 全為 instruction-dominant，選出 5 個 heads 供 E3；未執行 calibration/test。 |
 | **E3 V1：Suppression 與 downstream attenuation** | [協議](details/proposal-e3-v1.md) · [報告](details/report-e3-v1.md) | **Discovery completed、causal specificity confirmed**：FTNT 候選的跨 ticker 特異性與 evidence preservation 通過；未執行 calibration/held-out test。 |
 | **E4：Residual stream readout probe** | [協議](details/proposal-e4.md) · [診斷報告](details/report-e4-readout-delta.md) | **Probe completed、proposed、非 formal promotion**：4 個 frozen V3 cells 的資訊在 cell 後 1–8 層開始顯現，L16–L29 最強；readout 是 descriptive，不能升格為新因果 gate。 |
+| **E5：Fact coverage profile probe** | [協議](details/proposal-e5.md) | **Proposed、未執行**：單顆 cell 壓抑下跨事實類別（HQ 雙句框／代號／年份／交易所／競爭對手，18 pairs × 4 條件）的輸出層覆蓋輪廓量測；兩輪 clean preflight 已完成，協議已擬定（含 gold 綁定與剔除記錄），正式 run 未授權。 |
 
 ## 研究線狀態
 
-目前最穩固的結論是：4 個 entity cells 能特異性破壞客觀事實回想，但不驅動本線測試的 buy/sell 決策；E2/E3 描述其下游路徑邊界，E4 補充 residual-stream representation readout。所有版本協議、控制組、門檻與限制仍留在 `details/` 原文。
+目前最穩固的結論是：4 個 entity cells 能特異性破壞客觀事實回想，但不驅動本線測試的 buy/sell 決策；E2/E3 描述其下游路徑邊界，E4 補充 residual-stream representation readout。E5 為新立 proposed 診斷探針（單顆 cell 的事實覆蓋邊界：它承載的是地理事實子集還是更廣的公司身分槽位），兩輪 clean preflight 已完成、協議已擬定，正式 run 未授權。所有版本協議、控制組、門檻與限制仍留在 `details/` 原文。
 
 ## 閱讀邊界
 
-E1 的 fact-level amnesia gate 定義確認名冊；E2 的 DLA 是 discovery-level routing 描述；E3 的 suppression 是有限樣本的 causal specificity discovery；E4 只讀 residual stream 的表示差異。不能用 E4 的詞彙讀出替代 E1 的 fact gate，也不能把 E1 結果外推為通用決策機制。
+E1 的 fact-level amnesia gate 定義確認名冊；E2 的 DLA 是 discovery-level routing 描述；E3 的 suppression 是有限樣本的 causal specificity discovery；E4 只讀 residual stream 的表示差異；E5 的事實覆蓋輪廓是輸出層描述（null 僅結論「輸出層未受影響」，不是「未承載」，見其 §5 限制）。不能用 E4 的詞彙讀出替代 E1 的 fact gate，也不能把 E1 結果外推為通用決策機制。
 
 ## 最終入口
 
