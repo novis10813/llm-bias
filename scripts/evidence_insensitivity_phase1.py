@@ -5,7 +5,7 @@ import argparse
 import time
 from pathlib import Path
 
-from llm_bias.evidence_insensitivity import pipeline
+from llm_bias.evidence_insensitivity import phase2, pipeline
 
 
 def _default_run_id(prefix: str) -> str:
@@ -26,6 +26,13 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--model", default=".cache/models/qwen3.5-4b")
         command.add_argument("--model-slug", default=None, help="artifact root slug (default: qwen3.5-4b)")
         command.add_argument("--artifact-root", default="artifacts")
+    for name in ("prepare", "forward", "analyze"):
+        command = sub.add_parser(f"phase2-{name}")
+        command.add_argument("--run-id", required=True)
+        command.add_argument("--model", default=".cache/models/qwen3.5-4b")
+        command.add_argument("--model-slug", default=None, help="artifact root slug (default: qwen3.5-4b)")
+        command.add_argument("--phase1-run-id", default=phase2.PHASE1_DEFAULT_RUN)
+        command.add_argument("--artifact-root", default="artifacts")
     return root
 
 
@@ -40,8 +47,14 @@ def main() -> None:
         pipeline.run_prepare(run_id, artifact_root=root, model_path=args.model, model_slug=args.model_slug)
     elif args.command == "forward":
         pipeline.run_forward(run_id, artifact_root=root, model_path=args.model, model_slug=args.model_slug)
-    else:
+    elif args.command == "analyze":
         pipeline.run_analyze(run_id, artifact_root=root, model_slug=args.model_slug)
+    elif args.command == "phase2-prepare":
+        phase2.run_phase2_prepare(run_id, artifact_root=root, model_path=args.model, model_slug=args.model_slug, phase1_run_id=args.phase1_run_id)
+    elif args.command == "phase2-forward":
+        phase2.run_phase2_forward(run_id, artifact_root=root, model_path=args.model, model_slug=args.model_slug)
+    else:  # phase2-analyze
+        phase2.run_phase2_analyze(run_id, artifact_root=root, model_slug=args.model_slug)
     print(root / (args.model_slug or "qwen3.5-4b") / "evidence-insensitivity" / "runs" / run_id)
 
 
