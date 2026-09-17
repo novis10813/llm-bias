@@ -175,6 +175,6 @@ uv run jspace-intervention run-valence-readout \
 
 **後續**
 
-- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（資料／產物依賴）：V1 直接消費提名的 vocabulary candidates；V2 改用 outcome-gradient，不沿用 V1 direction source。
+- [jspace-token-experiments](../jspace-token-experiments/report.md)（資料／產物依賴）：V1 直接消費提名的 vocabulary candidates；V2 改用 outcome-gradient，不沿用 V1 direction source。
 
 最終／最新結果見本研究的 [report](report.md)。

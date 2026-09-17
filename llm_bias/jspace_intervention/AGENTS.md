@@ -13,7 +13,7 @@
 - `valence_readout.py`：positive/negative evidence 的 transported vocabulary readout；見
   [`../../docs/jspace-valence-readout/proposal.md`](../../docs/jspace-valence-readout/proposal.md)。
 - `token_screen.py` 與相關 pipeline/config：J-space token experiment V1；V1/V2 邊界由
-  [J-space token V1/V2 全線入口](../../docs/jspace-token-experiments/proposal.md)
+  [J-space token V1/V2 報告](../../docs/jspace-token-experiments/report.md)
   定義。
 - `outcome_flip.py`、`prior_probe.py`、`outcome_decode.py`、`outcome_geometry.py`：V2
   outcome-conditioned direction 的 formal intervention 與輔助 diagnostics；不得把

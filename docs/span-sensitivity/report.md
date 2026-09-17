@@ -1,59 +1,41 @@
-# Technology identity-header span sensitivity: discovery report
+# Header-span Sensitivity：同產業置換具顯著邊際敏感度（V1 Discovery）
 
-## Status
+**狀態：已完成（V1 discovery 完成，calibration/test 協議未凍結）。** 模型為 Qwen3.5-4B（bf16）；2026-08-31 完成。原始操作契約與家族設計見 [實驗提案](proposal.md)。
 
-V1 discovery 已完成。正式 discovery run：
+**一句話發現：** 在財務證據固定下，header 中同產業公司置換產生顯著決策偏移（平均 ΔM = −1.39 nats，12/35 翻轉）並超越表面亂碼控制，獲選為 primary condition；但純匿名化操作無法排除表面文字擾動。
 
-`artifacts/qwen3.5-4b/technology-header-span-sensitivity/runs/tech-header-discovery-gpu1-20260831T090100Z`
+## 1. 在證據固定下，Header 中的代號與公司名稱置換是否引起決策邊際偏移？是
 
-- Model：Qwen3.5-4B（`.cache/models/qwen3.5-4b`）
-- Split：`discovery`
-- Sector：Technology
-- Prompt column：`prompt_with_context_attribute_0`
-- Tickers：35
-- Prepared/forward records：245（35 tickers × 7 conditions）
-- Bootstrap：2,000 次 ticker-level resampling，seed `20260827`
-- Manifest：`complete`
+我們在財務證據內文完全固定的前提下，系統性修改提示詞開頭 Header 中的股票代號與公司名稱，觀察 Buy-minus-Sell continuation margin 的變化：
 
-第一次同名 run `tech-header-discovery-20260831` 在 forward 開始時因 GPU 0 記憶體不足
-失敗。Artifact manifest 保留 `failed` 狀態；結果不納入分析。正式 run 固定到 GPU 1，
-使用新 run ID，未覆寫失敗 artifact。
+**觀察（35 個 Technology 股票）：**
+- **同產業置換效應顯著**：`same_sector_swap` 產生平均 $\Delta M = \mathbf{-1.3857}$ nats（中位數 −1.2500，95% CI [−1.7465, −1.0500]，Holm $p = 0.00300$），誘發 **12/35 次** margin 符號翻轉（sell $\to$ buy 或 buy $\to$ sell）。
+- **人工構建身分次之**：`constructed_identity` 產生平均 $\Delta M = -1.2107$ nats（95% CI [−1.5143, −0.9179]，9/35 翻轉）。
 
-## Discovery Results
+**解讀：** 在證據不變時，單純替換 Header 處的企業身分足以誘發實質的邊際決策移動。
 
-每個 condition 先在同 ticker 內減去 `original` margin。負值表示 header mutation 讓
-Buy-minus-Sell margin 往 Sell 方向移動。
+## 2. 這一偏移能否與字元表面變更（表面擾動）明確區分？僅部分成立
 
-| Condition              | Mean ΔM | Median ticker ΔM | 95% ticker-bootstrap CI |   Raw p |  Holm p | Margin sign flips |
-| ---------------------- | ------: | ---------------: | ----------------------: | ------: | ------: | ----------------: |
-| `anonymous_ticker`     | -0.0107 |          -0.0000 |      [-0.0929, +0.0786] |  0.8406 |  0.8406 |                 0 |
-| `anonymous_name`       | -0.1893 |          -0.2500 |      [-0.2964, -0.0857] | 0.00250 | 0.00500 |                 1 |
-| `anonymous_identity`   | -0.5929 |          -0.5000 |      [-0.8179, -0.3786] | 0.00050 | 0.00300 |                 2 |
-| `same_sector_swap`     | -1.3857 |          -1.2500 |      [-1.7465, -1.0500] | 0.00050 | 0.00300 |                12 |
-| `constructed_identity` | -1.2107 |          -1.2500 |      [-1.5143, -0.9179] | 0.00050 | 0.00300 |                 9 |
-| `name_form_control`    | -0.8286 |          -0.7500 |      [-1.0607, -0.5892] | 0.00050 | 0.00300 |                 5 |
+**觀察：**
+- **亂碼表面對照組**：表面亂碼與字母替換控制組 `name_form_control` 產生平均 $\Delta M = \mathbf{-0.8286}$ nats（95% CI [−1.0607, −0.5892]，5/35 翻轉）。
+- **匿名化各條件未超越表面對照**：
+  - `anonymous_name`：平均 $\Delta M = -0.1893$ nats；
+  - `anonymous_identity`：平均 $\Delta M = -0.5929$ nats；
+  - `anonymous_ticker`：平均 $\Delta M = -0.0107$ nats（95% CI [−0.0929, +0.0786]，跨越 0，無顯著效應）。
 
-## Go/No-Go Assessment
+**解讀：** `same_sector_swap`（1.3857）的效應顯著大於表面控制組（0.8286），具備超越純文字擾動的實質影響；但單純匿名化操作的效應均小於表面控制組，無法排除表面分詞（Tokenization）擾動的影響。
 
-Discovery 不產生 confirmatory verdict。依 [proposal](proposal.md) 的 go/no-go contract：
+## 3. Discovery 階段形成了何種後續決策與邊界？
 
-1. `anonymous_ticker` 沒有可定位的 effect；CI 跨越 0。
-2. `anonymous_name` 與 `anonymous_identity` 的 Sell-direction effect 通過 discovery
-   統計檢查，但兩者的絕對 mean effect 小於 `name_form_control`。V1 discovery 因此不能
-   把這兩個結果解讀為超過 surface-form variation 的 identity-header effect。
-3. `same_sector_swap` 的絕對 mean effect（1.3857）大於 `name_form_control`（0.8286），
-   且產生 12/35 margin sign flips。它是進入 calibration 的 primary condition。
-4. `constructed_identity` 的絕對 mean effect（1.2107）也大於 `name_form_control`，但
-   constructed strings 不保證模型未見過，僅作 secondary condition。
-5. `name_form_control` 本身效應大，顯示 header tokenization／surface-form mutation
-   能顯著移動 margin。後續不得把 V1 header-only 結果改稱 entity-only causal effect。
+**決策與邊界：**
+1. **Primary 條件凍結**：僅將 `same_sector_swap` 列為後續校準階段的 Primary 條件；`constructed_identity` 列為次要診斷；`name_form_control` 保留為必要表面控制組。
+2. **非完整實體因果**：本實驗僅測量既有證據之上的 Header 邊際敏感度，不外推為模型內部完整的實體因果機制。
 
-**Discovery decision：** 進入 calibration，但只把 `same_sector_swap` 凍結為 primary
-condition；`constructed_identity` 作 secondary diagnostic，`name_form_control` 保留為
-必要 surface-form control。Calibration/test protocol 必須在 inference 前另行凍結。
+## 查證入口
 
-## Interpretation Limits
+| 要查什麼 | 原始紀錄與來源 |
+|---|---|
+| 原始提案與條件設計 | [實驗提案](proposal.md)（V1 discovery）。 |
+| Discovery 執行記錄與產物 | run `tech-header-discovery-gpu1-20260831T090100Z`，位於 `artifacts/qwen3.5-4b/technology-header-span-sensitivity/runs/`；245 筆記錄，Bootstrap 2000 次。 |
 
-V1 只修改 bracketed ticker/name header，evidence body 未改動。結果測量既有 evidence
-之上顯示 identity header 的邊際行為敏感度。它不證明完整 entity replacement 的效果，
-也不是 residual mechanism、attention effect 或 standalone causal evidence。
+**本次編輯說明：** 本報告按三項核心問題改寫，明確記錄各條件效應與表面控制組對比；原始協議 `proposal.md` 完整保留。

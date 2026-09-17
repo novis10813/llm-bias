@@ -438,7 +438,7 @@ the Draft 1 test is not run. The frozen machine-readable config is:
 
 **上游**
 
-- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（研究承接）：V2 未建立位置特異性，改用模型自然狀態差定位決策充分性。
+- [jspace-token-experiments](../jspace-token-experiments/report.md)（研究承接）：V2 未建立位置特異性，改用模型自然狀態差定位決策充分性。
 - [baseline-trial](../baseline-trial/proposal.md)（資料／產物依賴）：沿用 trial rows 的正負證據配對；residual patch 本身不要求 lens。
 
 **後續**
