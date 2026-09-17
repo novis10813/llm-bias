@@ -178,3 +178,18 @@ Gemma 有證據就 buy＋17% 固定 buy），在 capture layer 的 1D stance 狀
    反應經過不同的讀出映射」。
 3. **Gemma 容差校準**：後續 Gemma run 先做 jitter 帶實測（相對 ~0.19%
    為本次實測值）再定 G-2A 容差。
+
+## 8. Erratum（2026-09-17，Phase 3 preflight 發現）
+
+Gemma 推理管線（`load_model` → `jlens.from_hf(..., force_bos=True)`）對
+有 `bos_token_id` 的 tokenizer 就地設 `add_bos_token=True`（Gemma 預設
+False）——推理時序列首部多 1 個 BOS token。Phase 1 存檔 span（含本 phase
+capture position＝`instruction_span 終點 −1`）以未含 BOS 的 tokenizer
+導出，故 **Gemma run 的實際 capture position 比 frozen 定義早 1 個
+token**（instruction span 的次末 token，仍在 span 內）。Qwen
+（`bos_token_id=None`，force_bos no-op）不受影響。影響評估：Gemma 全部
+state-level 結果（Step A 定位 L18、G-2A/B/C、offset/gain 對比、asymmetric
+jump）量測於 instruction span 次末 token——span 邊界內 1 token 的位移，
+不改變本報告任何 null 結論（皆為組間對比，span 內相鄰 token 狀態連續）。
+若需 confirmation，可用精確終點 token 重測（未執行）；Phase 3 已改用
+inference-matched tokenizer 導出座標（見 Phase 3 protocol Rev 1.3）。

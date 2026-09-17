@@ -2,7 +2,8 @@
 
 **狀態**：frozen（2026-09-16 用戶批准；run ID `phase2-gpu-bf16-01`，雙模型）
 **對象模型**：Qwen3.5-4B（bf16，32 層，hidden 2560）＋ Gemma-4-E2B-it（bf16，
-42 層，hidden 2560，MatFormer E2B）——雙模型統一執行
+text tower 35 層，hidden 2560，MatFormer E2B；「42 層」為書面誤記，見
+Rev 1.3）——雙模型統一執行
 **研究線定位**：機制相第一階段（描述性）。在 Phase 1 的 frozen 行為分組上，
 量測每家公司在證據極性條件下 L 層 instruction span 的狀態結構，找證據
 不靈敏度的狀態層簽章。本 phase 不介入、不建立 causal claim（因果定位在
@@ -209,3 +210,8 @@ Gemma Step A 的 42 層 readout 在同一次 forward 的 hook 內逐層計算
   絕對容差。另：2×2 交叉表因 stance 軸符號在兩模型皆退化（402/402 同側），
   無分辨力——記錄為設計教訓（若需狀態方向交叉表，應改用 r(zero) 或
   r(N15)）。結果見 [Phase 2 報告](report-phase2.md)。
+- **Rev 1.3（2026-09-17，erratum，不影響任何已執行結果）**：Gemma text
+  tower 實際為 35 層（`text_config.num_hidden_layers = 35`）；本文件數處
+  「42 層」為書面誤記。Step A sweep 以 artifacts 為準（0–34，見
+  `layer_sweep.json`），執行未受影響；Phase 3 層格修正見
+  [Phase 3 protocol Rev 1.2](proposal-phase3.md)。
