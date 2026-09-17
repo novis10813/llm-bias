@@ -14,20 +14,10 @@ target entity activation causally changes the answer distribution.
   header spans using fixed Buy/Sell continuation margins.
 - `jspace-intervention`: sector-coordinate swap/gain, valence vocabulary readout,
   and matched-random V1 token causal screening over a validated canonical lens.
-  Outcome-conditioned decision-flip V2 is implemented against the frozen Draft 1
-  protocol. Its first formal pipeline completed with `success=false`: Buy steering
-  passed, but the sell-direction Holm gate lacked enough eligible test tickers.
-  The V2 doc also defines a readout-only zero-evidence header-only prior probe
-  and a Jacobian-lens direction decode; both have a recorded first formal run.
-  The same package implements hierarchical activation patching over prepared
-  positive/negative valence pairs; discovery found a layer-wise sufficiency
-  shift from evidence positions to post-evidence context and then the final
-  position. The unchanged held-out confirmation passed every frozen gate with
-  `success=true`. The package also implements three sector/context follow-ups:
-  A V1 cross-sector header-state patching, B V1 negative-evidence context
-  overriding, and C V1 L16 instruction-context readout. Their discovery runs
-  are recorded; B V1 calibration failed its frozen same-sector peer specificity
-  gate, and held-out test was not run.
+  The package also implements outcome-conditioned V2 decision-flip testing,
+  readout-only prior/direction probes, hierarchical activation patching, and
+  sector/context follow-ups. Findings and execution status are listed in the
+  [research overview](docs/README.md).
 - `jacobian-lens fit`: standalone Jacobian-lens fitting; experiment workflows
   consume fitted lenses and never fit one implicitly.
 
@@ -41,79 +31,13 @@ chain-of-thought or discrete reasoning paths.
 
 ## Documentation map
 
-- [Research directory, status, and experiment relationships](docs/README.md) — start here;
-  each experiment keeps `proposal.md` and `report.md` at the top level, with phase
-  protocols and intermediate records in `details/`.
+- [One-sentence findings, status, and evidence](docs/README.md) — start here;
+  follow report links to check evidence, and protocol links when running an experiment.
+  Historical details are available for audit, not required sequential reading.
 - [Documentation and instruction system](docs/documentation-system.md)
 - [Shared experiment core](docs/shared-experiment-core.md)
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 - [Research scripts reference](docs/research-scripts.md)
-
-### Research map
-
-The map below groups the active experiments into the three research branches
-used in the [research map table](docs/README.md): shared data and
-instruments, representation nomination to intervention, and the entity
-decision difference line. Node colors: green gate pass or completed, red
-gate fail or null, gray otherwise (line closed, exploratory, or proposed).
-Edges mark major upstream relations only: solid data/artifact dependency,
-dashed research succession or method reference, and thick solid lines mark
-the main convergence axis. The full relationship table with provenance
-stays in [docs/README.md](docs/README.md); archived frozen lines are not
-shown (see [archive/](archive/README.md)). Node names match the
-experiments linked in the sections below.
-
-```mermaid
-flowchart TB
-  classDef ok fill:#e8f5e9,stroke:#2e7d32,color:#1b1b1b
-  classDef neg fill:#ffebee,stroke:#c62828,color:#1b1b1b
-  classDef neutral fill:#eeeeee,stroke:#616161,color:#1b1b1b
-
-  subgraph INSTR["Shared data and instruments"]
-    jls["Jacobian-lens selection<br/>(completed)"]:::ok
-    bt["Baseline trial<br/>(completed per dataset/run)"]:::ok
-    jse["J-space evaluation<br/>(proposed, non-runnable)"]:::neutral
-  end
-
-  subgraph INTERV["Representation nomination to intervention"]
-    jsi["J-space sector intervention<br/>(specificity gates fail)"]:::neg
-    hss["Header-span sensitivity<br/>(V1 discovery)"]:::neutral
-    jvr["J-space valence readout<br/>(12 frozen candidates)"]:::ok
-    jtv1["J-space token V1<br/>(null, empty shortlist)"]:::neg
-    jtv2["J-space token V2<br/>(formal success=false)"]:::neg
-    ap["Activation patching<br/>(success=true)"]:::ok
-    scf["Sector/context follow-up A/B/C<br/>(B calibration fail)"]:::neg
-  end
-
-  subgraph ENTITY["Entity decision difference"]
-    ecell["Entity cell localization<br/>(closed: fact/decision dissociation)"]:::neutral
-    fsloc["Financial-soundness localization<br/>(exploratory V1)"]:::neutral
-    fscv["Financial-soundness causal validation<br/>(no causal certification)"]:::neutral
-    dial["Investment-dial<br/>(closed: gate pass, non-numeric)"]:::neutral
-    beg["Balanced evidence gap<br/>(closed: Phase 3 null 0/3)"]:::neutral
-    e2d["Entity-to-dial<br/>(closed: L15 k=8 subspace)"]:::neutral
-    sel["Selective intervention<br/>(G1-G2 pass, G3-G4 fail)"]:::neg
-    ecd["Entity concept decision<br/>(closed: rejected, stance readout)"]:::neutral
-  end
-
-  jls --> bt
-  bt --> jsi
-  jsi --> hss
-  jsi --> jvr
-  jsi --> ecell
-  jvr --> jtv1
-  jtv1 -->|version| jtv2
-  jtv2 -.-> ap
-  ap -.-> scf
-  ecell -.-> fsloc
-  fsloc --> fscv
-  ecell -.-> beg
-  ap -.-> beg
-  beg ==> e2d
-  dial --> e2d
-  e2d ==> sel
-  e2d --> ecd
-```
 
 ### Research design and planning
 
@@ -127,44 +51,9 @@ flowchart TB
 
 ### Experiment proposals and reports
 
-- [J-space sector intervention proposal](docs/jspace-sector-intervention/proposal.md) and [held-out report](docs/jspace-sector-intervention/report.md)
-- [J-space valence vocabulary readout proposal](docs/jspace-valence-readout/proposal.md) and [Technology discovery report](docs/jspace-valence-readout/report.md) —
-  positive-vs-negative J-space vocabulary readout that nominates representation
-  candidates for later signed steering/gain/swap; transported-representation
-  evidence, not causal evidence
-- [J-space token experiment versions](docs/jspace-token-experiments/proposal.md) —
-  separates completed V1 vocabulary-direction margin screening from the
-  implemented (Draft 1) V2 outcome-gradient Buy/Sell decision-flip testing
-  - [V1 proposal](docs/jspace-token-experiments/details/proposal-v1.md) and [report](docs/jspace-token-experiments/details/report-v1.md) —
-    completed discovery screen; no candidate passed the frozen shortlist gate
-  - [V2 proposal](docs/jspace-token-experiments/details/proposal-v2.md) and [report](docs/jspace-token-experiments/report.md) —
-    Draft 1 protocol frozen and implemented; the first formal pipeline returned
-    `success=false` because the sell-direction Holm gate had only two eligible test
-    tickers; final-position control also reproduced the steering effect; includes
-    first formal runs for the zero-evidence header-only prior probe and the
-    Jacobian-lens decode of the frozen V2 outcome direction
-  - [V2 outcome direction geometric projection](docs/jspace-token-experiments/details/report-v2-geometry.md) —
-    auxiliary descriptive geometry: per-layer Technology minus Financial Services
-    sector state difference projected onto the frozen V2 outcome directions
-    (parallel/perpendicular decomposition; not causal evidence)
-- [Activation patching proposal](docs/activation-patching-causal-tracing/proposal.md) and [experiment report](docs/activation-patching-causal-tracing/report.md) —
-  implemented Draft 1 workflow that patches model-produced residual states between
-  positive and negative valence prompts to scan layer and prompt-span sufficiency;
-  completed evidence-to-context-to-final layer localization; frozen
-  calibration and unchanged held-out confirmation both returned `success=true`
-- [Sector and context follow-up proposal](docs/sector-context-followup/proposal.md) and [latest report](docs/sector-context-followup/report.md) —
-  A/B/C discovery completed; B V1 calibration returned `success=false` at the
-  same-sector peer specificity gate, so held-out test was not run. The complete
-  A/B/C discovery results remain in [details](docs/sector-context-followup/details/report-discovery.md).
-- [Entity Cell](docs/entity-cell-localization/proposal.md),
-  [financial-soundness localization](docs/financial-soundness-localization/proposal.md), and
-  [causal validation](docs/financial-soundness-causal-validation/proposal.md) —
-  factual-memory localization and the separate exploratory financial-judgment branch.
-- [Investment-dial](docs/investment-dial/proposal.md),
-  [Balanced Evidence Gap](docs/balanced-evidence-gap/proposal.md), and
-  [Entity-to-Dial](docs/entity-to-dial/proposal.md) —
-  method replication, entity-induced decision-gap confirmation, and subsequent
-  path dissection; see the [research map](docs/README.md) for their distinct evidence and dependencies.
+The [research overview](docs/README.md) maintains the experiment list, current
+findings, report/protocol links, and an expandable relationship table with sources.
+This README does not maintain a second copy of per-experiment results.
 
 ### Workflow operations
 
