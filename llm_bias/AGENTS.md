@@ -1,7 +1,7 @@
 # `llm_bias/` scope
 
 這份文件說明主實驗 Python package 的責任邊界；上層規則見 repository root
-的 `AGENTS.md` 與 `CLAUDE.md`，其中完全相同的 **Shared experiment workflow contract**
+的 `AGENTS.md`，其中的 **Shared experiment workflow contract**
 定義 canonical `prepare → forward → analyze → finalize` 流程與跨 package 規則。
 本 scope 文件只補充 `llm_bias/` 內的 package ownership，不重複 canonical workflow
 commands 或取代各 workflow 文件。

@@ -22,11 +22,10 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 | 子目錄 `AGENTS.md` | 修改該目錄的 agents | 該目錄特有的 ownership、慣例、局部驗證、直接子層入口 | root 已定義的通用規則 |
 | `docs/<experiment-name>/` 與 `details/` | 維護者與實驗執行者 | 頂層研究入口與最終／最新報告；details 保存原始協議、分階段結果、artifact schema 與操作限制 | 無 code 或 artifact 依據的推測 |
 | `README.md` | 新使用者 | setup、active workflows、quickstart、文件地圖 | 重複 canonical workflow 的完整參數表 |
-| `CLAUDE.md`（目前缺檔） | 歷史 Claude Code 相容入口 | 若恢復，沿用 root 規則 | 與 root `AGENTS.md` 衝突的第二套政策 |
 
-`tests/test_workflow_boundaries.py` 仍要求 root `AGENTS.md` 與 `CLAUDE.md` 各包含一次
-完全相同的 `Shared experiment workflow contract`，但目前 Git 未追蹤 `CLAUDE.md`，
-該測試因缺檔失敗。這是既有相容性問題，本輪不新增副本或放寬測試；shared contract 保持不變。
+`AGENTS.md` 是唯一的 root 協作規則入口，不維護工具專屬的副本。
+`tests/test_workflow_boundaries.py` 要求其中包含一次完整、精確的
+`Shared experiment workflow contract`；停用相容入口不改變該契約。
 
 ## 詳細文件分類
 

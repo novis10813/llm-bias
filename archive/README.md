@@ -46,7 +46,7 @@ synthetic-entity-bias = "llm_bias.synthetic_entity_bias.cli:main"
 ```
 
 視情況同步更新 `llm_bias/__main__.py` 的 workflow 清單、
-`tests/test_workflow_boundaries.py` 與 `AGENTS.md`/`CLAUDE.md`/`README.md`
+`tests/test_workflow_boundaries.py` 與 `AGENTS.md`/`README.md`
 中的文件清單，然後跑完整驗證：
 
 ```bash

@@ -327,6 +327,6 @@ uv run pytest -q \
 ```
 
 For repository-wide verification, follow the commands in
-[`CLAUDE.md`](../../CLAUDE.md). This document is the canonical source for patching
+[`AGENTS.md`](../../AGENTS.md). This document is the canonical source for patching
 workflow commands and semantics; the proposal and dataset documents should link
 here rather than duplicate this operational detail.
