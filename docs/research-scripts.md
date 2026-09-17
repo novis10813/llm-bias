@@ -170,6 +170,25 @@ tests。
 run，先在報告中新增結果與 provenance，再改 renderer。J-space analysis scripts 只讀
 compact artifacts，不可把 raw activations、residuals 或 Jacobians 寫入輸出。
 
+## Evidence-insensitivity (Phases 1–3)
+
+`scripts/evidence_insensitivity_phase1.py` 是本線統一 operator：Phase 1
+（`pilot`/`prepare`/`forward`/`analyze`）、Phase 2（`phase2-*`）、Phase 3
+（`phase3-*`）subcommands，皆採 `prepare → forward → analyze` 的
+`ArtifactRun` lifecycle（`--model`/`--model-slug`/`--phase1-run-id`/
+`--phase2-run-id`）。Phase 3 的 `phase3-prepare` 用
+`core.model.load_tokenizer_for_inference` 導出位置表（與 `load_model` 的
+jlens force_bos 座標系一致；Gemma 有 BOS、Qwen 無）；`phase3-forward`
+開頭有 coordinate guard（存檔 prompt_end 須等於 forward 時編碼長度 −1，
+fail-closed）。`scripts/evidence_insensitivity_phase3_preflight.py` 是
+Phase 3 的單公司 GPU preflight（source 記錄＋margin patch＋patched
+generation，驗證干預管線後再跑 formal）。Regression coupling：
+`tests/test_evidence_insensitivity_phase1.py`、`tests/test_evidence_insensitivity_phase2.py`、
+`tests/test_evidence_insensitivity_phase3.py`（fake model，無 GPU）。
+Canonical contracts：[Phase 1](evidence-insensitivity/details/proposal-phase1.md)、
+[Phase 2](evidence-insensitivity/details/proposal-phase2.md)、
+[Phase 3](evidence-insensitivity/details/proposal-phase3.md)。
+
 ## Test-coupled interfaces
 
 - `tests/test_lens_promotion.py` 直接載入 `promote_qwen_lens_candidate.py` 的
