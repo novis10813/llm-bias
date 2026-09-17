@@ -67,6 +67,43 @@ def capture_final_residuals(
         return values
 
 
+def capture_position_residuals(
+    model: Any,
+    encoded: EncodedBatch,
+    positions: torch.Tensor,
+    layers: Iterable[int],
+    *,
+    keep_device: bool = False,
+) -> dict[int, torch.Tensor]:
+    """Capture requested jlens layer residuals at explicit per-row positions.
+
+    ``positions`` is a [batch] int tensor of 0-indexed sequence positions
+    (each must lie within the row's real, unpadded length; right-padded
+    positions after the real tokens are never requested). Positions before
+    the row end are unaffected by padding under causal attention even when
+    the model does not consume ``attention_mask``.
+    """
+    requested = sorted(set(int(layer) for layer in layers))
+    if not requested:
+        return {}
+    if not hasattr(model, "layers"):
+        return {}
+    if positions.ndim != 1 or positions.shape[0] != encoded.input_ids.shape[0]:
+        raise ValueError("positions must be a [batch] tensor matching the encoded batch")
+    if int(positions.min()) < 0 or (positions >= encoded.attention_mask.sum(-1)).any():
+        raise ValueError("position outside the row's unpadded length")
+    from jlens.hooks import ActivationRecorder
+
+    with ActivationRecorder(model.layers, at=requested) as recorder:
+        _forward(model, encoded)
+        values = {}
+        for layer in requested:
+            activation = recorder.activations[layer]
+            selected = activation[torch.arange(activation.shape[0], device=activation.device), positions.to(activation.device)]
+            values[layer] = selected.detach() if keep_device else selected.detach().cpu()
+        return values
+
+
 def forward_batch(
     model: Any,
     ids: list[list[int]],
@@ -140,4 +177,4 @@ def record_residuals(model: Any, input_ids: torch.Tensor, layers: Iterable[int])
         return {layer: recorder.activations[layer].detach().clone() for layer in requested}
 
 
-__all__ = ["EncodedBatch", "capture_final_residuals", "encode_batch", "forward_batch", "record_residuals"]
+__all__ = ["EncodedBatch", "capture_final_residuals", "capture_position_residuals", "encode_batch", "forward_batch", "record_residuals"]
