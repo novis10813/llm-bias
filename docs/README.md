@@ -20,7 +20,7 @@
 | Entity-to-Dial（Phase A–F） | 已收線 | 第 15 層的 8 維狀態差子空間可恢復近乎全部置換效果，但「一個殘差方向加一個 dial 神經元」的可加表示未通過檢驗。 | [報告](entity-to-dial/report.md) · [Phase F 協議](entity-to-dial/details/proposal-phase-f.md) |
 | Investment-dial（方法復現） | 已收線 | 在本模型與任務上，調整單一神經元能連續調節整體買賣立場並達到預設校準目標，完成方法復現，未以複製原論文數值為目標。 | [報告](investment-dial/report.md) · [V2 協議](investment-dial/details/proposal-v2.md) |
 | Selective-intervention V1 | 已完成 | 移除公司間差異子空間能讓決策落差減半，但全強度干預也改變整體及匿名提示的買賣傾向，未達到無副作用的要求。 | [報告](selective-intervention/report.md) · [V1 協議](selective-intervention/details/proposal-v1.md) |
-| Evidence-insensitivity | 進行中 | Phase 1 在本模板下發現，Qwen 對 503 家公司的零證據提示全選 sell，加入正面證據仍多數選 sell，而把正項移到末尾會使大量決策翻轉。 | [Phase 1 報告](evidence-insensitivity/details/report-phase1.md) · [階段／協議](evidence-insensitivity/proposal.md) |
+| Evidence-insensitivity | 進行中 | Phase 1 在本模板下發現，Qwen 對 503 家公司的零證據提示全選 sell，加入正面證據仍多數選 sell，而把正項移到末尾會使大量決策翻轉。 | [報告](evidence-insensitivity/report.md) · [全線進度](evidence-insensitivity/proposal.md) |
 | 財務穩健定位（探索） | 已完成 | 找到跨句式反應方向相近的財務判斷候選神經元，但尚未確認它們專門處理財務概念。 | [報告](financial-soundness-localization/report.md) · [協議](financial-soundness-localization/proposal.md) |
 | 財務穩健因果驗證（探索） | 已完成 | 抑制上述候選的影響與隨機神經元對照相近，本次未支持單一候選具有財務專屬的因果作用。 | [報告](financial-soundness-causal-validation/report.md) · [協議](financial-soundness-causal-validation/proposal.md) |
 
