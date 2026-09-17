@@ -37,7 +37,7 @@ Phase 1 是行為基準；Phase 2 是中間路徑與組件定位；Phase 3 是�
 
 **上游**
 
-- [entity-cell-localization](../entity-cell-localization/proposal.md)（研究承接）：事實失憶但決策不翻轉，促使研究轉向平衡證據下的 entity decision gap。
+- [entity-cell-localization](../entity-cell-localization/report.md)（研究承接）：事實失憶但決策不翻轉，促使研究轉向平衡證據下的 entity decision gap。
 - [investment-dial](../investment-dial/proposal.md)（資料／產物依賴）：沿用 test split、prompt 格式與 L15/N8490 dial 對照；檢查全域立場調控之外的 entity 差異。
 - [activation-patching-causal-tracing](../activation-patching-causal-tracing/proposal.md)（研究承接）：明確證據下 header 效應弱，改在多空對稱條件確認 entity 影響。
 - [jspace-token-experiments](../jspace-token-experiments/proposal.md)（研究承接）：V2 零證據 prior probe 未確認 entity 分歧，改測平衡證據；不沿用 V2 direction。
