@@ -49,9 +49,10 @@ class FakePhase2Model:
     for the Step A sweep.
     """
 
-    def __init__(self, n_layers: int = 6, d_model: int = 16):
+    def __init__(self, n_layers: int = 6, d_model: int = 16, out_dtype: torch.dtype = torch.float32):
         self.n_layers = n_layers
         self.d_model = d_model
+        self.out_dtype = out_dtype
         self.layers = nn.ModuleList([nn.Identity() for _ in range(n_layers)])
 
     def forward(self, input_ids_tensor, attention_mask=None, **_kwargs):
@@ -63,6 +64,7 @@ class FakePhase2Model:
                 1.0 + (input_ids_tensor[:, t] % 5).to(torch.float32).unsqueeze(-1)
             )
             x[:, t] = acc
+        x = x.to(self.out_dtype)
         for i, block in enumerate(self.layers):
             x = x + i * 0.001
             x = block(x)
@@ -236,6 +238,15 @@ def test_layer_localization_picks_correlated_layer_and_tie_breaks_shallow():
     assert l_tie == 1
 
 
+def test_full_lifecycle_bf16_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Real models (bf16) emit bfloat16 residuals; forward_stage must convert
+    # to float32 before numpy (numpy has no bf16 scalar type).
+    summary = _run_full_lifecycle(tmp_path, monkeypatch, anchor_layer=3, model_dtype=torch.bfloat16)
+    assert summary["gates"]["G-2A"]["pass"] is True
+    entry = summary["per_company"]["T000"]
+    assert all(np.isfinite([entry[k] for k in ("r_zero", "r_n15", "r_p15", "offset", "gain")]))
+
+
 def test_capture_position_bounds_check():
     from llm_bias.core.inference.forward import capture_position_residuals, encode_batch
 
@@ -253,7 +264,7 @@ def test_capture_position_bounds_check():
         capture_position_residuals(model, encoded, torch.tensor([-1, 0]), layers=[3])
 
 
-def _run_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, anchor_layer: int | None, run_id: str = "phase2-test", n_resp_discovery: int = DISCOVERY_RESPONSIVE) -> dict:
+def _run_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, anchor_layer: int | None, run_id: str = "phase2-test", n_resp_discovery: int = DISCOVERY_RESPONSIVE, model_dtype: torch.dtype = torch.float32) -> dict:
     tokenizer = CharTokenizer()
     _fake_phase1_run(tmp_path, SLUG, "phase1-gpu-bf16-01", tokenizer, n_resp_discovery=n_resp_discovery)
     if anchor_layer is None:
@@ -261,7 +272,7 @@ def _run_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, anch
     else:
         monkeypatch.setitem(phase2.DEFAULT_CAPTURE_LAYER, SLUG, anchor_layer)
     phase2.run_phase2_prepare(run_id, artifact_root=tmp_path, model_path="fake", tokenizer=tokenizer, model_slug=SLUG)
-    model = FakePhase2Model(n_layers=6, d_model=16)
+    model = FakePhase2Model(n_layers=6, d_model=16, out_dtype=model_dtype)
     phase2.run_phase2_forward(run_id, artifact_root=tmp_path, model_path="fake", model=model, tokenizer=tokenizer, device="cpu", model_slug=SLUG)
     result = phase2.run_phase2_analyze(run_id, artifact_root=tmp_path, model_slug=SLUG)
     return json.loads(Path(result).read_text(encoding="utf-8"))

@@ -323,7 +323,7 @@ def forward_stage(
             residuals = capture_position_residuals(model, encode_batch(ids, device), pos, layers=list(range(model.n_layers)))
             for i, (t, c) in enumerate(chunk):
                 for L, mat in residuals.items():
-                    states_by_layer.setdefault(L, {}).setdefault(c, {})[t] = np.asarray(mat[i], dtype=np.float32)
+                    states_by_layer.setdefault(L, {}).setdefault(c, {})[t] = mat[i].float().numpy()
         l_star, corrs = layer_localization(states_by_layer, c_c)
         capture_layer = l_star
         layer_sweep = {
@@ -341,7 +341,7 @@ def forward_stage(
         ids = [input_ids(tokenizer, text, add_special_tokens=True) for text in prompts_text]
         residuals = capture_position_residuals(model, encode_batch(ids, device), pos, layers=[capture_layer])
         for (t, cond), mat_row in zip(chunk, residuals[capture_layer]):
-            states[(t, cond)] = np.asarray(mat_row, dtype=np.float32)
+            states[(t, cond)] = mat_row.float().numpy()
     missing = set(rows) - set(states)
     if missing:
         raise ValueError(f"missing capture states: {sorted(missing)[:5]}")
@@ -416,7 +416,7 @@ def forward_stage(
         ids = [input_ids(tokenizer, text, add_special_tokens=True) for text in prompts_text]
         residuals = capture_position_residuals(model, encode_batch(ids, device), pos, layers=[capture_layer])
         for (t, cond), mat_row in zip(chunk, residuals[capture_layer]):
-            rerun_states[(t, cond)] = np.asarray(mat_row, dtype=np.float32)
+            rerun_states[(t, cond)] = mat_row.float().numpy()
     max_delta = 0.0
     mismatches = 0
     for t, cond in selected_pairs:
