@@ -58,6 +58,25 @@ def load_tokenizer(model: str = DEFAULT_MODEL) -> Any:
     return transformers.AutoTokenizer.from_pretrained(name, use_fast=True)
 
 
+def load_tokenizer_for_inference(model: str = DEFAULT_MODEL) -> Any:
+    """Tokenizer whose encodings match ``load_model``'s inference-time ones.
+
+    ``load_model`` wraps the HF model with ``jlens.from_hf(..., force_bos=True)``,
+    which mutates the shared tokenizer in place (``add_bos_token = True`` when
+    the tokenizer has a ``bos_token_id``). Any span/position table that must
+    index inference-time sequences (capture positions, patch coordinates)
+    must be derived with this loader or it will be off by the forced BOS for
+    tokenizers whose default is ``add_bos_token=False``.
+    """
+    tokenizer = load_tokenizer(model)
+    if (
+        getattr(tokenizer, "bos_token_id", None) is not None
+        and hasattr(tokenizer, "add_bos_token")
+    ):
+        tokenizer.add_bos_token = True
+    return tokenizer
+
+
 def _module_device(module: torch.nn.Module) -> torch.device:
     try:
         return next(module.parameters()).device
