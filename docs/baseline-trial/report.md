@@ -1,360 +1,44 @@
-# Prompt-analysis 實驗重現指南
+# Baseline Trial：外部金融提示詞流程接通與批量透視鏡解碼（流程建置）
 
-這份文件說明如何以任意相容 decoder model，從同一份 prompt CSV 執行
-Jacobian-lens readout、generation 與 generated-token attribution stages，並依 stage
-前置條件執行 validation、圖表與互動式 dashboard。
+**狀態：已完成（流程建置）。** 完成狀態依各資料集與執行階段獨立判定，非單一全線 verdict。完整重現指南與操作契約見 [實驗計畫](proposal.md)。
 
-整體分成三個獨立入口：
+**一句話發現：** 將外部金融偏誤試驗提示詞成功轉換並接通 prompt-analysis 分析管線（50-stock 轉出 800 cells，paper 規模轉出 30,744 cells），批量 lens-forward 實測將 4B 逐層解碼耗時自 ~24 分鐘降至 ~4 分鐘，產物合約通過驗證。
 
-- `jacobian-lens fit`：建立可重用的 lens artifact。
-- `prompt-analysis`：提供 `readout`、`generate`、`attribute-generated`、validation
-  與 visualization commands。
-- `scripts/run_prompt_analysis.sh`：只 orchestration prompt experiment，不會 fitting
-  lens；各 stage 由 `RUN_READOUT`、`RUN_GENERATION` 與 `RUN_ATTRIBUTION` 控制。
+## 1. 外部金融試驗提示詞如何接入本專案管線？格式轉換與驗證完成
 
-以下範例使用 Qwen 3.5-4B，但 Python API 與 CLI 名稱均不依賴特定模型。
+我們透過轉換腳本將外部 trial-plan 提示詞轉換為本專案的 legacy-wide CSV 格式：
 
-## 前置條件
+**觀察：**
+- **50-stock 規模**：50 檔股票、16 個 prompt columns（涵蓋 attribute, volume, intensity, strategy 等條件），共轉出 **800 個** 非空 cells。
+- **Paper 規模**：427 檔股票、72 個 prompt columns，共轉出 **30,744 個** 非空 cells。
+- **序列長度**：Token 長度中位數約 245–333 tokens，最大長度達 660–733 tokens，統一使用 `--max-seq-len 1024` 避免截斷財務證據。
+- 輸入格式與欄位對齊通過 `prompt-analysis inspect-input` 驗證。
 
-```bash
-uv sync
-test -d third_party/jacobian-lens
-test -d third_party/jspace-viz
-test -d .cache/models/qwen3.5-4b
-test -f data/sp500_r1k_r2k_entityBiasPrompt.csv
-```
+**解讀：** 外部試驗提示詞已無損接入本 repo 的分析環境，每筆資料旁均附有 `.provenance.json` 記錄原始 SHA-256 與轉換矩陣。
 
-Repository 內的 input 慣例放在 `data/`。Prompt-analysis CLI 與兩支 shell runner 為了
-保留 public compatibility，未指定 input 時仍使用 root-relative
-`sp500_r1k_r2k_entityBiasPrompt.csv`。依 repository 慣例執行時，請明確傳入
-`--input data/sp500_r1k_r2k_entityBiasPrompt.csv`，或設定
-`INPUT_CSV=data/sp500_r1k_r2k_entityBiasPrompt.csv`。
+## 2. 批量化透視鏡解碼效能與數值一致性為何？耗時顯著降低，數值達 bf16/ulp 容差一致
 
-## 1. 準備 model-specific canonical Jacobian lens
+在執行透視鏡解碼（lens-forward / readout）時，我們針對逐層 Jacobian-lens transported readout 進行批量化（batched lens-forward）優化：
 
-Canonical lens 必須保留每個 intermediate layer。Qwen3.5-4B 使用 model-specific
-residual width/layer count；完整設計、候選選擇與 promotion 流程見
-[Qwen3.5-4B Jacobian-lens calibration 與候選選擇](../jacobian-lens-selection/proposal.md)。
+**觀察：**
+- **解碼效能**：在 Qwen3.5-4B 上執行 5 層 readout 時，批量化推論將整體耗時由約 **24 分鐘降低至約 4 分鐘**。
+- **數值精度**：批量化推論結果在 bf16 浮點數及 ulp 容差下，與逐筆循序推論之 log-probability 完全一致。
 
-一般新模型可以先使用 standalone fitter 建立 experimental lens，輸出到候選目錄；
-active canonical lens 的位置固定為：
+**解讀：** 批量優化大幅提升了大規模資料集的逐層表徵讀出效率，且未引入任何數值漂移或精度損失。
 
-```text
-artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt
-```
+## 3. 各階段產物合約與下游解讀邊界為何？
 
-fitting checkpoints 的位置固定為：
+**契約與邊界：**
+1. **三階段管線契約**：管線嚴格解耦為 `readout`（逐層詞彙讀出與不確定度）、`generate`（唯一執行自回歸生成的階段）與 `attribute-generated`（僅讀取既有生成記錄計算梯度歸因，不重複生成），遵循 `RunManifest` 規範。
+2. **不保存原始張量**：產物僅輸出 compact top-k、rank、統計量與數值摘要，嚴禁持久化未聚合的 raw activations。
+3. **非單一偏誤結論**：本工作為基礎設施與管線重現建置，各階段通過產物合約驗證，不代表已在特定股票上確立單一因果或偏誤結論。
 
-```text
-artifacts/archive/<model-slug>/jacobian-lens/checkpoints/
-```
+## 查證入口
 
-選出的 Qwen active artifact 例：
-
-```text
-artifacts/qwen3.5-4b/jacobian-lens/
-├── jacobian_lens.pt
-├── jacobian_lens.pt.metadata.json
-└── selection.json
-```
-
-Metadata 記錄模型 identity、hidden width、layer coverage、fitting 參數、calibration
-digest 與 jlens version。完整 active lens 不得由小型 smoke fit 覆寫。
-
-## 2. 執行 prompt-analysis
-
-目前 runner 與 CLI 的 stage contract 是：
-
-- `readout`：讀取 CSV、載入既有 lens，輸出 `${RUN_ROOT}/readout/` 的逐層
-  vocabulary readout、uncertainty、aggregate top-k 與 metadata。
-- `generate`：對輸入 conditions 產生並保存 `${RUN_ROOT}/forward/generated_outputs.jsonl`
-  與 `forward/metadata.json`；它是唯一執行 generation 的 stage。
-- `attribute-generated`：只讀取既有 forward artifact，驗證 model identity 與
-  parent SHA-256，再把 gradient attribution 寫入 `${RUN_ROOT}/backward/`；它不會
-  再次 generation。
-
-預設 shell 設定為：
-
-```text
-MODEL=.cache/models/qwen3.5-4b
-LENS=artifacts/qwen3.5-4b/jacobian-lens/jacobian_lens.pt
-RUN_ROOT=artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>
-RUN_READOUT=1
-RUN_GENERATION=0
-RUN_ATTRIBUTION=0
-GEN_SAMPLE_PER_CONDITION=32
-```
-
-Runner 不會 fitting lens。完整 MAG7 8-K return-pairs runner 的固定設定另見
-[本文件的 MAG7 completion contract](#dataset-specific-completion-contracts)。
-
-### Runner 環境變數
-
-| 變數 | 預設值 |
+| 要查什麼 | 原始紀錄與來源 |
 |---|---|
-| `MODEL` | `.cache/models/qwen3.5-4b` |
-| `LENS` | `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt` |
-| `INPUT_CSV` | `sp500_r1k_r2k_entityBiasPrompt.csv`（compatibility default；repository-local run 應設為 `data/sp500_r1k_r2k_entityBiasPrompt.csv`） |
-| `DATASET_FORMAT` | `auto` |
-| `DATASET_SLUG` | input filename 的安全 slug |
-| `RUN_ID` | UTC timestamp |
-| `RUN_ROOT` | `artifacts/<model-slug>/<dataset-slug>/runs/<run-id>` |
-| `READOUT_BATCH_SIZE` | `32` |
-| `READOUT_MAX_SEQ_LEN` | `256`；`return-pairs` 時為 `512` |
-| `TOP_K` | `15` |
-| `MAX_ROWS` | empty（不限制） |
-| `GEN_SAMPLE_PER_CONDITION` | `32`；`0` 代表傳入 `--full-generation` |
-| `GEN_MAX_NEW_TOKENS` | `64` |
-| `GEN_TEMPERATURE` | `0`（greedy） |
-| `GEN_SEED` | empty |
-| `GEN_TOP_P` | `1.0` |
-| `GEN_TOP_K` | `0` |
-| `RUN_READOUT` | `1` |
-| `RUN_GENERATION` | `0` |
-| `RUN_ATTRIBUTION` | `0` |
-| `FORWARD_ARTIFACT` | attribution-only execution 時的既有 forward JSONL |
-| `BACKWARD_INPUT_TOP_K` | empty |
-| `RUN_IN_TMUX` | `1` |
-| `SESSION` | `prompt_analysis` |
+| 原始執行計畫與轉換契約 | [實驗計畫](proposal.md)；轉換腳本 `scripts/convert_baseline_trial_plan.py`。 |
+| 資料集路徑 | `data/baseline/qwen36-27b-50stocks/` 與 `data/baseline/paper-local-qwen36-27b/`。 |
+| 執行管線腳本 | `scripts/run_prompt_analysis.sh`；專用 CLI `baseline-trial`。 |
 
-`RUN_GENERATION=1` 執行 `generate`；`RUN_ATTRIBUTION=1` 執行
-`attribute-generated`。若 generation 關閉而 attribution 開啟，必須提供
-`FORWARD_ARTIFACT`；該 artifact 必須先存在。Stage outputs 只保存 compact records、
-token IDs/text、scores、generation config 與 metadata。
-
-## 3. Attribution validation（需要 attribution-enabled artifact）
-
-這個 validation 只接受 `RUN_ATTRIBUTION=1` 產生的
-`backward/generated_token_attribution.jsonl`。`readout` 與 `forward` artifact 不是
-attribution input，必須先完成 `attribute-generated` stage。
-
-```bash
-uv run prompt-analysis validate-attribution \
-  --model .cache/models/qwen3.5-4b \
-  --attribution artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>/backward/generated_token_attribution.jsonl \
-  --output-dir artifacts/qwen3.5-4b/<dataset-slug>/runs/<run-id>/attribution_validation
-```
-
-## 4. 建立視覺化
-
-`visualize_prompt_analysis.sh` 需要同一個 run 的 `readout` uncertainty 與 `forward`
-generated outputs；存在 `backward` artifact 時才會啟用 attribution panel。Script 不猜測
-run ID，必須明確指定 canonical run root：
-
-```bash
-RUN_ROOT=artifacts/<model-slug>/<dataset-slug>/runs/<run-id> \
-TOKENIZER=/path/to/model \
-bash scripts/visualize_prompt_analysis.sh
-```
-
-Visualizer 尋找：
-
-1. `${RUN_ROOT}/readout/prompt_layer_uncertainty.jsonl`（必要）
-2. `${RUN_ROOT}/forward/generated_outputs.jsonl`（必要）
-3. `${RUN_ROOT}/backward/generated_token_attribution.jsonl`（optional；存在時啟用
-   attribution panel）
-4. optional `${RUN_ROOT}/attribution_validation/semantic_scope_aopc.jsonl`
-
-輸出為：
-
-```text
-${RUN_ROOT}/visualization/
-├── final_layer_effective_temperature_with_context.png
-├── final_layer_effective_temperature_without_context.png
-├── final_layer_entropy_with_context.png
-├── final_layer_entropy_without_context.png
-├── final_layer_uncertainty.csv
-└── attribution_dashboard.html
-```
-
-直接在瀏覽器開啟 `attribution_dashboard.html` 即可。
-
-## 5. Multi-run price distribution 研究圖
-
-Multi-run price sampling 是獨立的 forward artifact family，不是單一 `RunManifest` lifecycle run，
-也不需要 generated-token backward attribution。先建立空的 sampling root：
-
-```bash
-uv run prompt-analysis generate \
-  --model .cache/models/qwen3.5-4b \
-  --input data/sp500_r1k_r2k_entityBiasPrompt.csv \
-  --output artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30 \
-  --runs 30 \
-  --temperature 0.7 \
-  --seed 123
-```
-
-此 command 產生 `sampling_manifest.json` 與每個
-`run_NNN/forward/generated_outputs.jsonl`。接著可輸出三個 index 的 close-price 研究圖：
-
-```bash
-uv run prompt-analysis plot-price-distributions \
-  --sampling-root artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30 \
-  --prices data/sp500_r1k_r2k_entityBiasPrompt.csv \
-  --output-dir artifacts/qwen3.5-4b/sp500-price-sampling/t0.7-r30/price_distribution
-```
-
-命令會先驗證 `sampling_manifest.json`、所有宣告的 `run_NNN/forward/generated_outputs.jsonl`、
-forward SHA-256、每個 run 的 record 數量，以及每個 date/index/context condition 是否完整。
-Incomplete artifact 不會被靜默當成完整實驗；backward attribution 不是此圖的輸入。
-
-每個市場輸出一張 300-DPI PNG：上方兩個共享 price scale 的 panels 分別顯示 without
-context 與 with context，包含 actual close、LLM median、25–75% band 與 5–95% band；
-下方 error panel 比較兩個 conditions 每日期的 median absolute percentage error（MdAPE）：
-
-```text
-abs(generated price - actual close) / actual close × 100
-```
-
-輸出為：
-
-```text
-${OUTPUT_DIR}/
-├── sp500_price_distribution.png
-├── russell1000_price_distribution.png
-├── russell2000_price_distribution.png
-├── price_distribution_samples.csv
-├── price_distribution_summary.csv
-└── price_distribution_metadata.json
-```
-
-`price_distribution_samples.csv` 保留所有 run 的 normalized records，包括 raw generated
-text、parse status、actual close 與 sample-level error。只有 finite numeric `answer` 進入
-quantile 與 MdAPE；`null`、string、malformed 或 non-finite answers 不會被轉成 0。
-`price_distribution_metadata.json` 保存輸入 SHA-256、generation config、quantile method、
-error formula 與 valid/invalid counts。圖中的 bands 是 valid generated prices 的中央 90% 與
-50%，描述的是 sampling variability 與 prediction error，不是 causal effect。
-
-## 6. Final-layer uncertainty distribution 研究圖
-
-既有 readout artifact 已保存每個日期與 condition 的 final-layer uncertainty，因此可以直接
-建立跨日期分布，不需重新載入 model/lens 或執行 inference：
-
-```bash
-uv run prompt-analysis plot-uncertainty-distributions \
-  --uncertainty-root artifacts/qwen3.5-4b/sp500_uncertainty/runs/readout \
-  --output-dir artifacts/qwen3.5-4b/sp500_uncertainty/uncertainty_distribution
-```
-
-Raw distribution 使用 ECDF，比較每個市場的 with-context 與 without-context：
-
-- `entropy_nats`：final-layer full-vocabulary softmax 的 Shannon entropy。
-- `effective_temperature`：final-normalized residual L2 norm 的倒數；不是 generation
-  sampling temperature。
-
-Paired distribution 會在每個市場內，以同日期配對後計算：
-
-```text
-with context − without context
-```
-
-Russell 1000 若有缺少 with-context 的日期，只會從 Russell 1000 的 paired set 排除，
-不影響另外兩個市場。Paired differences 是 descriptive associations，不是 causal effects。
-
-輸出為：
-
-```text
-${OUTPUT_DIR}/
-├── final_layer_entropy_raw_ecdf.png
-├── final_layer_entropy_paired_delta_violin.png
-├── final_layer_effective_temperature_raw_ecdf.png
-├── final_layer_effective_temperature_paired_delta_violin.png
-├── final_layer_uncertainty_distribution_raw.csv
-├── final_layer_uncertainty_paired_delta.csv
-├── final_layer_uncertainty_distribution_summary.csv
-└── final_layer_uncertainty_distribution_metadata.json
-```
-
-Metadata 保存 source SHA-256、condition/date counts、各市場 paired 與 unmatched counts、
-quantile method、metric definitions 與 non-causal interpretation。Entropy 與 effective
-temperature 使用不同 figures，不使用 dual axis。
-
-## Stage artifact contract
-
-The runner writes one canonical run tree:
-
-```text
-artifacts/<model-slug>/<dataset-slug>/runs/<run-id>/
-├── manifest.json
-├── readout/                         # when RUN_READOUT=1
-│   ├── prompt_layer_topk.jsonl
-│   ├── prompt_layer_uncertainty.jsonl
-│   ├── average_layer_topk.jsonl
-│   ├── average_layer_topk.csv
-│   ├── output_topk_distribution.png
-│   └── metadata.json
-├── forward/                         # when RUN_GENERATION=1
-│   ├── generated_outputs.jsonl
-│   └── metadata.json
-└── backward/                        # when RUN_ATTRIBUTION=1
-    ├── generated_token_attribution.jsonl
-    └── metadata.json
-```
-
-`manifest.json` is schema version `1` and is produced by `RunManifest`. Its canonical
-object contains:
-
-- `schema_version`, `model`, `model_slug`, `dataset`, `dataset_slug`, `run_id` and
-  `run_root`;
-- lifecycle `status` (`created`, `running`, `complete` or `failed`), timestamps, and
-  optional `error`;
-- `artifacts`, plus the role-indexed `input_refs`, `lens_refs` and `output_refs`;
-- `record_counts`, keyed by registered `artifact_type`; and
-- `stages`, keyed by enabled stage name, whose status is `created`, `running`, `complete`
-  or `failed`, with lifecycle timestamps.
-
-Each artifact reference records `artifact_type`, `stage`, `status`, `role`, a path, a
-lowercase SHA-256 digest, and an optional JSONL `record_count` and producer metadata.
-The runner registers the input CSV and configured lens during initialization. As stages
-finish it registers the files that actually exist, computes their SHA-256 values, and
-infers JSONL record counts. The root manifest is marked `complete` only after the runner
-has finished all enabled stages; a failed stage leaves the run `failed` with an error.
-The stored hashes, counts, and stage states support independent completion checks without
-using stale file existence as the completion signal.
-
-`attribute-generated` writes backward metadata with the model identity, parent forward
-path, parent forward SHA-256 (also exposed as `parent_forward_hash` and
-`parent_artifact`), output SHA-256, record counts, and coverage counts. It verifies the
-forward model identity, parent hash, and per-record generated-token coverage. The
-metadata does not claim a dataset/run binding that the producer does not implement.
-
-## Dataset-specific completion contracts
-
-- **Legacy-wide**: `generate` defaults to 32 deterministically spread dates per condition.
-  The same selected date set is used for each prompt condition.
-- **MAG7 8-K return-pairs**: the dedicated runner sets `DATASET_FORMAT=return-pairs`,
-  `READOUT_MAX_SEQ_LEN=512`, `RUN_GENERATION=1`, `RUN_ATTRIBUTION=0`, and
-  `GEN_SAMPLE_PER_CONDITION=0`. The runner translates zero into `generate --full-generation`.
-  The input contains 710 unique pairs, so forward generation writes 1,420 condition
-  records: one `original` and one `counterfactual` record per pair.
-- **Stage ordering**: `readout` and `generate` complete before `attribute-generated`.
-  Backward consumes the persisted generated token IDs and does not perform generation.
-
-## Artifact 與研究限制
-
-- 保存的是 compact readout/attribution 結果：top-k、rank、統計量、token IDs/text、
-  probabilities、generation 設定與 provenance；不保存完整 raw residual、embedding 或
-  gradient activation。
-- Readout aggregate 先對每個 condition 的完整 vocabulary softmax 做平均，再選 top-k。
-  `effective_temperature` 是 residual-space 的 readout measure；`GEN_TEMPERATURE` 是
-  generation sampling 設定，兩者不可互換或解讀成同一量。
-- Generated-token attribution 是局部的一階 gradient sensitivity/semantic-scope
-  readout，不是 attention map、chain-of-thought、離散 reasoning path，也不是
-  standalone causal proof。Attribution validation 的 ablation 結果只能提供額外的
-  validation evidence，不能把單次 attribution 直接宣稱為一般化 causal effect。
-
-## 完成檢查
-
-使用 tiny JSONL 與 temporary directory，至少驗證：
-
-1. run root 使用 `<model-slug>/<dataset-slug>/<run-id>`，manifest identity 與 stage
-   metadata identity 相符；
-2. enabled stages have `complete` status and their registered files exist;
-3. manifest and stage metadata SHA-256 values can be recomputed;
-4. backward metadata parent path/hash match the supplied forward artifact, and coverage
-   counts agree with persisted generated token IDs;
-5. run tree 沒有 raw activation suffix 或完整 activation 欄位。
-
-這些 checks 不需要載入 checkpoint。整合 gate 另外執行 `uv run pytest -q`、
-`uv run python -m compileall -q llm_bias`、`uv lock --check` 與 `uv build`；不要在
-unit smoke 中執行 710-pair inference。
+**本次編輯說明：** 本報告按三項核心問題改寫，聚焦於資料轉換規模、批量解碼效能與產物合約邊界；原始計畫 `proposal.md` 完整保留。
