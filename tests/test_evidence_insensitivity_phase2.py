@@ -236,6 +236,23 @@ def test_layer_localization_picks_correlated_layer_and_tie_breaks_shallow():
     assert l_tie == 1
 
 
+def test_capture_position_bounds_check():
+    from llm_bias.core.inference.forward import capture_position_residuals, encode_batch
+
+    model = FakePhase2Model(n_layers=6, d_model=16)
+    rows = [[10, 11, 12, 13], [10, 11, 12]]  # lengths 4 and 3 (right-padded to 4)
+    encoded = encode_batch(rows, "cpu")
+    # in-bounds positions work
+    res = capture_position_residuals(model, encoded, torch.tensor([2, 1]), layers=[3])
+    assert res[3].shape == (2, 16)
+    # position beyond the unpadded length fails closed
+    with pytest.raises(ValueError, match="outside the row's unpadded length"):
+        capture_position_residuals(model, encoded, torch.tensor([3, 3]), layers=[3])
+    # negative position fails closed
+    with pytest.raises(ValueError, match="outside the row's unpadded length"):
+        capture_position_residuals(model, encoded, torch.tensor([-1, 0]), layers=[3])
+
+
 def _run_full_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, anchor_layer: int | None, run_id: str = "phase2-test", n_resp_discovery: int = DISCOVERY_RESPONSIVE) -> dict:
     tokenizer = CharTokenizer()
     _fake_phase1_run(tmp_path, SLUG, "phase1-gpu-bf16-01", tokenizer, n_resp_discovery=n_resp_discovery)

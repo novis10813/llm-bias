@@ -90,7 +90,8 @@ def capture_position_residuals(
         return {}
     if positions.ndim != 1 or positions.shape[0] != encoded.input_ids.shape[0]:
         raise ValueError("positions must be a [batch] tensor matching the encoded batch")
-    if int(positions.min()) < 0 or (positions >= encoded.attention_mask.sum(-1)).any():
+    lengths = encoded.attention_mask.sum(-1).to(positions.device)
+    if int(positions.min()) < 0 or (positions >= lengths).any():
         raise ValueError("position outside the row's unpadded length")
     from jlens.hooks import ActivationRecorder
 
