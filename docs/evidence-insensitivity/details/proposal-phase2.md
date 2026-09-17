@@ -201,3 +201,11 @@ Gemma Step A 的 42 層 readout 在同一次 forward 的 hook 內逐層計算
   (d) determinism 20 筆為 seed 20260916 分層抽取（7 N15 / 7 P15 / 6 zero）；
   (e) per-company C_c 取自 Phase 1 分組表 `contrast_c` 欄位；(f) prompts
   直接複用 Phase 1 `prepare/prompts.jsonl`（primary arm，byte-identical）。
+- **Rev 1.2（2026-09-17，實作對齊註記，不改任何 frozen 門檻）**：Gemma
+  formal run 的 G-2A 以絕對容差 0.05 fail（max Δr_stance 0.129）。兩模型
+  **相對** jitter 相同（Qwen 0.0197 / norm 10.34 ≈ 0.19%；Gemma 0.129 /
+  norm 68.79 ≈ 0.19%）——絕對容差未隨 state norm 縮放是校準限制。frozen
+  gate 結果維持（不溯及）；後續跨 model 的 G-2A 應先實測 jitter 帶再定
+  絕對容差。另：2×2 交叉表因 stance 軸符號在兩模型皆退化（402/402 同側），
+  無分辨力——記錄為設計教訓（若需狀態方向交叉表，應改用 r(zero) 或
+  r(N15)）。結果見 [Phase 2 報告](report-phase2.md)。

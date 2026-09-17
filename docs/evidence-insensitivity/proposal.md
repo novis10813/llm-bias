@@ -6,8 +6,11 @@
 
 **狀態**：進行中——Phase 1 **completed**（Qwen，2026-09-16，formal run
 `phase1-gpu-bf16-01`，G-P1..P4 全過、50 responsive / 453 fixed-sell frozen；
-Gemma-4-E2B 同設計 formal 執行中）；Phase 2 **frozen**（Rev 1.1；實作完成、
-Qwen run 待啟動、Gemma 待其 Phase 1 formal 完成）；Phase 3 planned。主線模型：
+Gemma-4-E2B 同設計 formal completed：395 responsive / 108 fixed-buy）；
+Phase 2 **completed**（雙模型，2026-09-17：Qwen gates 全過、Gemma
+G-2A/G-2B fail；兩模型 capture-layer 狀態皆不承載行為分組——offset 與 gain
+組差皆 null，Qwen gain 差顯著但反向且極小；[報告](details/report-phase2.md)）；
+Phase 3 planned。主線模型：
 Qwen3.5-4B＋Gemma-4-E2B（用戶指示統一雙模型）。
 
 ## 全線問題
@@ -25,8 +28,8 @@ L15 instruction span 狀態差與該差異的上游因果來源。
 | 階段 | 協議 | 狀態 |
 |---|---|---|
 | **Phase 1：行為篩選與分組** | [Phase 1 協議](details/proposal-phase1.md) / [Phase 1 報告](details/report-phase1.md) | **Completed（2026-09-16）**：formal run `phase1-gpu-bf16-01`（5336 forwards）G-P1..P4 全過、fallback 未觸發；503 家分組表 frozen（50 evidence-responsive / 453 fixed-sell / 0 fixed-buy / 0 mixed；503/503 零證據 sell）；order-swap 臂顯示項目位置為強、非對稱的決策驅動（recency，正項在尾 69–90% sell→buy）。 |
-| **Phase 2：capture-layer 組間對比** | [Phase 2 協議](details/proposal-phase2.md) | **Frozen（Rev 1.1，2026-09-16 批准）；實作完成（unit tests 過）、Qwen run `phase2-gpu-bf16-01` 待啟動**：雙模型統一執行；Qwen capture layer = L15（frozen 錨點）、Gemma 以 16 家子樣本 Step A 定位 L*；discovery split 402 家 × {zero, N15, P15} 純 forward 狀態捕獲（不存 raw states）；stance 軸新 family 重導出；per-company 狀態反應曲線、offset vs gain 分解、2×2 交叉表、sector 控制。 |
-| **Phase 3：上游因果定位** | 待 Phase 2 完成後起草 | Planned：within-company 極性狀態差 × span（entity/evidence/instruction）× 層 sweep；transfer patching；hold-out confirmation。 |
+| **Phase 2：capture-layer 組間對比** | [Phase 2 協議](details/proposal-phase2.md)（Rev 1.2 註記） / [Phase 2 報告](details/report-phase2.md) | **Completed（2026-09-17，雙模型 `phase2-gpu-bf16-01`）**：Qwen L15（gates 全過）、Gemma L18（Step A 定位；G-2A 容差校準 fail、G-2B fail，帶保留描述）。核心結果：兩模型狀態空間單一共享方向（PC1 88.8% / 98.4%）；**閾值故事（offset）與承載衰減故事（gain）皆不成立**（Qwen offset p=0.57、gain p=0.009 但反向且僅 6%；Gemma 全 null）；狀態反應形狀是模型特性（Qwen 極性線性對稱、Gemma 證據存在驅動 10× 非對稱）。 |
+| **Phase 3：上游因果定位** | 待起草（Phase 2 已完成，輸入見[報告 §7](details/report-phase2.md)） | Planned：組差不在 capture layer 狀態 → 聚焦 (a) 更後層 state→decision 讀出段、(b) 三 span × 層 transfer patching；hold-out confirmation。 |
 
 ## 關鍵設計決定（2026-09-16 brainstorming，用戶批准）
 
