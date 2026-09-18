@@ -30,8 +30,11 @@ commands 或取代各 workflow 文件。
   `investment-dial` CLI 分開提供工程檢查、梯度篩選、A/B 校準與獨立公司評估。
   使用 JSON decision/reason、全 token 加法；不得把合成工程輸入當作 baseline 結果。
 - `selective_intervention/`：擁有 V1 推論期 entity-difference 子空間移除、對照與
-  gate 評估；operator 為 `scripts/selective_intervention_v1.py`，協議見
-  [V1 proposal](../docs/selective-intervention/details/proposal-v1.md)。
+  gate 評估，以及 M6 frozen-operator 外部 population 驗證；operator 為
+  `scripts/selective_intervention_v1.py` 與 `scripts/selective_intervention_m6.py`，協議見
+  [V1 proposal](../docs/selective-intervention/details/proposal-v1.md)、
+  [M6-V1 proposal](../docs/selective-intervention/details/proposal-m6.md) 與
+  [M6-V2 protocol](../docs/selective-intervention/details/proposal-m6-v2.md)。
 - `entity_cell/`：擁有 entity-cell localization、attention attribution 與
   suppression intervention 工作流；CLI 入口為 `entity-cell`。
 - `entity_concept_decision/`：Phase 1 基礎工具與 development runner；無 CLI；材料驗證、概念方向 fitting 與 caller-owned `prepare → forward → analyze` development workflow 由 [report](../docs/entity-concept-decision/report.md) 與 [implementation](../docs/entity-concept-decision/details/implementation-phase1-development.md) 定義。runner 接受任意概念集合（`concept_ids`）並做通用 stance 正交化；`development_materials` 含 round-1（C+S）與 round-2（表格格式，任意概念）兩種 builder；`layer_scan` 為多層完整空間概念-vs-stance 分離性掃描（development only）。runner 只接受已載入模型、tokenizer、CPU basis 與明確 development provenance，不是 formal audit pipeline。

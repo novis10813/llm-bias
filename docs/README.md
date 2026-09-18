@@ -19,7 +19,7 @@
 | Balanced Evidence Gap（Phase 1–3） | 已收線 | 相同多空證據下，換公司名稱會穩定改變買賣傾向，但歸因挑出的三個神經元在干預中都未勝過對照。 | [報告](balanced-evidence-gap/report.md) · [Phase 3 協議](balanced-evidence-gap/details/proposal-phase3.md) |
 | Entity-to-Dial（Phase A–F） | 已收線 | 第 15 層的 8 維狀態差子空間可恢復近乎全部置換效果，但「一個殘差方向加一個 dial 神經元」的可加表示未通過檢驗。 | [報告](entity-to-dial/report.md) · [Phase F 協議](entity-to-dial/details/proposal-phase-f.md) |
 | Investment-dial（方法復現） | 已收線 | 在本模型與任務上，調整單一神經元能連續調節整體買賣立場並達到預設校準目標，完成方法復現，未以複製原論文數值為目標。 | [報告](investment-dial/report.md) · [V2 協議](investment-dial/details/proposal-v2.md) |
-| Selective-intervention V1 | 已完成 | 移除公司間差異子空間能讓決策落差減半，但全強度干預也改變整體及匿名提示的買賣傾向，未達到無副作用的要求。 | [報告](selective-intervention/report.md) · [V1 協議](selective-intervention/details/proposal-v1.md) |
+| Selective-intervention V1 / M6-V2 | 已完成 | V1 的 full-strength intervention 因全局與匿名副作用收口為負結果；M6-V2 外部 12 家的 current-runtime spread ratio = 0.6401（95% CI [0.2837, 2.1144]），未確認機制泛化。 | [報告](selective-intervention/report.md) · [V1 協議](selective-intervention/details/proposal-v1.md) · [M6-V2 協議](selective-intervention/details/proposal-m6-v2.md) |
 | Evidence-insensitivity（Phase 1–3） | 已完成 | 雙模型的受測一維狀態未解釋行為分組，最後位置的狀態置換改變買賣分數卻未翻轉生成決策；Gemma Phase 2 僅作帶保留的描述。 | [報告](evidence-insensitivity/report.md) · [Phase 3 協議](evidence-insensitivity/details/proposal-phase3.md) |
 | 財務穩健定位（探索） | 已完成 | 找到跨句式反應方向相近的財務判斷候選神經元，但尚未確認它們專門處理財務概念。 | [報告](financial-soundness-localization/report.md) · [協議](financial-soundness-localization/proposal.md) |
 | 財務穩健因果驗證（探索） | 已完成 | 抑制上述候選的影響與隨機神經元對照相近，本次未支持單一候選具有財務專屬的因果作用。 | [報告](financial-soundness-causal-validation/report.md) · [協議](financial-soundness-causal-validation/proposal.md) |

@@ -1,8 +1,21 @@
 # Selective-intervention：推論期移除 L15 k=8 子空間（全強度負結果）
 
-**狀態：已完成（V1 formal）。** 模型為 Qwen3.5-4B（bf16）；2026-09-14 完成，formal run `selective-intervention-v1-gpu-bf16-01`，門檻判定為 `fail`（G1a/G1b/G2 pass、G3/G4 fail；full-strength 負結果）。
+**狀態：已完成（V1 formal；M6-V2 compatibility formal）。** V1 使用 Qwen3.5-4B（bf16）於 2026-09-14 完成，formal run `selective-intervention-v1-gpu-bf16-01`，門檻判定為 `fail`（G1a/G1b/G2 pass、G3/G4 fail；full-strength 負結果）。M6-V2 使用目前 Hugging Face default runtime 於 GPU1 完成，run `m6-v2-gpu1-01`；它不改寫 V1，也不宣稱 exact V1 center compatibility。
 
-**一句話發現：** 在推論期移除 L15 $k=8$ 實體差異子空間成功使公司間決策落差減半（group gap 縮減 53.8%，G1a/G1b/G2 pass，特異性成立），但全強度（$\alpha=1.0$）干預帶來全局推注（mean margin +0.33 nats，G3 fail）與匿名基準偏移（-0.27 nats，G4 fail），依 frozen 決策表收口為 full-strength 負結果。
+**一句話發現：** V1 在原始 population 內成功使公司間決策落差減半但因全局副作用收口為 full-strength 負結果；M6-V2 在外部 12 家 current-runtime compatibility population 的 spread ratio 為 **0.6401**（95% CI **[0.2837, 2.1144]**），未達預註冊的 ≤0.5 primary gate，且 G3′/G4′ 均 fail，因此沒有確認外部機制泛化。
+
+## M6-V2 外部 population compatibility validation
+
+- **Population**：12 家、4 sectors、48 prompts；selection manifest 固定 seed 42。
+- **Primary**：clean IQR = 0.3364，full-strength main IQR = 0.2153，spread ratio = **0.6401**，reduction = 35.99%。paired company bootstrap（10,000、seed 42）95% CI = **[0.2837, 2.1144]**。
+- **Interpretation**：`fail`（point estimate > 0.5）；不是 confirmed generalization。
+- **Specificity**：random control pass；random reduction = −2.00%，相對主臂縮減未達 25% 門檻。
+- **Safety diagnostics**：G3′ fail（mean shift +0.4546 nats）、G4′ fail（anonymous shift −0.2557 nats）。兩者為 secondary diagnostics，不改變 primary 判定。
+- **Greedy generation**：48/48 comparable prompts，main sell→buy flip rate = 0。
+- **Compatibility boundary**：V2 current center digest `f1fcf6b4...` 不等於 V1 artifact digest `99e5dcfb...`；因此本結果不得被描述為 exact frozen-V1-center replication。
+
+Formal artifact：`artifacts/qwen3.5-4b/selective-intervention-m6-v2/runs/m6-v2-gpu1-01/`。
+Protocol：[M6-V2 protocol](details/proposal-m6-v2.md)。
 
 ## 1. 移除 L15 $k=8$ 實體差異子空間能否縮減決策落差，且具備特異性？有效性與特異性雙陽性
 
@@ -40,6 +53,7 @@
 | 要查什麼 | 原始紀錄與來源 |
 |---|---|
 | V1 協議與凍結決策表 | [V1 協議](details/proposal-v1.md)（Rev 1.5）。 |
-| Formal run 執行記錄與產物 | run `selective-intervention-v1-gpu-bf16-01`，位於 `artifacts/qwen3.5-4b/selective-intervention/runs/`；646 arm forwards + 17 calibration forwards。 |
+| M6-V2 協議與結果 | [M6-V2 protocol](details/proposal-m6-v2.md)；run `m6-v2-gpu1-01`，位於 `artifacts/qwen3.5-4b/selective-intervention-m6-v2/runs/`。 |
+| Formal run 執行記錄與產物 | V1 run `selective-intervention-v1-gpu-bf16-01`，位於 `artifacts/qwen3.5-4b/selective-intervention/runs/`；646 arm forwards + 17 calibration forwards。 |
 
 **本次編輯說明：** 本報告依既有紀錄按三項核心問題改寫，移除純導覽的頂層 proposal，直接以本報告為閱讀入口；不變更任何原始數據、門檻或執行歷史。

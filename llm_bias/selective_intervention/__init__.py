@@ -6,4 +6,14 @@ the L15 post-block residual at instruction-span positions, with strength
 pre-registered efficacy / specificity / task-preservation gates.
 """
 
-__all__ = ["analysis", "pipeline", "scoring", "spans", "subspace", "template"]
+__all__ = [
+    "analysis",
+    "m6_analysis",
+    "m6_manifest",
+    "m6_pipeline",
+    "pipeline",
+    "scoring",
+    "spans",
+    "subspace",
+    "template",
+]

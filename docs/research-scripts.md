@@ -49,6 +49,26 @@ Explanation renderer: `plot_calibration_v2_explained.py` 產出解釋圖（V1 �
 [V1 report](selective-intervention/report.md)。對應測試為
 `tests/test_selective_intervention_{analysis,pipeline,subspace}.py`。
 
+### Selective-intervention M6 external-population validation
+
+`scripts/prepare_selective_intervention_m6_manifest.py` builds the frozen
+four-sector × three-company external manifest from the canonical constituent
+CSV. It performs no model inference; the seed, eligible pool, exclusions and
+final company list are recorded before an M6 run.
+
+`scripts/selective_intervention_m6.py` consumes that manifest together with the
+frozen Phase 2A prompt template, entity-to-dial E-01 basis and V1 run. It
+reconstructs the V1 center in memory with a digest check, runs the external
+clean/main/random arms, computes company-level IQR spread and bootstrap
+precision, and records G3′/G4′ and greedy-generation diagnostics. It does not
+fit or tune the operator on external companies. The `--smoke` mode checks one
+external prompt against real weights without writing a formal M6 analysis.
+
+Protocol: [M6-V2 protocol](selective-intervention/details/proposal-m6-v2.md)。V2
+preserves the M6-V1 source/operator boundaries while recording the current-runtime
+center digest separately. Regression coupling:
+`tests/test_selective_intervention_m6_{analysis,manifest,pipeline}.py`。
+
 ## Balanced Evidence Gap (Phase 1 behavioral confirmation)
 
 `scripts/balanced_evidence_gap.py` implements the Phase 1 balanced-evidence
