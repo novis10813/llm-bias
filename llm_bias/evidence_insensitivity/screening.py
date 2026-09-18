@@ -1,12 +1,12 @@
 """Compact generation and decision-position screening records."""
 from __future__ import annotations
 
-import json
 import math
 from typing import Any
 
 import torch
 
+from llm_bias.core.analysis import parse_buy_sell_decision
 from llm_bias.core.continuation_scoring import score_single_token_margin_fp32
 from llm_bias.core.inference.adapter import InjectedModelAdapter
 from llm_bias.core.inference.generation import GenerationConfig, generate_tokens
@@ -26,24 +26,7 @@ def _generation_target(model: Any) -> Any:
     return InjectedModelAdapter(model, hf_model=hf_model)
 
 
-def parse_decision(generated_text: str) -> str | None:
-    """Parse the first JSON object from a greedy completion.
-
-    The model pretty-prints the object and appends stop-marker text after
-    the closing brace, so the object is extracted with ``raw_decode`` from
-    the first ``{`` and trailing content is ignored (protocol §2).
-    """
-    if not isinstance(generated_text, str):
-        return None
-    start = generated_text.find("{")
-    if start == -1:
-        return None
-    try:
-        value, _ = json.JSONDecoder().raw_decode(generated_text[start:])
-    except json.JSONDecodeError:
-        return None
-    decision = value.get("decision") if isinstance(value, dict) else None
-    return decision if decision in {"buy", "sell"} else None
+parse_decision = parse_buy_sell_decision
 
 
 def screen_prompt(model: Any, tokenizer: Any, prompt_text: str, *, device: torch.device | str = "cpu") -> dict[str, Any]:

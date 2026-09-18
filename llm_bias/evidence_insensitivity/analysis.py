@@ -7,8 +7,10 @@ import statistics
 from collections import Counter, defaultdict
 from typing import Any
 
+from llm_bias.core.analysis import DECISIONS as GENERATED_DECISIONS, decision_flip_summary
+
 GATE_THRESHOLDS = {"parse": 0.95, "sign": 0.90, "power_responsive": 10, "power_insensitive": 10}
-DECISIONS = ("buy", "sell")
+DECISIONS = tuple(sorted(GENERATED_DECISIONS))
 EXCLUDED = "excluded"
 # Protocol §8 item 8: first JSON key is "decision", tolerant of whitespace
 # formatting (the model pretty-prints the object; pilot-verified).
@@ -125,20 +127,18 @@ def _order_swap_stats(records: list[dict[str, Any]]) -> dict[str, Any]:
     pairs = sorted(set(primary) & set(swapped))
     if not pairs:
         return {"n_pairs": 0, "decision_flip_rate": None, "mean_abs_delta_margin": None}
-    flips = 0
-    deltas: list[float] = []
-    for key in pairs:
-        base, reverse = primary[key], swapped[key]
-        if (
-            base.get("decision") in DECISIONS
-            and reverse.get("decision") in DECISIONS
-            and base["decision"] != reverse["decision"]
-        ):
-            flips += 1
-        deltas.append(abs(float(base["margin"]) - float(reverse["margin"])))
+    pair_summary = decision_flip_summary(
+        {str(key): primary[key].get("decision") for key in pairs},
+        {str(key): swapped[key].get("decision") for key in pairs},
+    )
+    deltas = [
+        abs(float(primary[key]["margin"]) - float(swapped[key]["margin"]))
+        for key in pairs
+    ]
     return {
         "n_pairs": len(pairs),
-        "decision_flip_rate": _finite(flips / len(pairs)),
+        "decision_flip_rate": pair_summary["flip_rate"],
+        "decision_flip": pair_summary,
         "mean_abs_delta_margin": _finite(statistics.mean(deltas)),
     }
 

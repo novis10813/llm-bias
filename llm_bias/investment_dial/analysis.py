@@ -2,6 +2,8 @@
 import json
 import math
 
+from llm_bias.core.analysis import decision_flip_summary
+
 
 def parse_response(text):
     def unique(pairs):
@@ -23,6 +25,22 @@ def parse_response(text):
         decision = None
     return {"json_object": is_object, "decision": decision,
             "schema_valid": bool(decision is not None and isinstance(obj.get("reason"), str))}
+
+
+def paired_decision_flip_summary(clean_rows, intervened_rows, *, id_field="id"):
+    """Compute generated Buy/Sell flips for two paired record collections."""
+    def decisions(rows):
+        result = {}
+        for index, row in enumerate(rows, 1):
+            if id_field not in row or "decision" not in row:
+                raise ValueError(f"decision record {index} is missing {id_field!r} or 'decision'")
+            key = str(row[id_field])
+            if not key or key in result:
+                raise ValueError(f"duplicate or empty decision record id: {key!r}")
+            result[key] = row["decision"]
+        return result
+
+    return decision_flip_summary(decisions(clean_rows), decisions(intervened_rows))
 
 
 def summary(rows):

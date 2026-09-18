@@ -26,6 +26,7 @@ import numpy as np
 import torch
 from scipy import stats
 
+from llm_bias.core.analysis import decision_flip_summary
 from llm_bias.core.artifacts.io import read_jsonl, write_json, write_jsonl, write_metadata
 from llm_bias.core.artifacts.lifecycle import ArtifactRun
 from llm_bias.core.continuation_scoring import continuation_token_ids, fp32_next_token_log_probs
@@ -600,10 +601,22 @@ def analyze_stage(run: ArtifactRun, *, model_slug: str | None = None) -> Path:
                         "mean": {groups[0]: _finite(float(np.mean(a))), groups[1]: _finite(float(np.mean(b)))},
                         "cohen_d": _finite((float(np.mean(a)) - float(np.mean(b))) / pooled) if pooled > 0 else 0.0,
                     }
-            flip_a = sum(1 for g in gen_rows if g["layer"] == L and g["position"] == p and g["direction"] == "T1" and g["group"] == groups[0] and g["flip"])
-            flip_b = sum(1 for g in gen_rows if g["layer"] == L and g["position"] == p and g["direction"] == "T1" and g["group"] == groups[1] and g["flip"])
-            n_a = sum(1 for g in gen_rows if g["layer"] == L and g["position"] == p and g["direction"] == "T1" and g["group"] == groups[0])
-            n_b = sum(1 for g in gen_rows if g["layer"] == L and g["position"] == p and g["direction"] == "T1" and g["group"] == groups[1])
+            flip_summaries = {}
+            for group in groups:
+                rows = [
+                    g for g in gen_rows
+                    if g["layer"] == L and g["position"] == p
+                    and g["direction"] == "T1" and g["group"] == group
+                ]
+                flip_summaries[group] = decision_flip_summary(
+                    {str(g["ticker"]): g["baseline_decision"] for g in rows},
+                    {str(g["ticker"]): g["patched_decision"] for g in rows},
+                )
+            entry["t1_flip_rate"] = flip_summaries
+            flip_a = flip_summaries[groups[0]]["flip_count"]
+            flip_b = flip_summaries[groups[1]]["flip_count"]
+            n_a = flip_summaries[groups[0]]["valid_pair_count"]
+            n_b = flip_summaries[groups[1]]["valid_pair_count"]
             if n_a and n_b and flip_a + flip_b > 0:
                 _, pval = stats.fisher_exact([[flip_a, n_a - flip_a], [flip_b, n_b - flip_b]])
                 entry["t1_flip_fisher"] = {"flip": {groups[0]: flip_a, groups[1]: flip_b}, "n": {groups[0]: n_a, groups[1]: n_b}, "p": _finite(float(pval))}

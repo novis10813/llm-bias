@@ -6,7 +6,12 @@ import pytest
 import torch
 
 from llm_bias.investment_dial import pipeline
-from llm_bias.investment_dial.analysis import parse_response, summary, inverse_curve
+from llm_bias.investment_dial.analysis import (
+    inverse_curve,
+    paired_decision_flip_summary,
+    parse_response,
+    summary,
+)
 from llm_bias.investment_dial.prompts import build_trials, encode_trials, validate_data
 from llm_bias.core.inference.coordinate_screen import coordinate_derivatives
 from llm_bias.core.artifacts.registered import verified_run
@@ -101,6 +106,15 @@ def test_invalid_decisions_are_not_guessed(text):
     assert parse_response(text)["decision"] is None
 
 
+def test_paired_decision_flip_summary_uses_generated_decisions():
+    clean = [{"id": "a", "decision": "sell"}, {"id": "b", "decision": "buy"}]
+    intervened = [{"id": "a", "decision": "buy"}, {"id": "b", "decision": "buy"}]
+    result = paired_decision_flip_summary(clean, intervened)
+    assert result["flip_count"] == 1
+    assert result["sell_to_buy_count"] == 1
+    assert result["buy_to_sell_count"] == 0
+
+
 def test_parse_rates_and_undefined_pi():
     missing_reason = parse_response('{"decision":"buy"}')
     assert missing_reason["decision"] == "buy" and not missing_reason["schema_valid"]
@@ -134,7 +148,13 @@ def test_screen_calibrate_evaluate_lifecycle(setup, tmp_path):
     evaluated = pipeline.run_evaluation(calibrated, "fake", "eval", artifact_root=root, loaded=loaded)
     assert set(seen) == {"test"}
     output, _ = verified_run(evaluated, "investment-dial-evaluation", pipeline.REQUIRED)
-    assert len(output["analyze/result.json"]["summaries"]) == 35
+    summaries = output["analyze/result.json"]["summaries"]
+    assert len(summaries) == 35
+    assert all(
+        "decision_flip" in row
+        for row in summaries
+        if row["arm"] != "baseline"
+    )
     assert not output["analyze/result.json"]["certified"]
     assert output["prepare/protocol.json"]["control_neuron"] == 2
     for directory in (screen, calibrated, evaluated):

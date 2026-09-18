@@ -248,6 +248,7 @@ def test_descriptive_stats_primary_only_curve_and_order_swap_block():
     assert stats["population_polarity"]["P15"]["mean_margin"] == pytest.approx(1.0)
     assert stats["order_swap"]["n_pairs"] == 1
     assert stats["order_swap"]["decision_flip_rate"] == pytest.approx(1.0)
+    assert stats["order_swap"]["decision_flip"]["sell_to_buy_count"] == 1
     assert stats["order_swap"]["mean_abs_delta_margin"] == pytest.approx(1.5)
     assert stats["anonymous_base_rate"]["zero"]["margin"] == pytest.approx(-3.0)
     # prefix-match statistic requires generated_text fields

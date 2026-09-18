@@ -64,6 +64,8 @@ sensitivity 使用 `prepare`、`forward`、`analyze`。
 - `statistics.py` 擁有 bootstrap、paired test、Holm correction、cosine statistics 與
   direction hash。
 - `directions.py` 擁有 online direction accumulation 與 quantile helpers。
+- `decision_flips.py` 解析真實生成的 JSON Buy/Sell decision，並計算 paired flip
+  count、方向與 valid-pair rate；不接受 fixed-choice margin sign 作為替代。
 
 Research-specific estimand、success gate 或 vocabulary 定義留在 owning experiment。
 

@@ -19,7 +19,13 @@ from llm_bias.core.inference.generation import GenerationConfig, generate_tokens
 from llm_bias.core.inference.mlp import dense_down_projection
 from llm_bias.core.inference.mlp_addition import mlp_addition
 from llm_bias.core.model import load_model
-from .analysis import parse_response, summary, inverse_curve, feasible
+from .analysis import (
+    inverse_curve,
+    feasible,
+    paired_decision_flip_summary,
+    parse_response,
+    summary,
+)
 from .prompts import VERSION, PREFIX, build_trials, encode_trials
 
 
@@ -258,7 +264,10 @@ def run_calibration(source_run, model_path, run_id, *, artifact_root="artifacts"
                     if delta == 0 and [r["generated_ids"] for r in records] != [r["generated_ids"] for r in baseline]:
                         raise RuntimeError("zero intervention generation mismatch")
                     effects.extend(_tagged(records, phase="A_curve"))
-                    curves.append(summary(records))
+                    curves.append({
+                        **summary(records),
+                        "decision_flip": paired_decision_flip_summary(baseline, records),
+                    })
                 result = candidate | {"A_curve": curves, "feasible": False, "rmse": None}
                 if not feasible(curves, minimum_rate):
                     result["reason"] = "A_output_validity"
@@ -333,8 +342,19 @@ def run_evaluation(source_run, model_path, run_id, *, artifact_root="artifacts",
             groups = defaultdict(list)
             for record in effects:
                 groups[(record["arm"], record["target"], record["positive_count"])].append(record)
-            summaries = [{"arm": arm, "target": target, "positive_count": count} | summary(records)
-                         for (arm, target, count), records in groups.items()]
+            baseline_by_count = {
+                count: records
+                for (arm, target, count), records in groups.items()
+                if arm == "baseline" and target is None
+            }
+            summaries = []
+            for (arm, target, count), records in groups.items():
+                item = {"arm": arm, "target": target, "positive_count": count} | summary(records)
+                if arm != "baseline":
+                    item["decision_flip"] = paired_decision_flip_summary(
+                        baseline_by_count[count], records
+                    )
+                summaries.append(item)
             write(run, "analyze/result.json", {"protocol_sha256": object_sha256(protocol),
                   "summaries": summaries, "certified": False, "interpretation": "descriptive_independent_company_test"})
             stage.count(len(summaries))
