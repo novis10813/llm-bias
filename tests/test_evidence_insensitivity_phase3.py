@@ -404,6 +404,11 @@ def test_full_lifecycle_all_gates_pass(tmp_path: Path, monkeypatch: pytest.Monke
     assert set(summary["s_vs_r"]) == {f"T1@{L}:{p}" for L, p in summary["active_combos"]}
     for entry in summary["s_vs_r"].values():
         fisher = entry["t1_flip_fisher"]
+        # The behavior endpoint is based on paired generated decisions, not margin sign.
+        assert all(
+            entry["t1_flip_rate"][group]["valid_pair_count"] == 42
+            for group in ("evidence-responsive", "fixed-sell")
+        )
         # fake model produces zero flips -> guarded undefined-odds path
         assert fisher["p"] is None and fisher["flip"] == {"evidence-responsive": 0, "fixed-sell": 0}
         # fake model has identical per-company deltas -> zero variance -> Welch guarded out
