@@ -38,6 +38,7 @@ compatibility exception；不要新增同類依賴。新 shared mechanics 必須
 
 - 不保存完整 raw activations；只輸出 compact top-k、rank、統計量、token IDs/text、probabilities 與 provenance。
 - 不要把不同 token 的 top-1 probability 差直接當成 causal effect；使用固定答案 token probability、logit margin 或明確定義的 normalized transfer。
+- margin／固定答案 token probability 的位移只證明內部讀出信號改變，不能單獨代表模型的決策行為改變。任何協議若核心宣稱涉及決策行為（翻轉買賣判定、改變輸出類別等），必須額外定義以真實生成（非固定答案評分）計算的 decision-flip 指標；協議設有 gate 時，behavior-level 宣稱須以 flip-based gate 或至少完整的 flip 率描述性統計佐證，不得只憑 margin gate 通過就寫成「改變決策」。
 - prompt readout 的 aggregate 必須先平均每個 condition 的完整 vocabulary softmax，再選 top-k。Attribution 是 local first-order sensitivity，不是 attention map 或 standalone causal claim。
 - Jacobian lens 是 transported representation readout，不是 chain-of-thought、離散 reasoning path 或 standalone causal evidence。
 - Counterfactual 線的 Pair/span-mapping/control-patch/bias-specific pair 研究語義隨程式一併移至 [`archive/README.md`](archive/README.md)。

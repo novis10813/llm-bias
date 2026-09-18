@@ -73,6 +73,8 @@ repository map 留在 README 或詳細文件，避免 root instruction file 隨�
 1. 開頭寫研究範圍、模型、狀態與一句話發現；主文按研究問題組織，不按 run 時序重播。
 2. 每個問題先給回答，再列決定結論的數據與對照，分清「觀察」與「解讀／限制」。
    白話解釋指標，說清楚干預做了什麼；零翻轉不等於零效應，null 不等於不存在。
+   宣稱改變模型決策時，須同時列出 margin／logit 指標與 decision-flip 指標；只有
+   margin 位移、沒有對應 flip 數據時，結論須寫成讀出層級效應，不得逕稱「改變決策」。
 3. 對不同模型、版本、公司、精度及探索／正式確認分開陳述；不把某一組的結果擴成全線結論。
    來源衝突就標出差異與待查項，不挑有利數字，也不為了文句順暢自行裁決。
 4. 主文以一分鐘能讀出問題、發現與邊界為目標；保留必要表格。命令、完整判準、歷次
@@ -183,6 +185,12 @@ family 或 success gate，建立新的 version 文件，不在舊文件中把新
 - 假說、指標、controls、判準與停止條件：執行前確定；定義退化分佈、缺少對照或缺少
   合格樣本時的 fail-closed／fallback。若使用位置分割，須明確覆蓋且互斥；數值容差須
   依模型精度給公式或有依據的底限。
+- Behavior-level 宣稱的雙軌指標：核心宣稱涉及模型決策行為時（例如翻轉買賣判定、
+  改變輸出類別），指標與 gate 不得只由 fixed-answer margin／logit 構成，須同時定義
+  一個以真實生成（實際 sampling 或 greedy decoding，非固定答案評分）計算的
+  decision-flip 指標，並在 gate 表中納入至少一個 flip-based gate，或在描述性統計
+  中完整報告 flip 率、對照組 flip 率與樣本數。margin 有位移但 flip 為零時，見
+  [報告寫作原則](#報告寫作原則)，不得逕稱行為已改變。
 - 版本分立：prompt family、estimand、direction source、controls、split/freeze sequence
   或 gate 改變時另立版本，不原地改已凍結規範；有結果才寫該版報告，不配套建立空檔。
 - Formal discovery/calibration/test 前，須以真實模型與 tokenizer 完成至少一筆 prompt
