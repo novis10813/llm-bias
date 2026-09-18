@@ -80,7 +80,7 @@ formal discovery/calibration/test 仍被禁止：先以真實 tokenizer/model �
 
 **上游**
 
-- [entity-cell-localization](../entity-cell-localization/proposal.md)（方法參考）：借用 V2/V3 自然句定位原則，不沿用實體專屬性與事實崩塌 gate。
+- [entity-cell-localization](../entity-cell-localization/report.md)（方法參考）：借用 V2/V3 自然句定位原則，不沿用實體專屬性與事實崩塌 gate。
 
 **後續**
 

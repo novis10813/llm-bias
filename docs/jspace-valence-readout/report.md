@@ -1,61 +1,48 @@
-# J-space 正負價態詞彙 readout：Technology discovery 報告
+# J-space 正負價態詞彙 Readout：提名 12 個候選方向（Technology Discovery）
 
-本報告記錄 proposal 所定義 workflow 的 discovery 結果。方法、aggregation contract、
-artifacts 與 CLI 見 [實驗提案](proposal.md)。
+**狀態：已完成（Technology discovery 完成，表徵候選非因果證明）。** 模型為 Qwen3.5-4B（bf16）；2026-08-27 完成。操作契約與 aggregation 定義見 [實驗提案](proposal.md)。
 
-## Technology discovery 結果
+**一句話發現：** 在 35 檔科技股的證據結尾位置，透過 Jacobian lens 讀出並提名了 12 個跨層與跨公司方向穩定的正負價態候選詞（負向如 `potential` $\Delta p = -0.0228$、`risk`；正向如 `justify` $\Delta p = +0.0059$、`upgrade`）；但後續下游因果篩選 shortlist 為空。
 
-正式 discovery run：
+## 1. 能否在殘差流中讀出能區分正負證據的穩定詞彙表徵？提名 12 個候選詞彙
 
-`artifacts/qwen3.5-4b/jspace-valence-readout/runs/valence-technology-evidence-balanced-20260827T043734Z`
+我們使用對齊好的 canonical Jacobian lens，在 35 檔科技股的 105 對平衡證據的結尾位置，逐層讀取完整的詞彙表 softmax 分佈：
 
-規模為 35 個 Technology discovery tickers、每 ticker 3 個 matched source trials、
-105 pairs／210 prompts。所有 stages 完成，readout 使用 L14–L26 與 final layer。
+**觀察：** 在 L14–L26 候選層中，提名出 12 個通過嚴格門檻（平均機率 $\ge 1\times 10^{-5}$、ticker 符號一致性 $\ge 70\%$、層一致性 $\ge 75\%$）的候選詞：
 
-Band L14–L26 的 frozen representation candidates：
-
-| Readout side | Token | Token ID | Band probability diff | Ticker sign consistency | Layer sign consistency |
+| 價態方向 | 候選 Token | Token ID | 層帶機率差值 ($\Delta p$) | 公司符號一致率 | 層符號一致率 |
 |---|---|---:|---:|---:|---:|
-| negative | ` potential` | 4499 | −0.022846 | 28/35 | 13/13 |
-| negative | ` predicted` | 18569 | −0.014658 | 28/35 | 13/13 |
-| negative | ` risks` | 14832 | −0.007027 | 34/35 | 13/13 |
-| negative | ` downgrade` | 87250 | −0.006880 | 35/35 | 13/13 |
-| negative | ` impacts` | 24115 | −0.006676 | 33/35 | 13/13 |
-| negative | ` risk` | 5048 | −0.005969 | 34/35 | 13/13 |
-| positive | ` justify` | 9079 | +0.005930 | 25/35 | 13/13 |
-| positive | ` Industry` | 23094 | +0.002811 | 26/35 | 13/13 |
-| positive | ` upgrade` | 13511 | +0.001839 | 32/35 | 13/13 |
-| positive | ` increase` | 5096 | +0.001660 | 28/35 | 13/13 |
-| positive | ` justified` | 33273 | +0.001410 | 26/35 | 11/13 |
-| positive | ` partnership` | 14859 | +0.001279 | 33/35 | 13/13 |
+| 負向 (negative) | ` potential` | 4499 | −0.022846 | 28/35 | 13/13 |
+| 負向 (negative) | ` predicted` | 18569 | −0.014658 | 28/35 | 13/13 |
+| 負向 (negative) | ` risks` | 14832 | −0.007027 | 34/35 | 13/13 |
+| 負向 (negative) | ` downgrade` | 87250 | −0.006880 | 35/35 | 13/13 |
+| 負向 (negative) | ` impacts` | 24115 | −0.006676 | 33/35 | 13/13 |
+| 負向 (negative) | ` risk` | 5048 | −0.005969 | 34/35 | 13/13 |
+| 正向 (positive) | ` justify` | 9079 | +0.005930 | 25/35 | 13/13 |
+| 正向 (positive) | ` Industry` | 23094 | +0.002811 | 26/35 | 13/13 |
+| 正向 (positive) | ` upgrade` | 13511 | +0.001839 | 32/35 | 13/13 |
+| 正向 (positive) | ` increase` | 5096 | +0.001660 | 28/35 | 13/13 |
+| 正向 (positive) | ` justified` | 33273 | +0.001410 | 26/35 | 11/13 |
+| 正向 (positive) | ` partnership` | 14859 | +0.001279 | 33/35 | 13/13 |
 
-`potential`、`predicted`、`justify`、`Industry` 等詞可能反映語句模板或一般預測語彙；
-它們和 `risk`、`downgrade`、`upgrade`、`increase`、`partnership` 一樣，都只保留為
-後續 causal screen 的候選，不依文字語義先行刪除。
+**解讀：** 這些詞彙反映了模型在處理正負財務論據時在特定位置激活的表徵偏向，具備統計上的方向一致性。
 
-這些 candidates 已由
-[token causal screen V1](../jspace-token-experiments/details/proposal-v1.md) 的 `run-token-screen`
-以 SHA-bound config 直接消費，並在 discovery split 完成對稱劑量 screen；V1 shortlist
-為空。後續 V2 不再由本 readout 提名詞彙方向，而改 fitting outcome-gradient
-axis。兩版差異見 [J-space token experiment versions](../jspace-token-experiments/details/README.md)。
+## 2. 詞彙讀出是否直接構成因果決策的證明？否，僅屬表徵提名
 
-一個較早的 diagnostic run 在 final prompt position 讀取，結果幾乎全由 JSON opening
-與格式 tokens 主導，沒有產生 eligible candidates：
+**觀察與方法限制：**
+1. **透視讀出非真實生成**：Jacobian lens 是將殘差流向量經線性映射回詞表的投影分數，它反映的是表徵向量的幾何走向，不等於模型在真實自回歸輸出端的下一個詞機率。
+2. **位置敏感性**：早期在 final position 讀取的診斷 run 幾乎全被 JSON 結構標記主導；改在 evidence item end position 讀取才分離出語義詞彙。
 
-`valence-technology-discovery-20260827T043215Z`
+## 3. 提名的 12 個候選在下游因果測試中表現為何？Shortlist 為空收線
 
-因此 schema v2 將 primary readout 改為兩個 evidence-item end positions。這個變更在
-看到 semantic candidates 前完成，後續 intervention 只使用 schema v2 candidate artifact。
+**後續驗證：** 這 12 個候選詞彙方向直接傳遞至 [Token Causal Screen V1](../jspace-token-experiments/report.md) 進行小劑量 steering 介入測試。實測結果顯示：840 次干預僅產生 1 次固定選擇符號翻轉，無任何詞彙通過預先凍結的一致性門檻，Shortlist 為空收線。詞彙讀出方向無法因果性操縱決策。
 
-## 限制
+## 查證入口
 
-- Readout 只取兩個 evidence item 的 end positions；不做完整 token-position scan
-  （那是 baseline lens-forward 的工作）。
-- Sign consistency 是必要非充分條件：70% ticker、75% layer 與
-  leave-one-ticker-out 門檻只代表 readout 方向有基本穩定性，不保證介入後行為一致；
-  候選 token 仍需在 calibration/test split
-  上做 signed steering/gain/swap 的 causal 驗證。
-- Discovery split 只用於候選提名；calibration/test tickers 不進入本 run
-  （split manifest 決定）。
-- `frozen_candidate_suggestions` 上限 12、contrast top 50、min mean
-  probability 1e-5 都是文件化門檻，改動需要更新本文。
+| 要查什麼 | 原始紀錄與來源 |
+|---|---|
+| 原始提案與 aggregation 契約 | [實驗提案](proposal.md)（V1 discovery）。 |
+| Discovery 執行記錄與產物 | run `valence-technology-evidence-balanced-20260827T043734Z`，位於 `artifacts/qwen3.5-4b/jspace-valence-readout/runs/`；35 科技股，105 對提示詞。 |
+| 下游因果驗證報告 | [J-space token 實驗報告](../jspace-token-experiments/report.md)；[V1 詳細報告](../jspace-token-experiments/details/report-v1.md)。 |
+
+**本次編輯說明：** 本報告按三項核心問題改寫，明確區分表徵讀出提名與下游因果驗證結果；原始協議 `proposal.md` 完整保留。

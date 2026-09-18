@@ -168,8 +168,8 @@ C_{position}=E(\text{sector, evidence})-E(\text{sector, final}).
 
 - [jspace-valence-readout](../jspace-valence-readout/proposal.md)（資料／產物依賴）：共用已固定的 ticker split manifest，不重分 discovery/calibration/test。
 - [span-sensitivity](../span-sensitivity/proposal.md)（資料／產物依賴）：共用 split manifest；以 header 表面替換建立行為基準，不依賴介入成功。
-- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（資料／產物依賴）：V1/V2 沿用 split manifest；各版本保留獨立 config 與 gate。
+- [jspace-token-experiments](../jspace-token-experiments/report.md)（資料／產物依賴）：V1/V2 沿用 split manifest；各版本保留獨立 config 與 gate。
 - [sector-context-followup](../sector-context-followup/proposal.md)（資料／產物依賴）：A/B/C 沿用 Technology 與 Financial Services split manifest。
-- [entity-cell-localization](../entity-cell-localization/proposal.md)（資料／產物依賴）：E1 V1 沿用 split manifest；不是以 sector intervention verdict 為 gate。
+- [entity-cell-localization](../entity-cell-localization/report.md)（資料／產物依賴）：E1 V1 沿用 split manifest；不是以 sector intervention verdict 為 gate。
 
 最終／最新結果見本研究的 [report](report.md)。

@@ -213,8 +213,8 @@ uv run python scripts/evaluate_qwen_lens_candidates.py \
 - [baseline-trial](../baseline-trial/proposal.md)（資料／產物依賴）：逐層 readout 使用 validated canonical lens；不是由 baseline workflow 隱式 fitting。
 - [jspace-sector-intervention](../jspace-sector-intervention/proposal.md)（資料／產物依賴）：產業座標介入使用 canonical lens 的投影。
 - [jspace-valence-readout](../jspace-valence-readout/proposal.md)（資料／產物依賴）：詞彙 transported readout 使用 canonical lens。
-- [jspace-token-experiments](../jspace-token-experiments/proposal.md)（資料／產物依賴）：V1 詞彙方向與 V2 direction decode 等 readout 使用 canonical lens。
+- [jspace-token-experiments](../jspace-token-experiments/report.md)（資料／產物依賴）：V1 詞彙方向與 V2 direction decode 等 readout 使用 canonical lens。
 - [sector-context-followup](../sector-context-followup/proposal.md)（資料／產物依賴）：僅 C 的 L16 transported readout 需要 canonical lens；A/B 是 residual patch。
-- [entity-cell-localization](../entity-cell-localization/proposal.md)（資料／產物依賴）：E4 使用 pinned canonical lens；不把這項要求擴張為 E1 定位的先決條件。
+- [entity-cell-localization](../entity-cell-localization/report.md)（資料／產物依賴）：E4 使用 pinned canonical lens；不把這項要求擴張為 E1 定位的先決條件。
 
 最終／最新結果見本研究的 [report](report.md)。

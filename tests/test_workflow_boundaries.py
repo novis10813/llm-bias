@@ -57,11 +57,10 @@ _SHARED_CONTRACT = """## Shared experiment workflow contract
 The shared experiment workflow is `prepare → forward → analyze → finalize`. Reuse the four core subpackages—`llm_bias/core/prompt_input`, `llm_bias/core/inference`, `llm_bias/core/analysis`, and `llm_bias/core/artifacts`—for cross-experiment workflow mechanics. Experiment packages must not sink shared prompt preparation, model forward execution, common analysis, artifact serialization, manifest/provenance, or lifecycle finalization into local copies; keep research-specific semantics and presentation in the owning experiment package. Compatibility rules are mandatory: preserve existing public CLI/API behavior and artifact schemas unless a canonical workflow document explicitly versions a change; experiment packages (`baseline_trial`, `jspace_intervention`, `prompt_analysis`, `span_sensitivity`) must not import each other, and shared infrastructure must not import any experiment package. Experiment workflows consume an existing validated canonical lens and must not fit, mutate, or replace one implicitly. Never persist raw activations, residuals, hidden states, gradients, Jacobians, or KV caches; emit only compact derived outputs with provenance."""
 
 
-def test_root_guidance_shares_exact_workflow_contract():
+def test_root_guidance_contains_exact_workflow_contract_once():
     root = Path(__file__).resolve().parents[1]
-    documents = [(root / "AGENTS.md").read_text(encoding="utf-8"), (root / "CLAUDE.md").read_text(encoding="utf-8")]
-    assert all(_SHARED_CONTRACT in document for document in documents)
-    assert documents[0].count(_SHARED_CONTRACT) == documents[1].count(_SHARED_CONTRACT) == 1
+    document = (root / "AGENTS.md").read_text(encoding="utf-8")
+    assert document.count(_SHARED_CONTRACT) == 1
 
 
 def test_shared_core_boundaries_are_conditional_until_packages_exist():

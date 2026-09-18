@@ -1,107 +1,43 @@
-# Sector and Context Follow-up B V1: Confirmation Report
+# Sector/Context Follow-up：L16 指令狀態具實體敏感性但未達產業特異（B V1 校準負結果）
 
-## Status
+**狀態：已完成（B V1 校準未通過，`success=false`，held-out test 未執行；A/B/C discovery 完成）。** 模型為 Qwen3.5-4B（bf16）；2026-08-31 完成。原始操作契約與 A/B/C 設計見 [實驗提案](proposal.md)。
 
-B V1 calibration 已完成，verdict 為 `success=false`，`test_authorized=false`。依
-[proposal](proposal.md#b-v1-frozen-confirmation-design) 的 frozen rule，held-out test 未執行。
+**一句話發現：** 在固定負面證據下，跨產業抽換 L16 指令狀態能顯著移動決策 margin（Toward-Source +0.178 nats，勝過 Header 對照），但同產業 peer 控制組的位移更大（|ΔM| = 0.357 > 0.229），未通過產業特異性檢驗，否定產業專屬中介假設。
 
-- Calibration run：
-  `artifacts/qwen3.5-4b/cross-sector-context-overriding/runs/cross-sector-context-calibration-20260831T092659Z`
-- Prepared input：
-  `artifacts/qwen3.5-4b/cross-sector-header-patching/prepared/calibration_pairs_v1.jsonl`
-- Frozen config：
-  `artifacts/qwen3.5-4b/cross-sector-context-overriding/configs/b-v1-confirmation-v1.json`
-- Confirmation artifact：
-  `artifacts/qwen3.5-4b/cross-sector-context-overriding/runs/cross-sector-context-calibration-20260831T092659Z/analyze/confirmation.json`
-- Split：`calibration`
-- Eligible identity pairs：12
-- Model：Qwen3.5-4B（`.cache/models/qwen3.5-4b`）
-- Layers：L14–L21
-- Spans：`instruction_context`、`header`、`final_position`
-- Manifest：`complete`
+## 1. 跨產業置換 L16 指令狀態能否轉移決策傾向且勝過 Header 對照？成立
 
-## Frozen Gate Results
+在固定負面財務證據下，我們將目標公司的 L16 `instruction_context` 殘差狀態替換為另一產業來源公司的對應狀態：
 
-| Gate | Observed | Pass |
-|---|---:|:---:|
-| Minimum eligible pairs | 12 ≥ 8 | Yes |
-| Self-source exact no-op | all ΔM = 0 | Yes |
-| L16 context Toward-Source mean | +0.17805 > 0.10 | Yes |
-| L16 Context–Header contrast | +0.17690 > 0.10 | Yes |
-| Context bootstrap 95% CI lower bound | +0.08417 | Yes |
-| Context–Header bootstrap 95% CI lower bound | +0.06918 | Yes |
-| Cross-sector context \|ΔM\| > same-sector peer context \|ΔM\| | 0.22870 < 0.35662 | **No** |
-| Both evidence-origin strata positive | Technology +0.14159; Financial Services +0.21451 | Yes |
-| Context exact sign-flip test | raw p = 0.00220 | Yes |
-| Context–Header exact sign-flip test | raw p = 0.00488 | Yes |
-| Holm correction across two tests | adjusted p = 0.00439 / 0.00488 | Yes |
+**觀察：**
+- **Toward-Source 效應顯著**：跨產業 L16 context 抽換的 Toward-Source 平均值為 **+0.17805 nats**（95% CI [+0.08417, +0.27129]，Holm 校正後 $p = 0.004395$），穩定將 target margin 往 source clean margin 方向推動。
+- **大幅勝過同層 Header 置換**：L16 Context–Header 對比均值為 **+0.17690 nats**（95% CI [+0.06918, +0.27631]，Holm 校正後 $p = 0.004883$）。
+- **通過 10/11 項門檻**：校準集通過包括最小配對數、No-op 契約、雙向證據分層等 10 項判準。
 
-Calibration 通過 10/11 gates。唯一失敗項目是 same-sector peer specificity。
+**解讀：** 中期層的 Header 狀態已退化為 No-op，而證據之後的指令上下文狀態保留了充分的決策偏好資訊。
 
-## Primary Estimates
+## 2. 該效應是否具備產業特異性（Sector Specificity）？未通過，同產業對照效應更大
 
-### L16 Cross-Sector Context Toward-Source Effect
+**觀察：**
+- **未通過 Same-sector Peer 特異性 Gate**：
+  - 跨產業 L16 context 抽換的絕對位移量 $|\Delta M| = \mathbf{0.22870}$ nats；
+  - 同產業同儕（Same-sector Peer）context 抽換的絕對位移量 $|\Delta M| = \mathbf{0.35662}$ nats。
+- 同產業同儕抽換產生的絕對擾動反而比跨產業替換大 **0.12792 nats**。
 
-- Equal-pair mean：`+0.17805`
-- Pair-bootstrap 95% CI：`[+0.08417, +0.27129]`
-- One-sided exact pair sign-flip p：`0.002197`
-- Holm-adjusted p：`0.004395`
+**解讀：** 依預先凍結規則，Gate 判定為 **FAIL**（`calibration_success = false`，`test_authorized = false`），Held-out 測試依規則未執行。該結果否定了「L16 指令區間存在特定產業專屬表徵通道」的假說，轉而支持更寬泛的公司身分（company-conditioned）敏感度。
 
-在 fixed negative evidence 下，跨產業抽換 L16 `instruction_context` state 仍穩定地把
-target margin 往 source clean margin 移動。效應較 discovery 的 `+0.31806` 小，但通過
-預先凍結的 effect、CI 與統計 gates。
+## 3. 這項結果對模型表徵解剖的意涵為何？支持實體敏感性，否定產業通道
 
-### L16 Context–Header Contrast
+**觀察與限制：**
+1. **實體敏感性成立**：更換指令狀態能顯著移動決策，證明模型在 L16 指令區間保留了公司身分先驗。
+2. **否定產業專屬中介**：同產業同儕替換同樣引發大幅移動，現有 controls 無法將其收窄為產業層級機制。
+3. **充分性測量邊界**：本實驗僅測量固定負面證據下的狀態抽樣充分性，不證明 L16 狀態是唯一或不可或缺的決策成分。
 
-- Equal-pair mean：`+0.17690`
-- Pair-bootstrap 95% CI：`[+0.06918, +0.27631]`
-- One-sided exact pair sign-flip p：`0.004883`
-- Holm-adjusted p：`0.004883`
+## 查證入口
 
-L16 context patching 仍顯著超過同層 header patching。這與 discovery 中「中期 header
-state 已接近 no-op，而 post-evidence context state 保留 decision-relevant sufficiency」
-的 layer/span localization 一致。
+| 要查什麼 | 原始紀錄與來源 |
+|---|---|
+| 原始提案與 A/B/C 操作契約 | [實驗提案](proposal.md)（含 A 跨產業 header、B 負證據 context、C L16 讀出）。 |
+| B V1 校準執行紀錄與產物 | run `cross-sector-context-calibration-20260831T092659Z`，位於 `artifacts/qwen3.5-4b/cross-sector-context-overriding/runs/`；`analyze/confirmation.json`。 |
+| A/B/C Discovery 完整報告 | [Discovery 報告](details/report-discovery.md)（含三臂初步掃描結果）。 |
 
-## Specificity Failure
-
-Calibration 的 equal-pair absolute effects：
-
-- Cross-sector L16 context：`|ΔM| = 0.22870`
-- Same-sector peer L16 context：`|ΔM| = 0.35662`
-
-Same-sector peer context replacement 的 absolute effect 比 cross-sector replacement 大
-`0.12792`。因此 B V1 calibration 不能把 L16 context effect 解讀為 sector-specific
-sufficiency。結果支持 broader identity-conditioned 或 company-conditioned context-state
-sensitivity；現有 controls 無法把它收窄成 sector-conditioned mechanism。
-
-Pair-level 結果也顯示 heterogeneity。一個 pair 的 Toward-Source effect 為負，另有多個
-pairs 的 cross-sector effect 很小，而 same-sector peer replacement 保持較大的 absolute
-perturbation。這不是單一 outlier 造成的 threshold 邊界失敗：aggregate peer control
-明顯高於 cross-sector primary arm。
-
-## Verdict
-
-```text
-calibration_success = false
-test_authorized = false
-formal_success = not_evaluated
-```
-
-依 frozen rule，B V1 held-out test 不執行。B V1 保留以下結論：
-
-1. Discovery 與 calibration 都重現 L16 `instruction_context` 相對 header control 的
-   resample-patching sufficiency。
-2. Calibration 未重現 sector specificity，因 same-sector peer context control 的
-   absolute effect 更大。
-3. 目前證據支持 identity-conditioned context-state sensitivity，不支持 formal
-   sector-conditioned claim。
-
-若後續改變 peer matching、primary specificity contrast、aggregation 或 gate，必須建立
-B V2；不得用 B V1 test split 調整 protocol 後回填本版本。
-
-## Interpretation Limits
-
-本實驗測量 fixed negative evidence 下 residual resample-patching sufficiency。它不證明
-L16 state 必要、不把 L16 稱為唯一 decision computation，也不建立 attention mechanism。
-Calibration failure 不能解讀成 L16 context 沒有效應；它只否定 B V1 預先定義的
-sector-specific confirmation gate。
+**本次編輯說明：** 本報告按三項核心問題改寫，明確記錄校準門檻未過原因與產業特異性否定結論；原始協議 `proposal.md` 完整保留。
