@@ -25,7 +25,7 @@ topic 與 company 同時探索 stability、debt burden、liquidity 三種短句�
 | --- | --- | --- |
 | [Geva et al., Transformer Feed-Forward Layers Are Key-Value Memories](https://arxiv.org/abs/2012.14913) | 前饋層輸入模式及輸出詞彙 | 比較財務短句反應；不能由高激活推斷知識儲存 |
 | [Meng et al., Locating and Editing Factual Associations in GPT](https://arxiv.org/abs/2202.05262) | 事實定位與編輯 | 不執行 ROME，不把事實機制等同評價機制 |
-| [Entity-cell V2](../entity-cell-localization/details/proposal-v2.md) / [V3](../entity-cell-localization/details/proposal-v3.md) | 自然句定位、事實干預 | 重用方法原則，不沿用實體專屬性及事實崩塌 gate |
+| [Entity-cell V2](../../entity-cell-localization/details/proposal-v2.md) / [V3](../../entity-cell-localization/details/proposal-v3.md) | 自然句定位、事實干預 | 重用方法原則，不沿用實體專屬性及事實崩塌 gate |
 
 ## 3. 定位只使用 discovery，驗證句式不能回頭挑候選
 
@@ -58,7 +58,7 @@ Input schema_version=1，protocol_version=exploratory-v1，pairs 為物件陣列
 
 Outputs 位於 artifacts/<model-slug>/financial-soundness-localization/runs/<run-id>/：prepare/prompts.json、prepare/protocol.json、forward/behavior.jsonl、analyze/candidates.json、analyze/summary.json 及 run manifest。候選保存 family/concept/mode、layer/neuron、score、rank、跨 split 統計，不保存完整通道值。protocol 記錄資料 hash、模型檔案 hashes、tokenizer 指紋、程式 identity、layers、top-k、seed。來源 identity 必須供下游驗證。
 
-共用 encoding、forward、scoring、statistics、serialization 與 lifecycle 使用 [core](../shared-experiment-core.md)。禁止保存 raw activations、hidden states、residuals、gradients、Jacobian、KV caches。所有數值必須 finite；缺失統計用 null 與原因。此流程不需要 lens。
+共用 encoding、forward、scoring、statistics、serialization 與 lifecycle 使用 [core](../../shared-experiment-core.md)。禁止保存 raw activations、hidden states、residuals、gradients、Jacobian、KV caches。所有數值必須 finite；缺失統計用 null 與原因。此流程不需要 lens。
 
 ## 6. 退化條件不產生認證結果
 
@@ -72,15 +72,15 @@ formal discovery/calibration/test 仍被禁止：先以真實 tokenizer/model �
 
 ## 7. 新設計不得回填舊版結果
 
-目前是未執行的探索草稿；公司評價干預、Buy/Sell 與真實財報皆不是本輪認證目標。未找到候選也不證明偏好分散。首次 formal run 後凍結協議；prompt family、排名、gate、controls 或 split 改變時，依 [versioning](../documentation-system.md#experiment-versioning) 建立版本索引及 proposal-v1/v2，不覆寫歷史。
+目前是未執行的探索草稿；公司評價干預、Buy/Sell 與真實財報皆不是本輪認證目標。未找到候選也不證明偏好分散。首次 formal run 後凍結協議；prompt family、排名、gate、controls 或 split 改變時，依 [versioning](../../documentation-system.md#experiment-versioning) 建立版本索引及 proposal-v1/v2，不覆寫歷史。
 
 ## 與其他研究的前後關係
 
-此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../../README.md)。
 
 **上游**
 
-- [entity-cell-localization](../entity-cell-localization/report.md)（方法參考）：借用 V2/V3 自然句定位原則，不沿用實體專屬性與事實崩塌 gate。
+- [entity-cell-localization](../../entity-cell-localization/report.md)（方法參考）：借用 V2/V3 自然句定位原則，不沿用實體專屬性與事實崩塌 gate。
 
 **後續**
 

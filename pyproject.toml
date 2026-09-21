@@ -31,7 +31,6 @@ baseline-trial = "llm_bias.baseline_trial.cli:main"
 jspace-intervention = "llm_bias.jspace_intervention.cli:main"
 span-sensitivity = "llm_bias.span_sensitivity.cli:main"
 entity-cell = "llm_bias.entity_cell.cli:main"
-financial-soundness = "llm_bias.financial_soundness.cli:main"
 investment-dial = "llm_bias.investment_dial.cli:main"
 
 [project.optional-dependencies]

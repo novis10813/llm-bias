@@ -1,9 +1,10 @@
 # Archived experiment code
 
-這個目錄保存與 baseline 資料集（`data/baseline/`）無關的實驗程式。Active tree
-（`llm_bias/`）目前保留 baseline 實驗棧 `core`、`prompt_analysis`、
-`baseline_trial`，active experiments `jspace_intervention`、`span_sensitivity`，以及 lens
-infra（`lens_fitting`、`lens_install`、`lens_cli.py`）。
+這個目錄保存已退出 active execution path 的 frozen 實驗程式與其可還原的資料、測試及
+canonical 文件；多數是舊 counterfactual/synthetic/8-K/10-K workflow，另包含
+financial-soundness 探索線。Active tree（`llm_bias/`）保留 shared core、baseline
+workflow、現行實驗與 lens infra；完整 active research navigation 見
+[`../docs/README.md`](../docs/README.md)。
 
 **Frozen：不要在此目錄開發新功能。** 若新的 baseline 實驗需要這裡的實作，
 先評估能否重寫成更小的版本放入 active tree；確需沿用時按下方步驟還原。
@@ -17,6 +18,7 @@ infra（`lens_fitting`、`lens_install`、`lens_cli.py`）。
 | `llm_bias/edgar_preparation/` | `llm_bias/edgar_preparation/` | EDGAR 8-K 清洗（`prepare-edgar-8k` CLI） |
 | `llm_bias/synthetic_entity_bias/` | `llm_bias/synthetic_entity_bias/` | synthetic entity bias 實驗（`synthetic-entity-bias` CLI） |
 | `llm_bias/ten_k_change_data/` | `llm_bias/ten_k_change_data/` | 10-K metadata-change 實驗（`prepare-10k-change-data` CLI） |
+| `archive/llm_bias/financial_soundness/`; `archive/tests/test_financial_soundness.py`; `archive/data/baseline/financial-soundness-localization/`; `docs/archive/financial-soundness-localization/`; `docs/archive/financial-soundness-causal-validation/` | `llm_bias/financial_soundness/`; `tests/test_financial_soundness.py`; `data/baseline/financial-soundness-localization/`; `docs/financial-soundness-localization/`; `docs/financial-soundness-causal-validation/` | Frozen exploratory financial-judgment localization and causal-validation workflow; no certification claim. The package depends on active `llm_bias/core`; its archived test is not in the root pytest suite. |
 | `llm_bias/static/counterfactual.*` | `llm_bias/static/` | counterfactual dashboard frontend |
 | `tests/` | `tests/` | 上述 package 的 20 個 test 檔 |
 | `scripts/` | `scripts/` | `run_synthetic_*.sh`、`build_index_constituents.py` |
@@ -44,6 +46,23 @@ git mv docs/archive/synthetic-entity-bias.md docs/
 ```toml
 synthetic-entity-bias = "llm_bias.synthetic_entity_bias.cli:main"
 ```
+
+還原 financial-soundness workflow 時，必須把完整 execution unit 搬回原位置，再在
+`pyproject.toml` 加回相同的 project script；不要只還原 package：
+
+```bash
+git mv archive/llm_bias/financial_soundness llm_bias/
+git mv archive/tests/test_financial_soundness.py tests/
+git mv archive/data/baseline/financial-soundness-localization data/baseline/
+git mv docs/archive/financial-soundness-localization docs/
+git mv docs/archive/financial-soundness-causal-validation docs/
+```
+
+```toml
+financial-soundness = "llm_bias.financial_soundness.cli:main"
+```
+
+還原後才可執行該 archived test；未還原時它不屬於 root pytest collection。
 
 視情況同步更新 `llm_bias/__main__.py` 的 workflow 清單、
 `tests/test_workflow_boundaries.py` 與 `AGENTS.md`/`README.md`

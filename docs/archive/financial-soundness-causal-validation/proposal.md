@@ -9,7 +9,7 @@
 | 方法來源 | 原始設定 | 本輪適應與限制 |
 | --- | --- | --- |
 | [Meng et al., Locating and Editing Factual Associations in GPT](https://arxiv.org/abs/2202.05262) | 事實關聯的定位、恢復與編輯 | 僅干預已選 MLP 座標，不做權重編輯；財務任務不是單一事實回想 |
-| [Entity-cell V3](../entity-cell-localization/details/proposal-v3.md) | 以事實回想干預驗證候選 | 正確財務答案取代總部等事實，舊 gate 不移植 |
+| [Entity-cell V3](../../entity-cell-localization/details/proposal-v3.md) | 以事實回想干預驗證候選 | 正確財務答案取代總部等事實，舊 gate 不移植 |
 
 「恢復」在本探索版中只指將同題同座標的 clean 值寫回，驗證 hook 可逆及計分一致。這不是獨立的機制證據：在同一位置撤銷抑制本來就應恢復。跨配對替換則提供另一項方向性診斷，但仍不證明概念只存於此座標。
 
@@ -57,7 +57,7 @@ Outputs 位於 artifacts/<model-slug>/financial-soundness-causal-validation/runs
 
 effects 每筆含 schema_version、pair_id、group_id、split、family、answer_mode、member、layer、neuron、control_neuron、condition、scale、clean_margin、margin、correct_margin_delta、transfer_fraction、transfer_reason。所有分數須 finite；不適用欄位為 null。禁止 raw activations、residuals、hidden states、gradients、Jacobian 或 KV cache。manifest 對各 compact 輸出計算 hashes。
 
-shared workflow 為 prepare → forward → analyze → finalize。共用 mechanics 使用 [core](../shared-experiment-core.md)，來源研究語義由 owning package 處理，不 import entity-cell。既有 V1/V2/V3、E3/E4 結果及 schema 不變。
+shared workflow 為 prepare → forward → analyze → finalize。共用 mechanics 使用 [core](../../shared-experiment-core.md)，來源研究語義由 owning package 處理，不 import entity-cell。既有 V1/V2/V3、E3/E4 結果及 schema 不變。
 
 ## 6. 工程通過與科學結論分開
 
@@ -65,11 +65,11 @@ shared workflow 為 prepare → forward → analyze → finalize。共用 mechan
 
 CLI 目前只授權探索，不以 unit tests 代替模型 preflight。研究結論最多是受測座標、提示詞、劑量與位置下的干預效應；沒有作用不證明神經元與財務無關，更不證明偏好分散。公司名稱效應及 Buy/Sell 留待獨立提案。
 
-首次 formal run 後凍結；若更改候選來源、prompt family、primary outcome、位置/劑量、controls 或 gate，依 [versioning](../documentation-system.md#experiment-versioning) 另立版本，不回填。
+首次 formal run 後凍結；若更改候選來源、prompt family、primary outcome、位置/劑量、controls 或 gate，依 [versioning](../../documentation-system.md#experiment-versioning) 另立版本，不回填。
 
 ## 與其他研究的前後關係
 
-此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../README.md)。
+此節為文件導覽，不改動本研究協議。關係定義與全線來源對照見[研究總覽](../../README.md)。
 
 **上游**
 

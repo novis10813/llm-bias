@@ -24,7 +24,7 @@ channel（run `phase2c-gpu-bf16-05`，gate 重評
 10 個 matched controls）。未驗證的問題：**對這些 coordinate 做 additive
 干預，decision margin 是否真的移動，且效果勝過 matched controls？**
 本協議回答這個問題。範式同 [financial-soundness causal
-validation](../financial-soundness-causal-validation/proposal.md) 的
+validation](../../archive/financial-soundness-causal-validation/proposal.md) 的
 candidate-vs-controls 結構；干預語義複用 investment-dial 的
 `mlp_addition`（additive Δ，all token positions，native units）。
 

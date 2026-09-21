@@ -39,6 +39,71 @@ chain-of-thought or discrete reasoning paths.
 - [Artifact identity and run manifest contract](docs/artifact-contract.md)
 - [Research scripts reference](docs/research-scripts.md)
 
+### Research map
+
+The map below groups the 17 active experiments into the three research
+branches used in the [research map table](docs/README.md): shared data and
+instruments, representation nomination to intervention, and the entity
+decision difference line. Node colors: green gate pass or completed, red
+gate fail or null, gray otherwise (line closed, exploratory, or proposed).
+Edges mark major upstream relations only: solid data/artifact dependency,
+dashed research succession or method reference, and thick solid lines mark
+the main convergence axis. The full relationship table with provenance
+stays in [docs/README.md](docs/README.md); the frozen exploratory
+financial-judgment workflow and other archived lines are not shown (see
+[archive/](archive/README.md)). Node names match the experiments linked in
+the sections below.
+
+```mermaid
+flowchart TB
+  classDef ok fill:#e8f5e9,stroke:#2e7d32,color:#1b1b1b
+  classDef neg fill:#ffebee,stroke:#c62828,color:#1b1b1b
+  classDef neutral fill:#eeeeee,stroke:#616161,color:#1b1b1b
+
+  subgraph INSTR["Shared data and instruments"]
+    jls["Jacobian-lens selection<br/>(completed)"]:::ok
+    bt["Baseline trial<br/>(completed per dataset/run)"]:::ok
+    jse["J-space evaluation<br/>(proposed, non-runnable)"]:::neutral
+  end
+
+  subgraph INTERV["Representation nomination to intervention"]
+    jsi["J-space sector intervention<br/>(specificity gates fail)"]:::neg
+    hss["Header-span sensitivity<br/>(V1 discovery)"]:::neutral
+    jvr["J-space valence readout<br/>(12 frozen candidates)"]:::ok
+    jtv1["J-space token V1<br/>(null, empty shortlist)"]:::neg
+    jtv2["J-space token V2<br/>(formal success=false)"]:::neg
+    ap["Activation patching<br/>(success=true)"]:::ok
+    scf["Sector/context follow-up A/B/C<br/>(B calibration fail)"]:::neg
+  end
+
+  subgraph ENTITY["Entity decision difference"]
+    ecell["Entity cell localization<br/>(closed: fact/decision dissociation)"]:::neutral
+    dial["Investment-dial<br/>(closed: gate pass, non-numeric)"]:::neutral
+    beg["Balanced evidence gap<br/>(closed: Phase 3 null 0/3)"]:::neutral
+    e2d["Entity-to-dial<br/>(closed: L15 k=8 subspace)"]:::neutral
+    ei["Evidence-insensitivity<br/>(completed: no generation flips)"]:::neutral
+    sel["Selective intervention<br/>(G1-G2 pass, G3-G4 fail)"]:::neg
+    ecd["Entity concept decision<br/>(closed: rejected, stance readout)"]:::neutral
+  end
+
+  jls --> bt
+  bt --> jsi
+  jsi --> hss
+  jsi --> jvr
+  jsi --> ecell
+  jvr --> jtv1
+  jtv1 -->|version| jtv2
+  jtv2 -.-> ap
+  ap -.-> scf
+  ecell -.-> beg
+  ap -.-> beg
+  beg ==> e2d
+  beg -.-> ei
+  dial --> e2d
+  e2d ==> sel
+  e2d --> ecd
+```
+
 ### Research design and planning
 
 - [Research proposals and planning](docs/proposal/README.md)

@@ -1,7 +1,7 @@
 # `archive/` guidance
 
-本目錄保存 frozen counterfactual、synthetic 與 10-K/8-K code、tests、scripts。不要在
-這裡開發新功能。若 active baseline experiment 需要舊實作，先評估能否在 active tree
+本目錄保存 frozen counterfactual、synthetic、10-K/8-K 與 financial-soundness code、
+tests、scripts。不要在這裡開發新功能。若 active baseline experiment 需要舊實作，先評估能否在 active tree
 重寫成較小、符合 shared workflow contract 的版本；確需沿用時，依
 [`README.md`](README.md) 還原完整 package、tests、scripts、docs 與 entry point。
 

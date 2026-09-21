@@ -4,47 +4,58 @@
 結論限於來源報告的模型、資料與干預條件；「未支持」不等於證明機制不存在，
 「收線」也不等於假說成立。歷史版本留在 `details/`，不必按時間逐篇讀完。
 
-下表涵蓋 18 個研究目錄，J-space token V1、V2 分列；資料流程與尚未執行的提案另組，
-不把工具完成當研究發現。本頁不改動判準或授權 run。
+下表按證據角色整理目前 active research；J-space token V1、V2 分列，資料流程與尚未執行的提案另組，不把工具完成當研究發現。本頁不改動判準或授權 run。
 
 **狀態只表示本列範圍的進度**：規劃中、進行中、已完成、已收線、暫停、待確認。
 「已完成」不代表檢驗通過；更新表格前須遵守 [欄位與狀態定義](documentation-system.md#總覽表格填寫規則)。
 
-## 公司知識、投資立場與證據反應
+## Core evidence for the current paper narrative
+
+這四條線保留正面與 null 結果，構成目前 paper narrative 的核心證據。
 
 | 研究 | 狀態 | 一句話發現 | 查證／執行 |
 |---|---|---|---|
 | Entity Cell（主線） | 已收線 | 壓制單一神經元會損害公司的部分事實、也發現多家公司共用的事實通道，但受測買賣決策未翻轉，不能稱為完全忘記公司。 | [報告](entity-cell-localization/report.md) · [V3 協議](entity-cell-localization/details/proposal-v3.md) |
-| 公司身分的中間概念（探索） | 已收線 | 在受測公司與層中，未找到能與買賣立場分離的公司概念；能預測立場的方向也未展現相應的強干預效果。 | [報告](entity-concept-decision/report.md) · [Phase 1 協議](entity-concept-decision/details/proposal-phase1.md) |
 | Balanced Evidence Gap（Phase 1–3） | 已收線 | 相同多空證據下，換公司名稱會穩定改變買賣傾向，但歸因挑出的三個神經元在干預中都未勝過對照。 | [報告](balanced-evidence-gap/report.md) · [Phase 3 協議](balanced-evidence-gap/details/proposal-phase3.md) |
 | Entity-to-Dial（Phase A–F） | 已收線 | 第 15 層的 8 維狀態差子空間可恢復近乎全部置換效果，但「一個殘差方向加一個 dial 神經元」的可加表示未通過檢驗。 | [報告](entity-to-dial/report.md) · [Phase F 協議](entity-to-dial/details/proposal-phase-f.md) |
-| Investment-dial（方法復現） | 已收線 | 在本模型與任務上，調整單一神經元能連續調節整體買賣立場並達到預設校準目標，完成方法復現，未以複製原論文數值為目標。 | [報告](investment-dial/report.md) · [V2 協議](investment-dial/details/proposal-v2.md) |
-| Selective-intervention V1 / M6-V2 | 已完成 | V1 的 full-strength intervention 因全局與匿名副作用收口為負結果；M6-V2 外部 12 家的 current-runtime spread ratio = 0.6401（95% CI [0.2837, 2.1144]），未確認機制泛化。 | [報告](selective-intervention/report.md) · [V1 協議](selective-intervention/details/proposal-v1.md) · [M6-V2 協議](selective-intervention/details/proposal-m6-v2.md) |
 | Evidence-insensitivity（Phase 1–3） | 已完成 | 雙模型的受測一維狀態未解釋行為分組，最後位置的狀態置換改變買賣分數卻未翻轉生成決策；Gemma Phase 2 僅作帶保留的描述。 | [報告](evidence-insensitivity/report.md) · [Phase 3 協議](evidence-insensitivity/details/proposal-phase3.md) |
-| 財務穩健定位（探索） | 已完成 | 找到跨句式反應方向相近的財務判斷候選神經元，但尚未確認它們專門處理財務概念。 | [報告](financial-soundness-localization/report.md) · [協議](financial-soundness-localization/proposal.md) |
-| 財務穩健因果驗證（探索） | 已完成 | 抑制上述候選的影響與隨機神經元對照相近，本次未支持單一候選具有財務專屬的因果作用。 | [報告](financial-soundness-causal-validation/report.md) · [協議](financial-soundness-causal-validation/proposal.md) |
 
-## 詞彙讀出、產業干預與決策位置
+## Boundary/control evidence
+
+這些保留線限制 single-neuron、entity-concept 與 intervention claim 的解讀，不是核心 paper narrative 的替代證據。
 
 | 研究 | 狀態 | 一句話發現 | 查證／執行 |
 |---|---|---|---|
+| Investment-dial（方法復現） | 已收線 | 在本模型與任務上，調整單一神經元能連續調節整體買賣立場並達到預設校準目標，完成方法復現，未以複製原論文數值為目標。 | [報告](investment-dial/report.md) · [V2 協議](investment-dial/details/proposal-v2.md) |
+| 公司身分的中間概念（探索） | 已收線 | 在受測公司與層中，未找到能與買賣立場分離的公司概念；能預測立場的方向也未展現相應的強干預效果。 | [報告](entity-concept-decision/report.md) · [Phase 1 協議](entity-concept-decision/details/proposal-phase1.md) |
+| Selective-intervention V1 / M6-V2 | 已完成 | V1 的 full-strength intervention 因全局與匿名副作用收口為負結果；M6-V2 外部 12 家的 current-runtime spread ratio = 0.6401（95% CI [0.2837, 2.1144]），未確認機制泛化。 | [報告](selective-intervention/report.md) · [V1 協議](selective-intervention/details/proposal-v1.md) · [M6-V2 協議](selective-intervention/details/proposal-m6-v2.md) |
+
+## Active discovery and localisation controls
+
+這些是 span sensitivity、J-space sector/valence/token、activation-patching、context 線與仍在規劃的 active evaluation；探索或失敗狀態維持原樣。
+
+| 研究 | 狀態 | 一句話發現 | 查證／執行 |
+|---|---|---|---|
+| Header-span sensitivity（探索） | 已完成 | 同產業公司名稱置換比表面亂碼控制更能改變決策，其他匿名化操作則尚不能排除表面文字擾動。 | [報告](span-sensitivity/report.md) · [協議](span-sensitivity/proposal.md) |
 | J-space sector intervention（獨立測試） | 已完成 | 置換產業的 J-space 座標未翻轉受測買賣決策，也未顯示效果專屬於產業方向或證據位置。 | [報告](jspace-sector-intervention/report.md) · [協議](jspace-sector-intervention/proposal.md) |
 | J-space valence readout（科技業探索） | 已完成 | 讀出能區分正負證據的候選詞彙，但這只提供後續干預的候選，尚不能說這些詞彙驅動決策。 | [報告](jspace-valence-readout/report.md) · [協議](jspace-valence-readout/proposal.md) |
-| Header-span sensitivity（探索） | 已完成 | 同產業公司名稱置換比表面亂碼控制更能改變決策，其他匿名化操作則尚不能排除表面文字擾動。 | [報告](span-sensitivity/report.md) · [協議](span-sensitivity/proposal.md) |
 | J-space token **V1**（探索） | 已收線 | 沿候選詞彙方向做小幅干預，沒有任何候選通過預定篩選，未進入後續確認。 | [報告](jspace-token-experiments/details/report-v1.md) · [協議](jspace-token-experiments/details/proposal-v1.md) |
 | J-space token **V2** | 已完成 | 依答案梯度選的方向能把受測 sell 推向 buy，但 sell 方向樣本不足，且最後位置的對照也能翻轉，未建立位置特異性。 | [報告](jspace-token-experiments/report.md) · [協議](jspace-token-experiments/details/proposal-v2.md) |
 | Activation patching（獨立測試） | 已完成 | 能轉移買賣傾向的狀態，隨層數由證據區移到指令區、再到最後位置，且這個位置變化在獨立測試中重現。 | [報告](activation-patching-causal-tracing/report.md) · [協議](activation-patching-causal-tracing/proposal.md) |
 | Sector/context follow-up（B V1 校準） | 已完成 | 固定負面證據下，跨產業換入指令區狀態的效果不比同產業換公司更強，未支持產業專屬的解釋。 | [報告](sector-context-followup/report.md) · [協議](sector-context-followup/proposal.md) |
+| J-space evaluation | 規劃中 | 只有合成任務的 J-space 輔助評估設計，尚無研究結果，也不作為其他實驗的執行門檻。 | [狀態](j-space-evaluation/report.md) · [提案](j-space-evaluation/proposal.md) |
 
-## 共用資料、儀器與未執行提案
+## Shared inputs and instruments
+
+這些是共用輸入與儀器，不呈現為獨立的 entity-bias evidence。
 
 | 研究 | 狀態 | 一句話發現 | 查證／執行 |
 |---|---|---|---|
 | Baseline trial（流程建置） | 已完成 | 已接通共用提示詞分析流程；各階段產物驗證不代表已得到單一偏誤結論。 | [報告](baseline-trial/report.md) · [協議](baseline-trial/proposal.md) |
 | Qwen Jacobian-lens selection（選擇與部署） | 已完成 | 簡體中文校準的 lens 依預設規則獲選，但驗證集尚未顯示它顯著優於英文或混合語言版本。 | [報告](jacobian-lens-selection/report.md) · [協議](jacobian-lens-selection/proposal.md) |
-| J-space evaluation | 規劃中 | 只有合成任務的 J-space 輔助評估設計，尚無研究結果，也不作為其他實驗的執行門檻。 | [狀態](j-space-evaluation/report.md) · [提案](j-space-evaluation/proposal.md) |
 
 跨實驗計畫見 [research program](proposal/README.md)；已凍結的舊工作見 [archive](archive/README.md)。
+[財務判斷 frozen exploratory workflow](archive/financial-soundness-localization/proposal.md) 已移出 active execution tree，包含 [causal validation](archive/financial-soundness-causal-validation/proposal.md)。
 工具與維護入口：[dashboard](interactive-prompt-lens-dashboard.md)、[shared core](shared-experiment-core.md)、
 [scripts reference](research-scripts.md)、[artifact contract](artifact-contract.md)、[文件編排規則](documentation-system.md)。
 
@@ -83,8 +94,6 @@
 | [jacobian-lens-selection](jacobian-lens-selection/proposal.md) → [sector-context-followup](sector-context-followup/proposal.md) | 資料／產物依賴 | 僅 C 的 L16 transported readout 需要 canonical lens；A/B 是 residual patch。 [依據](sector-context-followup/proposal.md) |
 | [jspace-sector-intervention](jspace-sector-intervention/proposal.md) → [entity-cell-localization](entity-cell-localization/report.md) | 資料／產物依賴 | E1 V1 沿用 split manifest；不是以 sector intervention verdict 為 gate。 [依據](entity-cell-localization/details/proposal-v1.md) |
 | [jacobian-lens-selection](jacobian-lens-selection/proposal.md) → [entity-cell-localization](entity-cell-localization/report.md) | 資料／產物依賴 | E4 使用 pinned canonical lens；不把這項要求擴張為 E1 定位的先決條件。 [依據](entity-cell-localization/details/proposal-e4.md) |
-| [entity-cell-localization](entity-cell-localization/report.md) → [financial-soundness-localization](financial-soundness-localization/proposal.md) | 方法參考 | 借用 V2/V3 自然句定位原則，不沿用實體專屬性與事實崩塌 gate。 [依據](financial-soundness-localization/proposal.md) |
-| [financial-soundness-localization](financial-soundness-localization/proposal.md) → [financial-soundness-causal-validation](financial-soundness-causal-validation/proposal.md) | 資料／產物依賴 | 以定位產出的候選座標做獨立干預驗證；不從驗證句式回頭挑候選。 [依據](financial-soundness-causal-validation/proposal.md) |
 | [entity-cell-localization](entity-cell-localization/report.md) → [balanced-evidence-gap](balanced-evidence-gap/report.md) | 研究承接 | 事實失憶但決策不翻轉，促使研究轉向平衡證據下的 entity decision gap。 [依據](balanced-evidence-gap/details/proposal-phase1.md) |
 | [investment-dial](investment-dial/report.md) → [balanced-evidence-gap](balanced-evidence-gap/report.md) | 資料／產物依賴 | 沿用 test split、prompt 格式與 L15/N8490 dial 對照；檢查全域立場調控之外的 entity 差異。 [依據](balanced-evidence-gap/details/proposal-phase1.md) |
 | [activation-patching-causal-tracing](activation-patching-causal-tracing/proposal.md) → [balanced-evidence-gap](balanced-evidence-gap/report.md) | 研究承接 | 明確證據下 header 效應弱，改在多空對稱條件確認 entity 影響。 [依據](balanced-evidence-gap/details/proposal-phase1.md) |
