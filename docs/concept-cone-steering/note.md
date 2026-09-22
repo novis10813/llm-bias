@@ -1,8 +1,8 @@
-# Entity-to-Dial 小型探索：L15 殘差流方向性推注（Steering Probe）
+# Concept Cone Steering：多維表徵推注與決策翻轉探索
 
 **紀錄日期：** 2026-09-22  
 **對象模型：** Qwen3.5-4B（bf16，GPU 1，transformers 5.14.1）  
-**問題：** 凍結的狀態移植（Transplant）受限於成對真實狀態差，無法跨過貪婪解碼的決策門檻（翻轉率為 0）。若改採表徵工程（Representation Steering，如 Arditi et al. 2024 / Wollschläger et al. 2025）的做法，以可調乘數 $\alpha$ 沿著實體高低評分均值差向量推注，能否在貪婪解碼下誘發決策翻轉？又是否具備方向特異性與實體特異性？
+**問題：** 傳統方法依賴單一脆弱神經元（如 Park et al. 2026 的 Investment Dial L15/N8490）或受限於成對真實狀態差（Entity-to-Dial 自然移植，翻轉率為 0）。若改採前沿表徵工程（Representation Steering，Arditi et al. 2024）與圓錐幾何（Concept Cones，Wollschläger et al. 2025）的方法，將 200 家 S&P 500 公司的實體好惡差值升級為多維 Polyhedral Cone 算子，能否在貪婪解碼下穩健翻轉模型的投資決策？又是否具備方向特異性、抗飽和性與跨公司通用性？
 
 ---
 

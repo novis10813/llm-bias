@@ -51,12 +51,12 @@ and two self-source no-ops; it does not create formal graphs or analysis.
 Canonical contract: [Held-out transfer V1](entity-to-dial/details/proposal-heldout-transfer-v1.md).
 Regression coupling: `tests/test_entity_to_dial_heldout_transfer.py`.
 
-### Directional steering exploratory probe
+## Concept Cone steering (Wollschläger et al. 2025 / Arditi et al. 2024 replication)
 
 `scripts/probe_dim_steering.py` owns the exploratory Difference-in-Means (DIM)
 residual steering probe on L15 instruction span, extracting token-wise \(\vec{v}_{\text{DIM}}[p]\)
 from Top/Bottom held-out cohort companies. It evaluates continuous margin modulation and greedy
-generation flips across balanced, pure positive, and pure negative evidence scenarios, with
+generation flips across balanced, pure positive, pure negative, and zero-evidence scenarios, with
 matched-norm random controls and anonymous prompt controls (`--evidence-mode`, `--alphas`,
 `--target-tickers`, `--include-controls`, `--output-json`).
 
@@ -66,7 +66,7 @@ implementing token-wise sector-demeaned contrastive SVD across the 200-company h
 enforces cone sign alignment, and evaluates individual basis rays versus the Cone Centroid across
 multiple held-out companies (`--k-contrast-pairs`, `--k-cone-dim`, `--target-tickers`,
 `--alphas`, `--eval-individual-rays`, `--output-json`).
-Canonical document: [Entity-to-Dial steering note](entity-to-dial/note.md).
+Canonical document: [Concept Cone steering note](concept-cone-steering/note.md).
 
 ## Selective-intervention V1
 
