@@ -14,7 +14,9 @@
   在第 15 層（L15）指令區間（100 tokens），計算逐 token 的均值差：
   $$\vec{v}_{\text{DIM}}[p] = \mu_{\text{Top10}}[p] - \mu_{\text{Bottom10}}[p] \in \mathbb{R}^{2560}, \quad p \in [0, 99]$$
   逐 token 模長範圍為 0.086 至 1.297，平均 0.209。
-- **實作與執行腳本：** `scripts/probe_dim_steering.py`，支援 `--evidence-mode`、`--alphas`、`--target-tickers` 與 `--include-controls`。
+- **實作與執行腳本：**
+  - `scripts/probe_dim_steering.py`：單維 DIM 推注與多種證據情境探索（`--evidence-mode`、`--alphas`、`--target-tickers`、`--include-controls`）。
+  - `scripts/probe_concept_cone.py`：200 家時序切片產業去均值對比 SVD 與 Concept Cone 算子（`--k-contrast-pairs`、`--k-cone-dim`、`--target-tickers`、`--alphas`、`--eval-individual-rays`）。
 - **干預算子：** 在 prefill 階段對 L15 指令區間注入 $h_{15, p} \leftarrow h_{15, p} + \alpha \cdot \vec{v}_{\text{DIM}}[p]$；單 token 解碼步不變。
 - **受測對象：**
   1. 極端 Sell 公司：MO（clean margin −1.967）、CNC（−2.059）、FOXA（−1.867）。

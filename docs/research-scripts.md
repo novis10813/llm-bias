@@ -59,6 +59,13 @@ from Top/Bottom held-out cohort companies. It evaluates continuous margin modula
 generation flips across balanced, pure positive, and pure negative evidence scenarios, with
 matched-norm random controls and anonymous prompt controls (`--evidence-mode`, `--alphas`,
 `--target-tickers`, `--include-controls`, `--output-json`).
+
+`scripts/probe_concept_cone.py` owns the multi-dimensional Concept Cone steering probe,
+implementing token-wise sector-demeaned contrastive SVD across the 200-company held-out cohort
+(Wollschläger et al. 2025 formulation). It extracts orthonormal basis rays \(\mathbf{b}_j[p]\),
+enforces cone sign alignment, and evaluates individual basis rays versus the Cone Centroid across
+multiple held-out companies (`--k-contrast-pairs`, `--k-cone-dim`, `--target-tickers`,
+`--alphas`, `--eval-individual-rays`, `--output-json`).
 Canonical document: [Entity-to-Dial steering note](entity-to-dial/note.md).
 
 ## Selective-intervention V1
