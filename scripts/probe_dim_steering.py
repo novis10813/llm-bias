@@ -41,13 +41,16 @@ NEG_BULLETS = [
 
 
 def render_custom_prompt(ticker: str, name: str, evidence_bullets: Sequence[str]) -> str:
-    """Render a frozen prompt with specific evidence bullets."""
-    evidence_text = "\n".join(f"- {b}" for b in evidence_bullets)
+    """Render a frozen prompt with specific evidence bullets or zero evidence."""
+    if evidence_bullets:
+        evidence_text = "\n".join(f"- {b}" for b in evidence_bullets)
+        evidence_block = f"{EVIDENCE_MARKER}\n\n{evidence_text}\n\n{EVIDENCE_CLOSE[2:]}"
+    else:
+        evidence_block = ""
     return (
-        "Refer to the evidence below to make a final investment decision for the given stock.\n\n"
+        "Make a final investment decision for the given stock.\n\n"
         f"{TICKER_LINE_PREFIX}{ticker}]\n\n{NAME_LINE_PREFIX}{name}]\n\n"
-        f"{EVIDENCE_MARKER}\n\n{evidence_text}\n\n"
-        f"{EVIDENCE_CLOSE[2:]}"
+        f"{evidence_block}"
         "Your final response must be a single, valid JSON object. The JSON object must contain\n"
         "the following two keys:\n\n"
         '"decision": "buy" or "sell"\n\n'
@@ -79,7 +82,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-tickers", nargs="+", default=["MO"], help="Tickers to evaluate")
     parser.add_argument(
         "--evidence-mode",
-        choices=["balanced", "pure_positive_2", "pure_positive_1", "pure_negative_2", "pure_negative_1", "all"],
+        choices=["balanced", "pure_positive_2", "pure_positive_1", "pure_negative_2", "pure_negative_1", "zero_evidence", "all"],
         default="all",
         help="Evidence scenario to test",
     )
@@ -166,12 +169,17 @@ def run_evaluation(
         alpha_list: list[float],
     ) -> list[dict[str, Any]]:
         fmt = format_prompt(tokenizer, prompt_text, use_chat_template=True, enable_thinking=False)
-        c_start, c_end = instruction_char_span(prompt_text)
+        inst_marker = "Your final response must be a single, valid JSON object."
+        if inst_marker not in prompt_text:
+            raise ValueError(f"instruction marker missing in prompt: {prompt_text[:100]}")
+        c_start = prompt_text.find(inst_marker)
+        c_end = len(prompt_text)
         b_start = fmt.find(prompt_text)
         span = token_span(tokenizer, fmt, b_start + c_start, b_start + c_end, add_special_tokens=True)
         ids = tokenizer(fmt, return_tensors="pt").input_ids.to(model.input_device)
         buy_id, sell_id = answer_token_ids(tokenizer, fmt + '{"decision": "')
         start, end = span[0], span[1]
+        assert (end - start) == 100, f"instruction span length {end - start} != 100"
 
         rows = []
         print(f"\n--- {label} ---")
@@ -211,7 +219,7 @@ def run_evaluation(
     for sc_name, bullets in scenarios:
         results["scenarios"][sc_name] = {}
         for ticker in target_tickers:
-            name = company_by_ticker[ticker]["name"]
+            name = company_by_ticker.get(ticker, {}).get("name", ticker)
             p_text = render_custom_prompt(ticker, name, bullets)
             sc_key = f"{ticker}_{sc_name}"
             results["scenarios"][sc_name][ticker] = eval_prompt(
@@ -224,7 +232,7 @@ def run_evaluation(
         if include_controls and target_tickers:
             # Test Random Control on first ticker
             first_ticker = target_tickers[0]
-            name = company_by_ticker[first_ticker]["name"]
+            name = company_by_ticker.get(first_ticker, {}).get("name", first_ticker)
             p_text = render_custom_prompt(first_ticker, name, bullets)
             results["scenarios"][sc_name][f"{first_ticker}_random_control"] = eval_prompt(
                 f"{first_ticker} (Random 1D Control) | {sc_name}",
@@ -259,6 +267,7 @@ def main() -> None:
         ("pure_positive_1", [POS_BULLETS[0]]),
         ("pure_negative_2", NEG_BULLETS),
         ("pure_negative_1", [NEG_BULLETS[1]]),
+        ("zero_evidence", []),
     ]
     if args.evidence_mode != "all":
         scenarios = [s for s in all_scenarios if s[0] == args.evidence_mode]
