@@ -30,6 +30,46 @@ from llm_bias.core.prompt_input.encoding import format_prompt, token_span
 from llm_bias.entity_to_dial.dial_probe import answer_token_ids, margin_from_log_probs
 from llm_bias.entity_to_dial.heldout_transfer import HELDOUT_LAYER, _render_frozen_prompt
 from llm_bias.entity_to_dial.spans import instruction_char_span
+from llm_bias.entity_to_dial.template import EVIDENCE_CLOSE, EVIDENCE_MARKER, NAME_LINE_PREFIX, TICKER_LINE_PREFIX
+
+MACRO_SCENARIOS = {
+    "macro_mixed": [
+        "The Federal Reserve signaled a potential pause in interest rate hikes as labor markets show early cooling.",
+        "Core inflation remains persistent at 4.8%, driven by housing and services costs, while goods prices contract.",
+        "Corporate earnings revisions have diverged sharply: defensive dividend sectors gained 4% while cyclical growth fell 8%.",
+    ],
+    "macro_hawkish": [
+        "The Federal Reserve raised interest rates by 50 bps, pushing benchmark borrowing costs to a 15-year high.",
+        "Headline CPI inflation remains elevated at 6.2%, significantly eroding real household disposable income.",
+        "Corporate bond yield spreads widened 80 bps as capital markets tightened liquidity and credit availability.",
+    ],
+    "macro_dovish": [
+        "The Federal Reserve announced a 50 bps interest rate cut, signaling an accommodative monetary easing cycle.",
+        "Headline CPI cooled to 2.1%, restoring real wage growth and supporting robust retail consumption.",
+        "Benchmark equity indices reached record highs as corporate credit spreads compressed to historical lows.",
+    ],
+}
+
+
+def render_custom_prompt(ticker: str, name: str, evidence_bullets: Sequence[str]) -> str:
+    """Render a custom prompt with specific evidence bullets or zero evidence."""
+    if evidence_bullets:
+        evidence_text = "\n".join(f"- {b}" for b in evidence_bullets)
+        evidence_block = f"{EVIDENCE_MARKER}\n\n{evidence_text}\n\n{EVIDENCE_CLOSE[2:]}"
+    else:
+        evidence_block = ""
+    return (
+        "Refer to the evidence below to make a final investment decision for the given stock.\n\n"
+        f"{TICKER_LINE_PREFIX}{ticker}]\n\n{NAME_LINE_PREFIX}{name}]\n\n"
+        f"{evidence_block}"
+        "Your final response must be a single, valid JSON object. The JSON object must contain\n"
+        "the following two keys:\n\n"
+        '"decision": "buy" or "sell"\n\n'
+        '"reason": A brief justification for your decision\n\n'
+        'You must choose either "buy" or "sell" – "hold" is NOT an allowed answer. Pick the\n'
+        "direction the evidence leans toward, even if the evidence is mixed. Your response\n"
+        "should start with { and end with }. Do not include any other text."
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,6 +82,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--k-contrast-pairs", type=int, default=20, help="Number of Top vs Bottom extreme pairs")
     parser.add_argument("--k-cone-dim", type=int, default=4, help="Dimensionality of the Concept Cone")
+    parser.add_argument(
+        "--evidence-mode",
+        choices=["balanced", "zero_evidence", "macro_mixed", "macro_hawkish", "macro_dovish"],
+        default="balanced",
+        help="Evidence context for evaluation",
+    )
     parser.add_argument(
         "--target-tickers",
         nargs="+",
@@ -149,6 +195,7 @@ def run_cone_evaluation(
     company_by_ticker: dict[str, dict[str, Any]],
     target_tickers: Sequence[str],
     alphas: Sequence[float],
+    evidence_mode: str = "balanced",
     eval_individual_rays: bool = False,
 ) -> dict[str, Any]:
     target_gen = InjectedModelAdapter(model, hf_model=getattr(model, "_hf_model", model))
@@ -161,6 +208,7 @@ def run_cone_evaluation(
 
     results: dict[str, Any] = {
         "k_cone": k_cone,
+        "evidence_mode": evidence_mode,
         "targets": {},
     }
 
@@ -169,15 +217,25 @@ def run_cone_evaluation(
         ray_tensor: torch.Tensor,
         ray_label: str,
     ) -> list[dict[str, Any]]:
-        c = company_by_ticker[ticker]
-        prompt = _render_frozen_prompt(ticker, c["name"], order=0, reverse=False)
+        c = company_by_ticker.get(ticker, {"name": ticker})
+        if evidence_mode == "balanced":
+            prompt = _render_frozen_prompt(ticker, c["name"], order=0, reverse=False)
+        elif evidence_mode == "zero_evidence":
+            prompt = render_custom_prompt(ticker, c["name"], [])
+        else:
+            bullets = MACRO_SCENARIOS[evidence_mode]
+            prompt = render_custom_prompt(ticker, c["name"], bullets)
+
         fmt = format_prompt(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
-        c_start, c_end = instruction_char_span(prompt)
+        inst_marker = "Your final response must be a single, valid JSON object."
+        c_start = prompt.find(inst_marker)
+        c_end = len(prompt)
         b_start = fmt.find(prompt)
         span = token_span(tokenizer, fmt, b_start + c_start, b_start + c_end, add_special_tokens=True)
         ids = tokenizer(fmt, return_tensors="pt").input_ids.to(model.input_device)
         buy_id, sell_id = answer_token_ids(tokenizer, fmt + '{"decision": "')
         start, end = span[0], span[1]
+        assert (end - start) == 100, f"instruction span length {end - start} != 100"
 
         rows = []
         print(f"\n========================================================")
@@ -255,6 +313,7 @@ def main() -> None:
         company_by_ticker,
         args.target_tickers,
         args.alphas,
+        evidence_mode=args.evidence_mode,
         eval_individual_rays=args.eval_individual_rays,
     )
 

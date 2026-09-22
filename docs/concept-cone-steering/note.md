@@ -157,6 +157,31 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 
 - **結論：翻轉成功率 100%（5 / 5）！** 同一套圓錐完全不經個別調整，在所有 5 家跨行業極端 Sell 公司上全部以 $\alpha \in [5.0, 6.0]$ 穩健翻轉為 `buy`，輸出完整合法 JSON，且理由具備高度財務連貫性。
 
+### (10) 總體經濟背景下的基準反轉與語義互補分工（Macro Evidence Inversion & Semantic Complementarity）
+
+將提示詞證據替換為總體經濟背景（聯準會暫停升息、核心通膨 4.8%、防禦高股息板塊漲 4% vs 週期成長板塊跌 8%），檢驗自然基準與 4D Concept Cone 內部各射線（$\alpha=5.0$）的生成行為：
+
+#### A. 自然基準（Clean）的巨集觀大反轉
+
+| 受測對象 | 提示詞總經情境 | Clean Margin ($T=0$) | 自然生成理由摘要 |
+|---|---|---:|---|
+| **MO (Altria, 菸草防禦)** | 混合總經 (防禦漲4% vs 成長跌8%) | **+1.083 (`buy`)** | **"Altria benefits from the shift toward defensive dividend sectors as earnings revisions favor stability over cyclical growth..."** |
+| **MSFT (微軟, 科技成長)** | 混合總經 (防禦漲4% vs 成長跌8%) | **+0.500 (`sell`)** | **"Persistent core inflation at 4.8% suggests the Fed may not pause rate hikes, increasing borrowing costs and pressuring cyclical growth sectors..."** |
+
+- **重大發現：** 模型的實體偏誤並非僵死設定。引入總經脈絡時，模型展現出完整的**總體資產定價邏輯（Macro Asset Pricing）**——主動看多避險高股息（Altria），同時看空受通膨與折現率壓迫的科技成長股（微軟）。
+
+#### B. 圓錐內部各射線（Ray A–E）的語義互補分工實測 ($\alpha = 5.0$)
+
+| 射線設定 | MO Margin (判定) | MO 理由焦點 | MSFT Margin (判定) | MSFT 理由焦點（如何翻轉為 Buy） |
+|---|---:|---|---:|---|
+| **Ray A** (偏重 $b_1$ 主軸) | +2.662 (`buy`) | 聚焦於**商業模式吸引力**（高股息模型契合環境） | +2.635 (`buy`) | 重新包裝為**穩定獲利股**，向防禦板塊靠攏 |
+| **Ray B** (偏重 $b_2$ 互補軸) | +0.947 (`buy`) | 審慎保留，文末加註 *"despite persistent inflation"* | +0.734 (`buy`) | 著重現金流，保留對週期疲弱的警惕 |
+| **Ray C** (偏重 $b_3$ 互補軸) | +2.096 (`buy`) | 引入**固定收益配置策略**（"stable income strategy"） | +1.861 (`buy`) | **自動調取未在 prompt 出現的特異屬性——「雲端成長（cloud growth）」作為抗通膨護城河！** |
+| **Ray D** (偏重 $b_4$ 互補軸) | +2.073 (`buy`) | 主動引入**市場有效定價理論**（"already priced in"） | +1.918 (`buy`) | 著重強大現金流緩衝，不提雲端 |
+| **Ray E** (4D Cone 質心) | +2.359 (`buy`) | 平滑合成各軸，穩健輸出 `buy` | +2.520 (`buy`) | 平滑合成現金流、雲端與抗通膨韌性 |
+
+- **結論：** 徹底坐實命題 2。多維圓錐的不同正交維度並非冗餘，而是**分別調用模型內部不同的投研專業面向**（$b_1$ 定向、$b_2$ 風險邊界、$b_3$ 調取微觀特異性護城河、$b_4$ 評估市場預期充分性）。
+
 ---
 
 ## 3. 邊界與限制（不誇大宣稱）

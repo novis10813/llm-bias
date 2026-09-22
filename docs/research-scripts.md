@@ -64,8 +64,8 @@ matched-norm random controls and anonymous prompt controls (`--evidence-mode`, `
 implementing token-wise sector-demeaned contrastive SVD across the 200-company held-out cohort
 (Wollschläger et al. 2025 formulation). It extracts orthonormal basis rays \(\mathbf{b}_j[p]\),
 enforces cone sign alignment, and evaluates individual basis rays versus the Cone Centroid across
-multiple held-out companies (`--k-contrast-pairs`, `--k-cone-dim`, `--target-tickers`,
-`--alphas`, `--eval-individual-rays`, `--output-json`).
+balanced, zero-evidence, and macroeconomic evidence scenarios (`--evidence-mode`, `--k-contrast-pairs`,
+`--k-cone-dim`, `--target-tickers`, `--alphas`, `--eval-individual-rays`, `--output-json`).
 Canonical document: [Concept Cone steering note](concept-cone-steering/note.md).
 
 ## Selective-intervention V1
