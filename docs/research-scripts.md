@@ -38,6 +38,19 @@ Explanation renderer: `plot_calibration_v2_explained.py` 產出解釋圖（V1 �
 為何失敗、V2 細 grid 恢復什麼、per-target error 對比）；同源 compact artifacts，
 寫入 `docs/assets/investment-dial/calibration_v2_explained.{pdf,png}`。
 
+## Entity-to-Dial held-out transfer V1
+
+`scripts/entity_to_dial_heldout_transfer.py` owns the full-sector
+200-company held-out fixed-margin source→target transplant evaluation for the
+frozen E-01 L15 \(V_8\) basis. Formal run `entity-to-dial-heldout-transfer-v1-01`
+completed 2026-09-22 with both strata `not_supported`. Its formal path consumes the canonical 2024
+S&P 500 CSV, frozen M6 exclusion manifest and E-01 artifact; it neither
+refits the basis nor records raw states. `--smoke` instead runs exactly one
+ticker-sorted pair, one frozen evaluation variant, full/\(V_8\)/random arms
+and two self-source no-ops; it does not create formal graphs or analysis.
+Canonical contract: [Held-out transfer V1](entity-to-dial/details/proposal-heldout-transfer-v1.md).
+Regression coupling: `tests/test_entity_to_dial_heldout_transfer.py`.
+
 ## Selective-intervention V1
 
 `scripts/selective_intervention_v1.py` 執行 L15 k=8 subspace removal 的 V1

@@ -17,7 +17,7 @@
 |---|---|---|---|
 | Entity Cell（主線） | 已收線 | 壓制單一神經元會損害公司的部分事實、也發現多家公司共用的事實通道，但受測買賣決策未翻轉，不能稱為完全忘記公司。 | [報告](entity-cell-localization/report.md) · [V3 協議](entity-cell-localization/details/proposal-v3.md) |
 | Balanced Evidence Gap（Phase 1–3） | 已收線 | 相同多空證據下，換公司名稱會穩定改變買賣傾向，但歸因挑出的三個神經元在干預中都未勝過對照。 | [報告](balanced-evidence-gap/report.md) · [Phase 3 協議](balanced-evidence-gap/details/proposal-phase3.md) |
-| Entity-to-Dial（Phase A–F） | 已收線 | 第 15 層的 8 維狀態差子空間可恢復近乎全部置換效果，但「一個殘差方向加一個 dial 神經元」的可加表示未通過檢驗。 | [報告](entity-to-dial/report.md) · [Phase F 協議](entity-to-dial/details/proposal-phase-f.md) |
+| Entity-to-Dial（Phase A–F；held-out transfer V1） | 已完成 | 第 15 層 $k=8$ 狀態差子空間在 16-company construction set 恢復 98.3% 置換效果；在全 sector 200-company held-out evaluation，sector-within / cross-sector median recovery 為 0.6759 / 0.6596，低於 0.8 target，雖均高於 random-8D control。 | [報告](entity-to-dial/report.md) · [Phase F 協議](entity-to-dial/details/proposal-phase-f.md) · [Held-out V1 協議](entity-to-dial/details/proposal-heldout-transfer-v1.md) |
 | Evidence-insensitivity（Phase 1–3） | 已完成 | 雙模型的受測一維狀態未解釋行為分組，最後位置的狀態置換改變買賣分數卻未翻轉生成決策；Gemma Phase 2 僅作帶保留的描述。 | [報告](evidence-insensitivity/report.md) · [Phase 3 協議](evidence-insensitivity/details/proposal-phase3.md) |
 
 ## Boundary/control evidence
