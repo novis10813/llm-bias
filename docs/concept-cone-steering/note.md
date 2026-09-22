@@ -33,6 +33,13 @@
 
 ### (1) 極端 Sell 公司的決策翻轉（主臂）
 
+> **對應程式碼與函式：** [`scripts/probe_dim_steering.py`](../../scripts/probe_dim_steering.py)（`extract_v_dim`、`eval_prompt`）  
+> **重現命令：**
+> ```bash
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_dim_steering.py \
+>     --evidence-mode balanced --target-tickers MO CNC FOXA --alphas 0.0 2.0 3.0 4.0 5.0
+> ```
+
 | 受測對象 | $\alpha=0.0$（Clean） | $\alpha=2.0$ | $\alpha=3.0$ | $\alpha=4.0$ | $\alpha=5.0$ | 首次翻轉點 | 生成理由摘要（翻轉後） |
 |---|---:|---:|---:|---:|---:|---|---|
 | **MO** | −1.967（sell） | −0.715（sell） | +0.266（sell） | **+1.377（buy）** | +2.167（buy） | $\alpha=4.0$ | 肯定 Q3 營收與自由現金流，蓋過利潤率與財測下修 |
@@ -43,12 +50,26 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 
 ### (2) 隨機方向對照（特異性檢驗）
 
+> **對應程式碼與函式：** [`scripts/probe_dim_steering.py`](../../scripts/probe_dim_steering.py)（`v_rand` matched-norm control block）  
+> **重現命令：**
+> ```bash
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_dim_steering.py \
+>     --evidence-mode balanced --target-tickers MO --alphas 0.0 2.0 4.0 6.0 --include-controls
+> ```
+
 在 MO 上注入相同模長的隨機方向 $\vec{v}_{\text{rand}}$，掃描 $\alpha \in [0.0, 6.0]$：
 - Margin 僅在 −1.967 至 −1.718 間微幅擺動（全幅位移 $< 0.25$ nats）。
 - 貪婪解碼全程 100% 維持 `sell`，零翻轉。
 - **結論：決策翻轉具備高度方向特異性，非隨機殘差擾動所致。**
 
 ### (3) 匿名提示詞對照（實體特異性檢驗）
+
+> **對應程式碼與函式：** [`scripts/probe_dim_steering.py`](../../scripts/probe_dim_steering.py)（`anonymous_control` block）  
+> **重現命令：**
+> ```bash
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_dim_steering.py \
+>     --evidence-mode balanced --target-tickers MO --alphas 0.0 2.0 4.0 6.0 --include-controls
+> ```
 
 在無公司名稱的匿名提示詞施加 $\vec{v}_{\text{DIM}}$：
 - $\alpha=0.0$：Margin −1.788，生成 `sell`。
@@ -57,6 +78,8 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 - **結論：$\vec{v}_{\text{DIM}}$ 同時拉動匿名提示詞，說明該方向本質上是全域立場調控（Global Stance Steering），而非純粹的公司實體識別碼。**
 
 ### (4) 幾何正交約束檢驗（Wollschläger RepInd）
+
+> **對應程式碼與函式：** 參見 [`scripts/probe_dim_steering.py`](../../scripts/probe_dim_steering.py) 延伸檢驗模組（在 $V_8$ 空間評估 $\vec{\Delta}_{\text{MO}}$ 與 $\vec{\Delta}_{\text{Anon}}$ 之餘弦敏感度矩陣，並實施正交投影 $\vec{w}^* \perp \vec{\Delta}_{\text{Anon}}$）。
 
 嘗試在凍結的 $V_8$ 子空間內尋找「只推 MO、不推 Anonymous」的方向：
 - 測量 MO 與 Anonymous 在 $V_8$ 的 8 個基底上的敏感度向量 $\vec{\Delta}_{\text{MO}}$ 與 $\vec{\Delta}_{\text{Anon}}$：
@@ -67,6 +90,13 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
   - 在 $\alpha \ge 12.0$ 下，因脫離自然分佈，模型語言退化（輸出無法解析成合法 JSON）。
 
 ### (5) 證據極性與客觀事實錨定抗衡（Evidence Polarity Probe）
+
+> **對應程式碼與函式：** [`scripts/probe_dim_steering.py`](../../scripts/probe_dim_steering.py)（`render_custom_prompt`，搭配 `POS_BULLETS` 與 `NEG_BULLETS`）  
+> **重現命令：**
+> ```bash
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_dim_steering.py \
+>     --evidence-mode all --target-tickers MO --alphas -4.0 -2.0 -1.0 0.0 2.0 4.0 6.0
+> ```
 
 在 MO 上測試不同強度之單邊客觀證據與 Steering 的拉鋸：
 
@@ -82,6 +112,13 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 
 ### (6) 零財務證據情境（Zero-Evidence / 純公司身分資訊）
 
+> **對應程式碼與函式：** [`scripts/probe_dim_steering.py`](../../scripts/probe_dim_steering.py)（`--evidence-mode zero_evidence`，去除全部證據區塊僅留代號與名稱）  
+> **重現命令：**
+> ```bash
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_dim_steering.py \
+>     --evidence-mode zero_evidence --target-tickers MO MSFT --alphas -4.0 0.0 4.0 6.0
+> ```
+
 去除全部財務證據區塊，僅提供公司代號與名稱（`[TICKER]` 與 `[NAME]`）：
 
 | 受測對象 | Clean 基準判定 | Clean 生成理由摘要 | Steering 干預效果（$\alpha = +6.0$） | 干預後生成理由摘要 |
@@ -95,6 +132,13 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 - **隨機對照依然無效：** MO 的隨機高斯方向在 $\alpha \in [0, 6]$ 下 Margin 維持在 −2.525 至 −2.233，維持 100% Sell。
 
 ### (7) 多維 Concept Cone 與單一 1D 方向飽和對比（Wollschläger Cone 驗證）
+
+> **對應程式碼與函式：** [`scripts/probe_concept_cone.py`](../../scripts/probe_concept_cone.py)（`extract_concept_cone_basis`、`eval_ticker_with_ray`）  
+> **重現命令：**
+> ```bash
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_concept_cone.py \
+>     --target-tickers MO --evidence-mode balanced --alphas 0.0 2.0 4.0 6.0 8.0 10.0 12.0 --eval-individual-rays
+> ```
 
 將 Phase E 凍結的 8 維正交基底 $V_8$ 的 8 個軸按 Buy 方向對齊為 $\mathbf{b}_1, \dots, \mathbf{b}_8$，構成 Buy 概念的 8 維 Polyhedral Cone：$\mathcal{R}_8 = \{ \sum_{i=1}^8 \lambda_i \mathbf{b}_i \mid \lambda_i \ge 0 \}$。在 MO 多空平衡提示詞下比較「單一 1D 基底軸」vs「8D Cone 質心射線（$\vec{w} = \frac{1}{\sqrt{8}}\sum_{i=1}^8 \mathbf{b}_i$）」的推注表現：
 
@@ -111,6 +155,8 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 
 ### (8) 200 家產業去均值與時序對比 SVD（Token-wise Sector-Demeaned Contrastive SVD）
 
+> **對應程式碼與函式：** [`scripts/probe_concept_cone.py`](../../scripts/probe_concept_cone.py)（核心演算法函式 `extract_concept_cone_basis`：執行產業去均值 $\widetilde{h} = h - \mu_{\text{sector}}$、100 tokens 逐切片 SVD 與 Cone 符號對齊）。
+
 為克服 16 家舊基底（平均重疊度僅 0.274）的局部文字雜訊與非監督配對混入的產業語義，實施四大工程改進：
 1. **產業去均值化（Sector Demeaning）：** 針對 200 家中的 Top 20 與 Bottom 20，逐 token 減去其所屬產業均值 $\widetilde{h} = h - \mu_{\text{sector}}$，濾除產業固有語義。
 2. **時序對比 SVD（Slice-wise Contrastive SVD）：** 在 L15 指令區間的 100 個 token 位置上，逐位置分解 Top 20 vs Bottom 20 對比差值張量 $[20, 100, 2560]$，提取各 token 的前 4 個正交基底 $B[p] \in \mathbb{R}^{2560 \times 4}$。
@@ -126,6 +172,18 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 - **軸向角色分工：** 檢驗各軸發現，主成分軸 $b_1$ 在 $\alpha=5.0$ 達到 $+1.640$（單獨翻轉為 `buy`）；$b_2 \sim b_4$ 則編碼了不同公司間的正交偏好差異；4D Cone 質心有效融合了主立場與互補差異軸，實現平滑穩健的跨產業泛化翻轉。
 
 ### (9) Wollschläger 三大核心假說的系統性驗證（Systematic Validation of the 3 Hypotheses）
+
+> **對應程式碼與函式：** [`scripts/probe_concept_cone.py`](../../scripts/probe_concept_cone.py)（`run_cone_evaluation`，支援多公司掃描與個別射線比對）  
+> **重現命令：**
+> ```bash
+> # 命題 1 與 命題 2：MO 上的抗飽和曲線與個別射線對比
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_concept_cone.py \
+>     --target-tickers MO --evidence-mode balanced --alphas 0.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 --eval-individual-rays
+> 
+> # 命題 3：跨 5 家跨行業極端 Sell 公司泛化翻轉
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_concept_cone.py \
+>     --target-tickers MO CNC FOXA TSN BAX --evidence-mode balanced --alphas 0.0 3.0 4.0 5.0 6.0
+> ```
 
 在 200 家 Token-wise 去均值 SVD 構建的 4D Concept Cone 上，針對 Wollschläger et al. (2025) 的三大命題執行端到端實測：
 
@@ -158,6 +216,14 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 - **結論：翻轉成功率 100%（5 / 5）！** 同一套圓錐完全不經個別調整，在所有 5 家跨行業極端 Sell 公司上全部以 $\alpha \in [5.0, 6.0]$ 穩健翻轉為 `buy`，輸出完整合法 JSON，且理由具備高度財務連貫性。
 
 ### (10) 總體經濟背景下的基準反轉與語義互補分工（Macro Evidence Inversion & Semantic Complementarity）
+
+> **對應程式碼與函式：** [`scripts/probe_concept_cone.py`](../../scripts/probe_concept_cone.py)（`--evidence-mode macro_mixed`，搭配 `MACRO_SCENARIOS`）  
+> **重現命令：**
+> ```bash
+> # 混合總經情境下，比對 MO 與 MSFT 在 4D Cone 質心與 4 條基底軸上的語義分工
+> CUDA_VISIBLE_DEVICES=1 uv run python scripts/probe_concept_cone.py \
+>     --evidence-mode macro_mixed --target-tickers MO MSFT --alphas 0.0 5.0 --eval-individual-rays
+> ```
 
 將提示詞證據替換為總體經濟背景（聯準會暫停升息、核心通膨 4.8%、防禦高股息板塊漲 4% vs 週期成長板塊跌 8%），檢驗自然基準與 4D Concept Cone 內部各射線（$\alpha=5.0$）的生成行為：
 
