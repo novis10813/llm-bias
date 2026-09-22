@@ -51,6 +51,16 @@ and two self-source no-ops; it does not create formal graphs or analysis.
 Canonical contract: [Held-out transfer V1](entity-to-dial/details/proposal-heldout-transfer-v1.md).
 Regression coupling: `tests/test_entity_to_dial_heldout_transfer.py`.
 
+### Directional steering exploratory probe
+
+`scripts/probe_dim_steering.py` owns the exploratory Difference-in-Means (DIM)
+residual steering probe on L15 instruction span, extracting token-wise \(\vec{v}_{\text{DIM}}[p]\)
+from Top/Bottom held-out cohort companies. It evaluates continuous margin modulation and greedy
+generation flips across balanced, pure positive, and pure negative evidence scenarios, with
+matched-norm random controls and anonymous prompt controls (`--evidence-mode`, `--alphas`,
+`--target-tickers`, `--include-controls`, `--output-json`).
+Canonical document: [Entity-to-Dial steering note](entity-to-dial/note.md).
+
 ## Selective-intervention V1
 
 `scripts/selective_intervention_v1.py` 執行 L15 k=8 subspace removal 的 V1

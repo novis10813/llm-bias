@@ -14,6 +14,7 @@
   在第 15 層（L15）指令區間（100 tokens），計算逐 token 的均值差：
   $$\vec{v}_{\text{DIM}}[p] = \mu_{\text{Top10}}[p] - \mu_{\text{Bottom10}}[p] \in \mathbb{R}^{2560}, \quad p \in [0, 99]$$
   逐 token 模長範圍為 0.086 至 1.297，平均 0.209。
+- **實作與執行腳本：** `scripts/probe_dim_steering.py`，支援 `--evidence-mode`、`--alphas`、`--target-tickers` 與 `--include-controls`。
 - **干預算子：** 在 prefill 階段對 L15 指令區間注入 $h_{15, p} \leftarrow h_{15, p} + \alpha \cdot \vec{v}_{\text{DIM}}[p]$；單 token 解碼步不變。
 - **受測對象：**
   1. 極端 Sell 公司：MO（clean margin −1.967）、CNC（−2.059）、FOXA（−1.867）。
@@ -62,6 +63,20 @@ Margin 隨 $\alpha$ 呈現嚴格單調遞增；當 Margin 提升至約 +1.3 至 
 - 若以正交投影強制消除匿名敏感度（$\vec{w}^* \perp \vec{\Delta}_{\text{Anon}}$），剩餘有效方差不足 12%：
   - 在 $\alpha \le 8.0$ 下，受非線性影響，匿名 Margin 依然漂移 $+1.0$ nat。
   - 在 $\alpha \ge 12.0$ 下，因脫離自然分佈，模型語言退化（輸出無法解析成合法 JSON）。
+
+### (5) 證據極性與客觀事實錨定抗衡（Evidence Polarity Probe）
+
+在 MO 上測試不同強度之單邊客觀證據與 Steering 的拉鋸：
+
+| 證據情境 | 客觀證據內容 | Clean 基準判定 | Steering 干預效果 | 翻轉門檻 | 翻轉後模型的真實理由 |
+|---|---|---|---|---|---|
+| **純利多 (2 條)** | 營收成長 14% + 自由現金流創高 | **`buy`**（Margin +0.870） | 負向推注 $\alpha < 0$<br>$\alpha=-1.0 \to M=+0.021$<br>$\alpha=-4.0 \to M=-1.789$ | **$\alpha = -1.0$<br>(輕推即翻)** | **`sell`**："Altria 股價歷史上落後大盤，且核心菸草業務面臨長期逆風，短期獲利不足以支持買入。" |
+| **微利多 (1 條)** | 僅營收成長 14% | **`sell`**（Margin −0.140） | 負向推注 $\alpha < 0$<br>$\alpha=-1.0 \to M=-0.899$<br>$\alpha=-4.0 \to M=-2.212$ | 無需翻轉<br>(Clean 即為 Sell) | **`sell`**："營收成長雖好，但單一季度不足以扭轉菸草成熟市場的監管風險。" |
+| **微利空 (1 條)** | 僅財測下修 6% | **`sell`**（Margin −2.712） | 正向推注 $\alpha > 0$<br>$\alpha=+4.0 \to M=-0.110$<br>$\alpha=+6.0 \to M=+1.511$ | **$\alpha = +6.0$<br>(重推才翻)** | **`buy`**："Altria 是一家成熟、現金充沛的防禦型公司，高股息殖利率足以彌補 6% 的溫和財測下調。" |
+| **純利空 (2 條)** | 毛利縮 300bps + 財測下修 6% | **`sell`**（Margin −3.007） | 正向推注 $\alpha > 0$<br>$\alpha=+4.0 \to M=-1.203$<br>$\alpha=+6.0 \to M=+0.813$ | $\alpha > 6.0$<br>(Margin 轉正但**決策未翻**) | **`sell`**：即使 Margin 被強推近 4 nats，模型依然死守兩項硬性財務利空，文字解碼拒絕翻轉為 Buy。 |
+
+- **多空不對稱性：** 覆蓋利多（Buy $\to$ Sell）極易（$\alpha=-1.0$），覆蓋利空（Sell $\to$ Buy）極難（需要 $\alpha=+6.0$ 甚至無法翻轉）。
+- **合理化機制：** 模型被迫翻轉時未捏造假數據，而是調取公司外部屬性（如「防禦型高股息」或「菸草長期逆風」）合理化新決策。
 
 ---
 
