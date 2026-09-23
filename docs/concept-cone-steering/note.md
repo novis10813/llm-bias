@@ -17,6 +17,7 @@
 - **實作與執行腳本：**
   - `scripts/probe_dim_steering.py`：單維 DIM 推注與多種證據情境探索（`--evidence-mode`、`--alphas`、`--target-tickers`、`--include-controls`）。
   - `scripts/probe_concept_cone.py`：200 家時序切片產業去均值對比 SVD 與 Concept Cone 算子（`--k-contrast-pairs`、`--k-cone-dim`、`--target-tickers`、`--alphas`、`--eval-individual-rays`）。
+- **模板版本註記（2026-09-22 補）：** `probe_dim_steering.py` 的 custom renderer 首行於同日 14:42（commit 1fa5dbf）由 "Refer to the evidence below to make a final investment decision..."（與 frozen 模板逐字相同）改為 "Make a final investment decision..."。§2(1)–(3) 的 balanced／random／anonymous 數字產自舊首行（即 frozen 模板下可重現）；§2(5)–(6) 的 scenario 數字產自新首行。兩者基線不可互相比對；論文以 frozen 模板為 balanced 條件的標準。
 - **干預算子：** 在 prefill 階段對 L15 指令區間注入 $h_{15, p} \leftarrow h_{15, p} + \alpha \cdot \vec{v}_{\text{DIM}}[p]$；單 token 解碼步不變。
 - **受測對象：**
   1. 極端 Sell 公司：MO（clean margin −1.967）、CNC（−2.059）、FOXA（−1.867）。

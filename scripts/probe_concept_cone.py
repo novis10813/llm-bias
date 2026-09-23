@@ -12,9 +12,12 @@ Outputs compact derived summaries and generation decisions. No raw activations a
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+import subprocess
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -107,6 +110,41 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Also evaluate each basis ray individually on the first target ticker",
     )
+    parser.add_argument(
+        "--leave-out-sector",
+        default=None,
+        help="Exclude this sector from the contrast construction set (leave-one-sector-out)",
+    )
+    parser.add_argument(
+        "--inject-layer",
+        type=int,
+        default=None,
+        help="Layer for the residual intervention (default: heldout layer 15)",
+    )
+    parser.add_argument(
+        "--measure-stance-cosine",
+        action="store_true",
+        default=False,
+        help="Compute per-token cosine between cone axis b1 and the Top/Bottom difference-in-means direction",
+    )
+    parser.add_argument(
+        "--centroid-dims",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Evaluate centroids of the first j axes (dimension ablation; each must be <= k-cone-dim)",
+    )
+    parser.add_argument(
+        "--persist-directions",
+        default=None,
+        help="Directory to persist the cone basis as a compact derived operator with provenance",
+    )
+    parser.add_argument(
+        "--skip-eval",
+        action="store_true",
+        default=False,
+        help="Extract only (no evaluation); used for cosine measurement / persistence runs",
+    )
     parser.add_argument("--output-json", default=None, help="Optional path to write compact derived results")
     return parser.parse_args()
 
@@ -117,7 +155,14 @@ def extract_concept_cone_basis(
     heldout_root: Path,
     k_pairs: int = 20,
     k_cone: int = 4,
-) -> tuple[torch.Tensor, dict[str, dict[str, Any]]]:
+    exclude_sector: str | None = None,
+) -> tuple[
+    torch.Tensor,
+    dict[str, dict[str, Any]],
+    dict[str, torch.Tensor],
+    list[str],
+    list[str],
+]:
     """Extract slice-wise sector-demeaned contrastive SVD basis [100, 2560, k_cone]."""
     cohort_manifest = json.loads((heldout_root / "prepare/cohort_manifest.json").read_text(encoding="utf-8"))
     records = [
@@ -133,6 +178,11 @@ def extract_concept_cone_basis(
         ticker_margins[r["target_ticker"]] = r["target_margin"]
         ticker_margins[r["source_ticker"]] = r["source_margin"]
     ranked_tickers = sorted(ticker_margins.items(), key=lambda x: x[1])
+    if exclude_sector:
+        ranked_tickers = [
+            (t, m) for t, m in ranked_tickers if company_by_ticker[t]["sector"] != exclude_sector
+        ]
+        print(f"Leave-one-sector-out: excluded sector '{exclude_sector}', {len(ranked_tickers)} companies remain")
 
     top_tickers = [t for t, _ in ranked_tickers[-k_pairs:]]
     bottom_tickers = [t for t, _ in ranked_tickers[:k_pairs]]
@@ -185,7 +235,70 @@ def extract_concept_cone_basis(
             sign_j = 1.0 if cos_j >= 0 else -1.0
             cone_bases[p, :, j] = (sign_j * Vk_p[:, j]).to(model.input_device)
 
-    return cone_bases, company_by_ticker
+    return cone_bases, company_by_ticker, states, top_tickers, bottom_tickers
+
+
+def compute_stance_cosine(
+    states: dict[str, torch.Tensor],
+    top_tickers: list[str],
+    bottom_tickers: list[str],
+    cone_bases: torch.Tensor,
+    k: int = 10,
+) -> dict[str, Any]:
+    """Per-token cosine between cone axis b1 and the non-demeaned Top/Bottom difference-in-means direction."""
+    top_k = top_tickers[-k:]
+    bot_k = bottom_tickers[:k]
+    v_dim = torch.stack([states[t] for t in top_k], dim=0).mean(dim=0) - torch.stack(
+        [states[t] for t in bot_k], dim=0
+    ).mean(dim=0)
+    b1 = cone_bases[..., 0]
+    cos = (b1 * v_dim).sum(dim=-1) / (b1.norm(dim=-1) * v_dim.norm(dim=-1)).clamp_min(1e-8)
+    cos_list = [float(x) for x in cos.cpu().tolist()]
+    return {
+        "k_reference": k,
+        "top_reference": top_k,
+        "bottom_reference": bot_k,
+        "cos_mean": sum(cos_list) / len(cos_list),
+        "cos_median": sorted(cos_list)[len(cos_list) // 2],
+        "cos_min": min(cos_list),
+        "cos_max": max(cos_list),
+        "cos_per_token": cos_list,
+    }
+
+
+def persist_cone_basis(
+    cone_bases: torch.Tensor,
+    centroid: torch.Tensor,
+    out_dir: str,
+    meta: dict[str, Any],
+) -> Path:
+    """Persist cone basis + centroid (compact derived steering operator) with provenance. No raw activations."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    tensor_path = out / "cone.pt"
+    payload = {
+        "cone_bases": cone_bases.detach().to(torch.bfloat16).cpu(),
+        "centroid": centroid.detach().to(torch.bfloat16).cpu(),
+    }
+    torch.save(payload, tensor_path)
+    prov = {
+        "kind": "concept_cone_basis",
+        "shape": list(cone_bases.shape),
+        "dtype_stored": "bfloat16",
+        "tensor_sha256": hashlib.sha256(tensor_path.read_bytes()).hexdigest(),
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "git_commit": meta.get("git_commit"),
+        "script": "scripts/probe_concept_cone.py",
+        "model": meta.get("model"),
+        "heldout_run": meta.get("heldout_run"),
+        "k_contrast_pairs": meta.get("k_contrast_pairs"),
+        "k_cone": meta.get("k_cone"),
+        "leave_out_sector": meta.get("leave_out_sector"),
+        "torch_version": torch.__version__,
+        "stance_cosine": meta.get("stance_cosine"),
+    }
+    (out / "provenance.json").write_text(json.dumps(prov, indent=2, ensure_ascii=False), encoding="utf-8")
+    return tensor_path
 
 
 def run_cone_evaluation(
@@ -197,17 +310,33 @@ def run_cone_evaluation(
     alphas: Sequence[float],
     evidence_mode: str = "balanced",
     eval_individual_rays: bool = False,
+    inject_layer: int | None = None,
+    centroid_dims: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     target_gen = InjectedModelAdapter(model, hf_model=getattr(model, "_hf_model", model))
     gen_config = GenerationConfig(max_new_tokens=48, temperature=0.0)
     final_layer = model.n_layers - 1
     k_cone = cone_bases.shape[-1]
+    inject_layer = inject_layer if inject_layer is not None else HELDOUT_LAYER
 
-    # Concept Cone Centroid across tokens
-    w_cone = cone_bases.sum(dim=-1) / (float(k_cone) ** 0.5)
+    # Cone centroid ray(s): full centroid by default, or first-j centroids for the dimension ablation
+    rays: dict[str, torch.Tensor] = {}
+    if centroid_dims:
+        for j in centroid_dims:
+            if not 1 <= j <= k_cone:
+                raise ValueError(f"centroid dim {j} out of range [1, {k_cone}]")
+            rays[f"centroid_dim{j}"] = cone_bases[..., :j].sum(dim=-1) / (float(j) ** 0.5)
+    else:
+        rays["cone_centroid"] = cone_bases.sum(dim=-1) / (float(k_cone) ** 0.5)
+
+    def ray_label(name: str) -> str:
+        if name == "cone_centroid":
+            return f"{k_cone}D Concept Cone Centroid"
+        return f"Cone Centroid first-{name.rsplit('dim', 1)[1]} axes"
 
     results: dict[str, Any] = {
         "k_cone": k_cone,
+        "inject_layer": inject_layer,
         "evidence_mode": evidence_mode,
         "targets": {},
     }
@@ -250,7 +379,7 @@ def run_cone_evaluation(
                 out[:, start:end, :] = out[:, start:end, :] + shift.unsqueeze(0)
                 return out
 
-            interventions = {HELDOUT_LAYER: transform} if a != 0.0 else None
+            interventions = {inject_layer: transform} if a != 0.0 else None
             if interventions:
                 with residual_interventions(model, interventions):
                     res = record_residuals(model, ids, [final_layer])[final_layer]
@@ -274,10 +403,10 @@ def run_cone_evaluation(
             })
         return rows
 
-    # Evaluate Cone Centroid across all target tickers
+    # Evaluate cone centroid ray(s) across all target tickers
     for ticker in target_tickers:
         results["targets"][ticker] = {
-            "cone_centroid": eval_ticker_with_ray(ticker, w_cone, f"{k_cone}D Concept Cone Centroid"),
+            ray_name: eval_ticker_with_ray(ticker, ray, ray_label(ray_name)) for ray_name, ray in rays.items()
         }
 
     # Optionally evaluate individual rays on first ticker
@@ -298,24 +427,75 @@ def main() -> None:
     print(f"Loading model from {args.model}...")
     model, tokenizer, _ = load_model(args.model, dtype=None)
 
-    cone_bases, company_by_ticker = extract_concept_cone_basis(
+    heldout_root = Path(args.heldout_run)
+    cone_bases, company_by_ticker, states, top_tickers, bottom_tickers = extract_concept_cone_basis(
         model,
         tokenizer,
-        Path(args.heldout_run),
+        heldout_root,
         k_pairs=args.k_contrast_pairs,
         k_cone=args.k_cone_dim,
+        exclude_sector=args.leave_out_sector,
     )
 
-    results = run_cone_evaluation(
-        model,
-        tokenizer,
-        cone_bases,
-        company_by_ticker,
-        args.target_tickers,
-        args.alphas,
-        evidence_mode=args.evidence_mode,
-        eval_individual_rays=args.eval_individual_rays,
-    )
+    results: dict[str, Any] = {}
+
+    if args.measure_stance_cosine:
+        cosine = compute_stance_cosine(states, top_tickers, bottom_tickers, cone_bases)
+        results["stance_cosine"] = cosine
+        print(
+            f"\nStance cosine b1 vs v_DIM (k={cosine['k_reference']}): "
+            f"mean={cosine['cos_mean']:.4f} median={cosine['cos_median']:.4f} "
+            f"min={cosine['cos_min']:.4f} max={cosine['cos_max']:.4f}"
+        )
+
+    if args.persist_directions:
+        try:
+            git_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+            ).stdout.strip()
+        except Exception:
+            git_commit = None
+        w_full = cone_bases.sum(dim=-1) / (float(args.k_cone_dim) ** 0.5)
+        persist_cone_basis(
+            cone_bases,
+            w_full,
+            args.persist_directions,
+            {
+                "git_commit": git_commit,
+                "model": args.model,
+                "heldout_run": args.heldout_run,
+                "k_contrast_pairs": args.k_contrast_pairs,
+                "k_cone": args.k_cone_dim,
+                "leave_out_sector": args.leave_out_sector,
+                "stance_cosine": results.get("stance_cosine"),
+            },
+        )
+        print(f"Persisted cone basis to {args.persist_directions}")
+
+    target_tickers = args.target_tickers
+    if target_tickers == ["all"]:
+        manifest = json.loads((heldout_root / "prepare/cohort_manifest.json").read_text(encoding="utf-8"))
+        target_tickers = [c["ticker"] for c in manifest["companies"]]
+        print(f"Expanding --target-tickers all to {len(target_tickers)} cohort tickers")
+
+    if args.skip_eval:
+        results.update({"k_cone": args.k_cone_dim, "evidence_mode": args.evidence_mode, "targets": {}})
+        print("Skipping evaluation (--skip-eval)")
+    else:
+        results.update(
+            run_cone_evaluation(
+                model,
+                tokenizer,
+                cone_bases,
+                company_by_ticker,
+                target_tickers,
+                args.alphas,
+                evidence_mode=args.evidence_mode,
+                eval_individual_rays=args.eval_individual_rays,
+                inject_layer=args.inject_layer,
+                centroid_dims=args.centroid_dims,
+            )
+        )
 
     if args.output_json:
         out_path = Path(args.output_json)

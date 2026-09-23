@@ -9,9 +9,11 @@ Outputs compact derived summaries and generation decisions. No raw activations a
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -87,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         help="Evidence scenario to test",
     )
     parser.add_argument(
+        "--prompt-style",
+        choices=["custom", "frozen"],
+        default="custom",
+        help="Renderer for the balanced scenario (frozen = canonical entity-to-dial template)",
+    )
+    parser.add_argument(
         "--alphas",
         nargs="+",
         type=float,
@@ -94,6 +102,25 @@ def parse_args() -> argparse.Namespace:
         help="Alpha multiplier sweep",
     )
     parser.add_argument("--include-controls", action="store_true", default=True, help="Include random & anon controls")
+    parser.add_argument(
+        "--rand-seeds",
+        nargs="+",
+        type=int,
+        default=[42],
+        help="Seeds for matched-norm random direction controls (one vector per seed)",
+    )
+    parser.add_argument(
+        "--rand-alphas",
+        nargs="+",
+        type=float,
+        default=[0.0, 2.0, 4.0, 6.0],
+        help="Alpha sweep used for random direction controls",
+    )
+    parser.add_argument(
+        "--persist-directions",
+        default=None,
+        help="Directory to persist v_DIM as a compact derived operator with provenance",
+    )
     parser.add_argument("--output-json", default=None, help="Optional path to write compact derived results")
     return parser.parse_args()
 
@@ -137,6 +164,35 @@ def extract_v_dim(
     return v_dim, company_by_ticker
 
 
+def persist_v_dim(
+    v_dim: torch.Tensor,
+    out_dir: str,
+    meta: dict[str, Any],
+) -> Path:
+    """Persist v_DIM (compact derived steering operator) with provenance. No raw activations."""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    tensor_path = out / "v_dim.pt"
+    tensor = v_dim.detach().to(torch.bfloat16).cpu()
+    torch.save(tensor, tensor_path)
+    prov = {
+        "kind": "v_dim",
+        "shape": list(v_dim.shape),
+        "dtype_stored": "bfloat16",
+        "tensor_sha256": hashlib.sha256(tensor_path.read_bytes()).hexdigest(),
+        "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "git_commit": meta.get("git_commit"),
+        "script": "scripts/probe_dim_steering.py",
+        "model": meta.get("model"),
+        "heldout_run": meta.get("heldout_run"),
+        "k_top_bottom": meta.get("k_top_bottom"),
+        "layer": meta.get("layer"),
+        "torch_version": torch.__version__,
+    }
+    (out / "provenance.json").write_text(json.dumps(prov, indent=2, ensure_ascii=False), encoding="utf-8")
+    return tensor_path
+
+
 def run_evaluation(
     model: Any,
     tokenizer: Any,
@@ -146,16 +202,24 @@ def run_evaluation(
     scenarios: list[tuple[str, list[str]]],
     alphas: list[float],
     include_controls: bool = True,
+    rand_seeds: list[int] | None = None,
+    rand_alphas: list[float] | None = None,
+    prompt_style: str = "custom",
 ) -> dict[str, Any]:
+    rand_seeds = rand_seeds if rand_seeds is not None else [42]
+    rand_alphas = rand_alphas if rand_alphas is not None else [0.0, 2.0, 4.0, 6.0]
     target_gen = InjectedModelAdapter(model, hf_model=getattr(model, "_hf_model", model))
     gen_config = GenerationConfig(max_new_tokens=48, temperature=0.0)
     final_layer = model.n_layers - 1
 
-    # Matched-norm random vector control
-    torch.manual_seed(42)
-    v_rand = torch.randn_like(v_dim)
-    for p in range(v_dim.shape[0]):
-        v_rand[p] = (v_rand[p] / v_rand[p].norm()) * v_dim[p].norm()
+    # Matched-norm random vector controls: one independent direction per seed
+    v_rand_list: list[tuple[int, torch.Tensor]] = []
+    for seed in rand_seeds:
+        gen = torch.Generator(device=v_dim.device).manual_seed(seed)
+        v_rand = torch.randn(v_dim.shape, generator=gen, device=v_dim.device, dtype=v_dim.dtype)
+        for p in range(v_dim.shape[0]):
+            v_rand[p] = (v_rand[p] / v_rand[p].norm()) * v_dim[p].norm()
+        v_rand_list.append((seed, v_rand))
 
     results: dict[str, Any] = {
         "v_dim_norm_per_token_mean": float(v_dim.norm(dim=-1).mean().item()),
@@ -216,11 +280,16 @@ def run_evaluation(
             })
         return rows
 
+    def render_prompt(sc_name: str, ticker: str, name: str, bullets: Sequence[str]) -> str:
+        if sc_name == "balanced" and prompt_style == "frozen":
+            return _render_frozen_prompt(ticker, name, order=0, reverse=False)
+        return render_custom_prompt(ticker, name, bullets)
+
     for sc_name, bullets in scenarios:
         results["scenarios"][sc_name] = {}
         for ticker in target_tickers:
             name = company_by_ticker.get(ticker, {}).get("name", ticker)
-            p_text = render_custom_prompt(ticker, name, bullets)
+            p_text = render_prompt(sc_name, ticker, name, bullets)
             sc_key = f"{ticker}_{sc_name}"
             results["scenarios"][sc_name][ticker] = eval_prompt(
                 f"{ticker} ({name}) | {sc_name}",
@@ -230,16 +299,17 @@ def run_evaluation(
             )
 
         if include_controls and target_tickers:
-            # Test Random Control on first ticker
+            # Test Random Controls on first ticker (one arm per seed)
             first_ticker = target_tickers[0]
             name = company_by_ticker.get(first_ticker, {}).get("name", first_ticker)
-            p_text = render_custom_prompt(first_ticker, name, bullets)
-            results["scenarios"][sc_name][f"{first_ticker}_random_control"] = eval_prompt(
-                f"{first_ticker} (Random 1D Control) | {sc_name}",
-                p_text,
-                v_rand,
-                [0.0, 2.0, 4.0, 6.0],
-            )
+            p_text = render_prompt(sc_name, first_ticker, name, bullets)
+            for seed, v_rand in v_rand_list:
+                results["scenarios"][sc_name][f"{first_ticker}_random_control_seed{seed}"] = eval_prompt(
+                    f"{first_ticker} (Random 1D Control seed={seed}) | {sc_name}",
+                    p_text,
+                    v_rand,
+                    rand_alphas,
+                )
 
             # Test Anonymous prompt
             anon_p = anonymous_prompt(p_text, first_ticker, name)
@@ -283,7 +353,32 @@ def main() -> None:
         scenarios,
         args.alphas,
         include_controls=args.include_controls,
+        rand_seeds=args.rand_seeds,
+        rand_alphas=args.rand_alphas,
+        prompt_style=args.prompt_style,
     )
+
+    if args.persist_directions:
+        import subprocess
+
+        try:
+            git_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+            ).stdout.strip()
+        except Exception:
+            git_commit = None
+        persist_v_dim(
+            v_dim,
+            args.persist_directions,
+            {
+                "git_commit": git_commit,
+                "model": args.model,
+                "heldout_run": args.heldout_run,
+                "k_top_bottom": args.k_top_bottom,
+                "layer": HELDOUT_LAYER,
+            },
+        )
+        print(f"Persisted v_DIM to {args.persist_directions}")
 
     if args.output_json:
         out_path = Path(args.output_json)
