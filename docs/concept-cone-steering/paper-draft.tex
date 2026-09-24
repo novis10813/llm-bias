@@ -101,28 +101,58 @@ decisions.
 
 \subsection{Entity-Conditioned Investment Decisions}
 
-A growing body of work documents that language-model outputs can depend on entity identity even when
-the surrounding task is held fixed. In financial settings, this motivates careful separation between
-entity-conditioned behavior and the internal mechanisms used to control a decision. We use this
-phenomenon as the motivation for the steering problem; we do not treat the present study as a
-localization or debiasing account of entity-specific factual memory.
+In the protocol studied here, the financial evidence and the decision format are held fixed while
+the named company varies, and the model's buy/sell output still varies with the company. This
+entity-conditioned behavior is the motivation for the steering problem, not the object of the
+study: we do not attempt to localize the origin of the company-specific difference, and we do not
+claim to remove it. The closest prior work, \citet{park2026dial}, addresses the same behavior from
+the control side, showing that a scalar intervention on a single neuron continuously adjusts an
+LLM's aggregate buy/sell prior, which they term an investment dial. Their dial shifts the overall
+stance without targeting specific firms or attributes; it is not compared against multi-dimensional
+residual operators, and the intervention site is not derived from a span-level analysis of where a
+fixed answer-token readout is steered. We build on this control-side view to ask where steering of
+an investment decision is accessible, how single-neuron, one-dimensional, and multi-dimensional
+operators compare at that site, and how reliably internal readout movement becomes a generated
+decision change.
 
 \subsection{Inference-Time Representation Steering}
 
-Our intervention design is related to methods that modify hidden representations during inference
-without updating model weights. Refusal removal and refusal steering provide a methodological
-precedent for testing whether a behavioral tendency can be controlled through a residual-space
-direction. Other work studies whether a concept is adequately represented by a single direction or
-requires a multi-dimensional subspace. We transfer these ideas to investment stance and evaluate
-both internal readout movement and complete generated decisions.
+Our operators belong to the family of inference-time interventions that modify residual
+representations during the forward pass without updating model weights. \citet{turner2023actadd}
+introduce activation addition, which contrasts the intermediate activations of a prompt pair to
+form a steering vector; \citet{zou2023rep} develop representation engineering, which monitors and
+manipulates high-level model tendencies through population-level representation differences; and
+\citet{panickssery2024caa} formulate contrastive activation addition, which averages residual-stream
+differences over pairs of positive and negative examples. These methods establish that a single
+difference-in-means direction can reliably shift aggregate behavior along a targeted axis.
+
+The closest methodological precedent is steering of safety refusal. \citet{arditi2024refusal} show
+that adding or ablating a single refusal direction in the residual stream bidirectionally controls
+whether a model refuses a request, and evaluate the effect on generated responses. \citet{wollschlager2025cones}
+complicate this single-direction picture: they identify multiple representationally independent
+refusal directions and show that refusal is mediated by multi-dimensional concept cones, polyhedral
+regions in which all directions mediate the behavior. They further show that geometric orthogonality
+alone does not imply independence under intervention, a distinction we inherit when interpreting the
+axes of our cone.
+
+We transfer this intervention perspective from refusal to template-conditioned investment
+decisions. Our operators are constructed from company-level decision-margin contrasts rather than
+from refusal pairs, and we evaluate both a fixed-token readout and complete greedy decisions.
+The comparison of a single-neuron scalar intervention, a one-dimensional DIM direction, and a
+four-dimensional concept cone under a common dose convention and matched-norm random controls
+spans the operator geometries established in this line of work.
 
 \subsection{Layer-Wise Activation Patching}
 
 Layer-wise activation patching and causal tracing provide tools for identifying where information
-that affects an output is transferred through a transformer. We use this family of methods to select
-an intervention site before comparing steering operators. The selected site is interpreted as a
-location with measured steering leverage, not as proof that the site is the origin of
-entity-dependent behavior.
+that affects an output is transferred through a transformer. \citet{meng2022locating} locate the
+layers and positions at which a corrupted forward pass re-writes its output by patching clean
+activations into the computation, and \citet{ghandeharioun2024patchscopes} unify this family of
+inspection techniques as patching between source and target positions, scored by a readout on the
+target. We use the same mechanism to select an intervention site before comparing steering
+operators: residual states of the entity, evidence, instruction, and answer-prefix spans are patched
+layer by layer into a fixed buy/sell readout. The selected site is interpreted as a location with
+measured steering leverage, not as proof that the site is the origin of entity-dependent behavior.
 
 \section{Study Design}
 
@@ -306,6 +336,7 @@ definition, margin measurement, greedy parsing rule, and intervention timing.
 The appendix will describe the anonymized code and data supplement, compact derived artifacts,
 operator provenance, and analyses that remain outside the primary paper claims.
 
+\bibliographystyle{acl_natbib}
 \bibliography{custom}
 
 \end{document}

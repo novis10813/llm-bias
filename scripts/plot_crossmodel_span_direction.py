@@ -128,10 +128,6 @@ def main():
         ax_a.plot(depths(n1), [spans["entity"][l] for l in sorted(spans["entity"])], lw=1.8, color=c, zorder=3)
         ax_a.plot(depths(n1), [spans["instruction"][l] for l in sorted(spans["instruction"])],
                   lw=1.2, ls="--", color=c, alpha=0.75, zorder=2)
-        ie = max(spans["instruction"], key=spans["instruction"].get)
-        ee = max(spans["entity"], key=spans["entity"].get)
-        ins_peaks[name] = ie / (n1 - 1)
-        ent_peaks[name] = ee / (n1 - 1)
 
     # --- (b)/(c) v2 direction groups ---
     for ax, g in ((ax_b, "posneg"), (ax_c, "negpos")):
@@ -154,54 +150,64 @@ def main():
     ax_c.set_title(r"$\bf{(c)}$ negative → positive — 427 cos (v2)", loc="left", fontsize=11.5, pad=7)
     ax_a.set_ylabel("mean normalized transfer T", fontsize=11)
 
-    # --- legends ---
+    # --- legends (unified: upper right on all panels) ---
+    legend_handles = [plt.Line2D([], [], color=COLORS[r[0]], lw=2.2) for r in rows]
     ax_a.legend(
-        [plt.Line2D([], [], color=COLORS[r[0]], lw=2.2) for r in rows]
-        + [plt.Line2D([], [], color="0.45", lw=1.8), plt.Line2D([], [], color="0.45", lw=1.2, ls="--")],
+        legend_handles + [plt.Line2D([], [], color="0.45", lw=1.8),
+                          plt.Line2D([], [], color="0.45", lw=1.2, ls="--")],
         [r[0] for r in rows] + ["entity", "instruction"],
-        loc="center left", fontsize=8.5, title="color: model · style: span", title_fontsize=8.5,
+        loc="upper right", fontsize=8, title="color: model · style: span", title_fontsize=8,
         frameon=True, facecolor="white", framealpha=0.8, edgecolor="lightgrey", labelcolor="dimgrey",
     )
     for ax in (ax_b, ax_c):
-        ax.legend(
-            [plt.Line2D([], [], color=COLORS[r[0]], lw=2.2) for r in rows],
-            [r[0] for r in rows],
-            loc="upper left", fontsize=8.5,
-            frameon=True, facecolor="white", framealpha=0.8, edgecolor="lightgrey", labelcolor="dimgrey",
-        )
+        ax.legend(legend_handles, [r[0] for r in rows],
+                  loc="upper right", fontsize=8,
+                  frameon=True, facecolor="white", framealpha=0.8, edgecolor="lightgrey", labelcolor="dimgrey")
 
-    # --- insight notes (computed, not hardcoded) ---
-    lo, hi = min(ins_peaks.values()), max(ins_peaks.values())
-    ax_a.text(
-        0.985, 0.96,
-        f"instruction peak @ rel depth {lo:.2f}–{hi:.2f} (all {len(rows)} models)\n"
-        f"entity peak in shallow layers (rel depth ≤ {max(ent_peaks.values()):.2f})",
-        transform=ax_a.transAxes, fontsize=8, color="dimgrey",
-        verticalalignment="top", horizontalalignment="right",
-        bbox={"facecolor": "white", "alpha": 0.75, "edgecolor": "lightgrey", "pad": 3},
-    )
+    # --- peak annotations: marker + arrow + short label, anchored on the data ---
+    # label positions (tx, ty) are hand-tuned per panel to avoid curves/legend;
+    # unknown models fall back to directly above their peak.
+    def annotate_peaks(ax, peaks, offsets):
+        for name, (px, py) in peaks.items():
+            tx, ty = offsets.get(name, (px, py + 0.08))
+            ax.scatter([px], [py], s=16, color=COLORS[name], edgecolors="white",
+                       linewidths=0.5, zorder=5)
+            ax.annotate(
+                f"{SHORT.get(name, name)} {py:.3f}", xy=(px, py), xytext=(tx, ty),
+                fontsize=7.5, color="dimgrey", ha="center", va="center", zorder=6,
+                arrowprops=dict(arrowstyle="-", color="dimgrey", lw=0.7, shrinkA=1, shrinkB=2),
+            )
+
+    peaks_a = {name: (ie / (n1 - 1), spans["instruction"][ie])
+               for name, n1, spans, _, _ in rows
+               for ie in [max(spans["instruction"], key=spans["instruction"].get)]}
+    annotate_peaks(ax_a, peaks_a, {
+        "Qwen3.5-4B": (0.60, 0.33),
+        "Gemma-4-12B": (0.70, 0.22),
+        "GLM-4-9B": (0.62, 0.85),
+        "GPT-OSS-20B": (0.62, 0.98),
+    })
     for ax, g in ((ax_b, "posneg"), (ax_c, "negpos")):
-        lines = []
+        peaks = {}
         for name, _, _, n2, v2 in rows:
             m = v2[g][0]
             pk = int(np.nanargmax(m))
-            lines.append(f"{SHORT[name]}: {m[pk]:.3f} @ {pk / (n2 - 1):.2f}")
-        ax.text(
-            0.985, 0.96, "peak T by model\n" + "\n".join(lines),
-            transform=ax.transAxes, fontsize=7.5, color="dimgrey",
-            verticalalignment="top", horizontalalignment="right",
-            bbox={"facecolor": "white", "alpha": 0.75, "edgecolor": "lightgrey", "pad": 3},
-        )
-
-    asym = all(
-        np.nanmax(v2["negpos"][0]) >= np.nanmax(v2["posneg"][0]) for _, _, _, _, v2 in rows
-    )
-    fig.text(
-        0.99, 0.012,
-        ("cross-panel: neg → pos peak T ≥ pos → neg peak T in all "
-         f"{len(rows)} models (panel c vs b)" if asym else "cross-panel: no consistent asymmetry across models"),
-        ha="right", va="bottom", fontsize=9, color="dimgrey", style="italic",
-    )
+            peaks[name] = (pk / (n2 - 1), m[pk])
+        if g == "posneg":
+            offsets = {
+                "Qwen3.5-4B": (0.30, 0.28),
+                "Gemma-4-12B": (0.57, 0.07),
+                "GLM-4-9B": (0.40, 0.55),
+                "GPT-OSS-20B": (0.64, 0.56),
+            }
+        else:
+            offsets = {
+                "Qwen3.5-4B": (0.38, 0.53),
+                "Gemma-4-12B": (0.57, 0.08),
+                "GLM-4-9B": (0.35, 0.40),
+                "GPT-OSS-20B": (0.46, 0.63),
+            }
+        annotate_peaks(ax, peaks, offsets)
 
     fig.suptitle(
         f"Cross-model Phase 2B — residual state transfer by relative depth "
