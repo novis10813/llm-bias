@@ -73,15 +73,82 @@ decision stance can be controlled under a fixed decision protocol.
 
 ## 2. Related Work
 
-**Placeholder:** Position the paper at the intersection of:
+### 2.1 Entity Sensitivity and Stance Control in Financial LLMs
 
-- inference-time activation steering and representation engineering;
-- refusal removal and refusal steering as the methodological lineage;
-- single-direction versus multi-dimensional concept representations;
-- causal tracing and layer-wise activation patching.
+Large language models deployed in economic and financial decision-making exhibit systematic
+evaluation biases and pretraining memorization (Lopez-Lira et al., 2025; Kong et al., 2026),
+as well as latent firm- and sector-level preferences (Lee et al., 2026).
+Even when explicit evidence, task instructions, and decision schemas are held fixed, altering only
+the named company can alter the model's recommendation due to pre-existing corporate and sectoral
+biases (Hu & Zhao, 2026; Elbouanani et al., 2026). Prior work predominantly treats this behavior as an
+auditing, benchmarking, or prompt-masking challenge. In contrast, Park et al. (2026) study the
+same phenomenon from the control side, showing that a scalar intervention on a single neuron
+(an "investment dial") can continuously calibrate an LLM's aggregate buy/sell prior at inference
+time without modifying model weights or prompts.
 
-The final section should explain why this paper transfers those methods to investment stance rather
-than claiming a new general-purpose steering algorithm.
+While an investment dial demonstrates that investment stance is controllable via internal
+representations, its intervention acts on an aggregate prior rather than a localized sequence span,
+and it is not compared against multi-dimensional representations. Furthermore, in high-stakes
+financial recommendation, an altered stance must be weighed against explicit prompt evidence.
+Prior work documents that chain-of-thought rationales and post-hoc explanations in language models
+frequently exhibit unfaithfulness, justifying decisions shaped by internal priors or superficial
+cues rather than the provided facts (Turpin et al., 2023), especially when evaluating complex
+decision-making under uncertain contexts (Jia et al., 2024). This motivates our evaluation
+protocol: we examine both internal continuation margins and complete greedy JSON decisions alongside
+evidence sensitivity, assessing when internal stance control genuinely alters downstream behavior
+rather than merely producing rationalized readouts.
+
+### 2.2 Operator Geometries: From Neurons to Multi-Dimensional Cones
+
+Inference-time representation steering controls model behavior by adding targeted vectors to
+intermediate hidden states during the forward pass (Turner et al., 2023; Zou et al., 2023;
+Panickssery et al., 2024). In safety alignment, Arditi et al. (2024) demonstrate that refusal
+behavior is largely mediated by a single linear direction in the residual stream, which can be added
+or ablated to bidirectionally govern generated compliance. Such one-dimensional difference-in-means
+(DIM) directions provide a lightweight intervention mechanism, but assume that the underlying
+behavioral concept is adequately captured by a single functional axis.
+
+Recent work reveals that complex model behaviors often exceed one-dimensional linear representations.
+Wollschläger et al. (2025) show that refusal behavior occupies a multi-dimensional polyhedral
+"concept cone," within which infinite valid steering directions exist. Crucially, they establish
+that geometric orthogonality does not imply independence under intervention, introducing
+*representational independence* to identify functionally decoupled directions and mitigate
+non-linear saturation. Beyond linear vectors, multi-dimensional and invertible latent
+transformations have also been proposed to achieve broader and more flexible behavioral control
+(Nguyen & Le, 2026).
+
+We transfer these geometric insights from safety refusal to structured, template-conditioned
+investment decisions. Rather than examining a single operator in isolation, we conduct a controlled
+cross-operator comparison: we evaluate a single-neuron scalar intervention (Park et al., 2026), a
+one-dimensional token-wise DIM direction, and a four-dimensional concept cone constructed from
+sector-demeaned contrastive SVD under matched-norm controls. This comparison tests whether
+multi-dimensional polyhedral operators offer smoother, more monotonic control surfaces than
+scalar or one-dimensional counterparts in financial reasoning.
+
+### 2.3 Localizing Leverage: Weight Editing vs. Inference-Time Patching
+
+A prominent branch of mechanistic interpretability uses activation patching and causal tracing to
+localize factual associations before directly modifying model parameters (Meng et al., 2022, 2023).
+In particular, ROME (Meng et al., 2022) and MEMIT (Meng et al., 2023) identify critical MLP layers
+that mediate subject-attribute recall and compute closed-form low-rank updates to rewrite the
+corresponding MLP weight matrices ($W_{\text{proj}}$). Similarly, internal attention and feedforward
+manipulations have been developed to diagnose and eliminate biases by suppressing specific internal
+components (Zhou et al., 2024), while recent studies search for sparse, localized "entity cells" in
+MLP layers that encode firm- or individual-level identities (Yona et al., 2026).
+
+While parameter-editing methods permanently alter model weights, they risk collateral damage to
+general capabilities and lack dynamic, context-dependent adjustability. In contrast, our approach
+operates entirely at inference time on prefill residual representations, leaving all model parameters
+untouched and allowing continuous, on-demand dosage tuning. Furthermore, whereas ROME and MEMIT
+focus on single subject-token positions to update static factual memories, we execute a systematic
+span-by-layer residual patching sweep across entity, evidence, instruction, and answer-prefix spans
+to measure where the decision readout is most susceptible to steering.
+
+Finally, while gradient-based attribution frameworks provide fine-grained token-level causal maps
+(Liu et al., 2026), we interpret our localized intervention site (Layer 15 in Qwen3.5-4B) strictly
+as an empirical locus of measured steering leverage over the fixed decision readout. We explicitly
+refrain from claiming that this layer constitutes the historical origin of entity bias or a static
+repository of financial beliefs.
 
 ## 3. Study Design
 
