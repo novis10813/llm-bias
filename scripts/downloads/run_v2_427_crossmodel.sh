@@ -16,8 +16,9 @@ export TOKENIZERS_PARALLELISM=false
 # Long 2B sweeps (854 directions) fragment the allocator; expandable segments
 # keep the fp32 lm_head transient (up to 3.75 GiB) satisfiable (Gemma v1/v2 OOMs).
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-# gpt-oss MXFP4 needs the kernels hub (cached since 2026-09-23); do not go offline.
-if [ "$SLUG" = "gpt-oss-20b" ]; then unset HF_HUB_OFFLINE; else export HF_HUB_OFFLINE=1; fi
+# No HF_HUB_OFFLINE: models load from local paths, but transformers' MXFP4/FP8
+# paths resolve runtime triton kernels from the HF hub at load time.
+unset HF_HUB_OFFLINE
 
 echo "=== [v2-427 ${SLUG}] 2A condition probe (gpu ${GPU}) ==="
 uv run --no-sync python scripts/balanced_evidence_gap_phase2.py \

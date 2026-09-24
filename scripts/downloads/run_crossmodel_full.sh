@@ -11,8 +11,10 @@ MODEL_DIR="$1"; SLUG="$2"; GPU="$3"; shift 3
 EXTRA_LOAD_ARGS=("$@")
 RUN_ROOT="artifacts/${SLUG}/balanced-evidence-gap-phase2/runs"
 export CUDA_VISIBLE_DEVICES="$GPU"
-export HF_HUB_OFFLINE=1
 export TOKENIZERS_PARALLELISM=false
+# No HF_HUB_OFFLINE: models are loaded from local paths, but transformers'
+# FP8/MXFP4 paths resolve runtime triton kernels from the HF hub at load time
+# (kernels-community/*); offline mode hard-fails the first load.
 # Long 2B sweeps fragment the allocator; expandable segments keep large fp32
 # transients satisfiable (Gemma v1/v2 OOMs, 27B lm_head is 3.1 GiB in fp32).
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
