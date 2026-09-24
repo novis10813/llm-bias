@@ -164,50 +164,53 @@ def main():
                   loc="upper right", fontsize=8,
                   frameon=True, facecolor="white", framealpha=0.8, edgecolor="lightgrey", labelcolor="dimgrey")
 
-    # --- peak annotations: marker + arrow + short label, anchored on the data ---
-    # label positions (tx, ty) are hand-tuned per panel to avoid curves/legend;
+    # --- peak annotations: marker + short label; (a) has no arrows (its purpose
+    # is the entity-vs-instruction shape contrast), (b)/(c) use arrows ---
+    # label positions (tx, ty, ha) are hand-tuned per panel to avoid curves/legend;
     # unknown models fall back to directly above their peak.
-    def annotate_peaks(ax, peaks, offsets):
-        for name, (px, py) in peaks.items():
-            tx, ty = offsets.get(name, (px, py + 0.08))
+    def annotate_peaks(ax, peaks, offsets, arrows):
+        for name, (px, py, layer) in peaks.items():
+            tx, ty, ha = offsets.get(name, (px, py + 0.08, "center"))
             ax.scatter([px], [py], s=16, color=COLORS[name], edgecolors="white",
                        linewidths=0.5, zorder=5)
             ax.annotate(
-                f"{SHORT.get(name, name)} {py:.3f}", xy=(px, py), xytext=(tx, ty),
-                fontsize=7.5, color="dimgrey", ha="center", va="center", zorder=6,
-                arrowprops=dict(arrowstyle="-", color="dimgrey", lw=0.7, shrinkA=1, shrinkB=2),
+                f"{SHORT.get(name, name)} L{layer} {py:.3f}", xy=(px, py), xytext=(tx, ty),
+                fontsize=7.5, color="dimgrey", ha=ha, va="center", zorder=6,
+                bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=0.8),
+                arrowprops=None if not arrows else dict(
+                    arrowstyle="-", color="dimgrey", lw=0.7, shrinkA=1, shrinkB=2),
             )
 
-    peaks_a = {name: (ie / (n1 - 1), spans["instruction"][ie])
+    peaks_a = {name: (ie / (n1 - 1), spans["instruction"][ie], ie)
                for name, n1, spans, _, _ in rows
                for ie in [max(spans["instruction"], key=spans["instruction"].get)]}
     annotate_peaks(ax_a, peaks_a, {
-        "Qwen3.5-4B": (0.60, 0.33),
-        "Gemma-4-12B": (0.70, 0.22),
-        "GLM-4-9B": (0.62, 0.85),
-        "GPT-OSS-20B": (0.62, 0.98),
-    })
+        "Qwen3.5-4B": (0.505, 0.445, "left"),
+        "Gemma-4-12B": (0.555, 0.375, "left"),
+        "GLM-4-9B": (0.515, 0.755, "left"),
+        "GPT-OSS-20B": (0.545, 0.845, "left"),
+    }, arrows=False)
     for ax, g in ((ax_b, "posneg"), (ax_c, "negpos")):
         peaks = {}
         for name, _, _, n2, v2 in rows:
             m = v2[g][0]
             pk = int(np.nanargmax(m))
-            peaks[name] = (pk / (n2 - 1), m[pk])
+            peaks[name] = (pk / (n2 - 1), m[pk], pk)
         if g == "posneg":
             offsets = {
-                "Qwen3.5-4B": (0.30, 0.28),
-                "Gemma-4-12B": (0.57, 0.07),
-                "GLM-4-9B": (0.40, 0.55),
-                "GPT-OSS-20B": (0.64, 0.56),
+                "Qwen3.5-4B": (0.30, 0.28, "center"),
+                "Gemma-4-12B": (0.57, 0.07, "center"),
+                "GLM-4-9B": (0.40, 0.55, "center"),
+                "GPT-OSS-20B": (0.62, 0.56, "center"),
             }
         else:
             offsets = {
-                "Qwen3.5-4B": (0.38, 0.53),
-                "Gemma-4-12B": (0.57, 0.08),
-                "GLM-4-9B": (0.35, 0.40),
-                "GPT-OSS-20B": (0.46, 0.63),
+                "Qwen3.5-4B": (0.38, 0.53, "center"),
+                "Gemma-4-12B": (0.57, 0.08, "center"),
+                "GLM-4-9B": (0.35, 0.40, "center"),
+                "GPT-OSS-20B": (0.46, 0.63, "center"),
             }
-        annotate_peaks(ax, peaks, offsets)
+        annotate_peaks(ax, peaks, offsets, arrows=True)
 
     fig.suptitle(
         f"Cross-model Phase 2B — residual state transfer by relative depth "
