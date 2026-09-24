@@ -164,11 +164,12 @@ def main():
                   loc="upper right", fontsize=8,
                   frameon=True, facecolor="white", framealpha=0.8, edgecolor="lightgrey", labelcolor="dimgrey")
 
-    # --- peak annotations: marker + short label; (a) has no arrows (its purpose
-    # is the entity-vs-instruction shape contrast), (b)/(c) use arrows ---
-    # label positions (tx, ty, ha) are hand-tuned per panel to avoid curves/legend;
+    # --- peak annotations: marker + label; only on (b)/(c) with arrows.
+    # Panel (a) carries no annotations: its purpose is the entity-vs-instruction
+    # shape contrast (its peak values live in the caption).
+    # Label positions (tx, ty, ha) are hand-tuned per panel to avoid curves/legend;
     # unknown models fall back to directly above their peak.
-    def annotate_peaks(ax, peaks, offsets, arrows):
+    def annotate_peaks(ax, peaks, offsets):
         for name, (px, py, layer) in peaks.items():
             tx, ty, ha = offsets.get(name, (px, py + 0.08, "center"))
             ax.scatter([px], [py], s=16, color=COLORS[name], edgecolors="white",
@@ -177,19 +178,9 @@ def main():
                 f"{SHORT.get(name, name)} L{layer} {py:.3f}", xy=(px, py), xytext=(tx, ty),
                 fontsize=7.5, color="dimgrey", ha=ha, va="center", zorder=6,
                 bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=0.8),
-                arrowprops=None if not arrows else dict(
-                    arrowstyle="-", color="dimgrey", lw=0.7, shrinkA=1, shrinkB=2),
+                arrowprops=dict(arrowstyle="-", color="dimgrey", lw=0.7, shrinkA=1, shrinkB=2),
             )
 
-    peaks_a = {name: (ie / (n1 - 1), spans["instruction"][ie], ie)
-               for name, n1, spans, _, _ in rows
-               for ie in [max(spans["instruction"], key=spans["instruction"].get)]}
-    annotate_peaks(ax_a, peaks_a, {
-        "Qwen3.5-4B": (0.505, 0.445, "left"),
-        "Gemma-4-12B": (0.555, 0.375, "left"),
-        "GLM-4-9B": (0.515, 0.755, "left"),
-        "GPT-OSS-20B": (0.545, 0.845, "left"),
-    }, arrows=False)
     for ax, g in ((ax_b, "posneg"), (ax_c, "negpos")):
         peaks = {}
         for name, _, _, n2, v2 in rows:
@@ -210,7 +201,7 @@ def main():
                 "GLM-4-9B": (0.35, 0.40, "center"),
                 "GPT-OSS-20B": (0.46, 0.63, "center"),
             }
-        annotate_peaks(ax, peaks, offsets, arrows=True)
+        annotate_peaks(ax, peaks, offsets)
 
     fig.suptitle(
         f"Cross-model Phase 2B — residual state transfer by relative depth "
