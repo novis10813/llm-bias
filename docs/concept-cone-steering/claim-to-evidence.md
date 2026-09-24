@@ -49,7 +49,21 @@
 
 **目前證據：** `phase1-v2-stance-char16-01` 顯示 L15 的 stance direction 對 16 家公司 final margin 有 `R²=0.605`，而候選層 profile 在 L15 最高。`docs/proposal/progress-after-investment-dial.md` 另記錄過 L15 instruction transfer peak，以及較早 entity handoff 的描述。
 
-**判定：** **Incomplete。** 現有 layer scan 是 stance-direction characterization，並非本 paper 所需的完整 `span × layer` residual patching map；候選層也沒有涵蓋 layers 0--5。因此目前不能直接支持「entity-span 在 0--5 最大」這個精確句子。
+**跨模型 `span × layer` residual patching 峰值**（balanced-evidence-gap Phase 2B sweep，16 家公司、8 個 transfer direction，frozen shared-evidence template；4/5 模型完成）
+
+| 模型 (n_layers) | entity peak 層 (rel depth, T) | instruction peak 層 (rel depth, T) | 2B run-id |
+|---|---|---|---|
+| Qwen3.5-4B (32) | L0 (0.00, 1.011) | L15 (0.48, 0.464) | `phase2b-gpu-bf16-01` |
+| Gemma-4-12B (48) | L9 (0.19, 1.418) | L25 (0.53, 0.401) | `phase2b-crossmodel-01` |
+| GLM-4-9B (40) | L13 (0.33, 0.978) | L19 (0.49, 0.782) | `phase2b-crossmodel-01` |
+| GPT-OSS-20B\* (24) | L4 (0.17, 0.849) | L12 (0.52, 0.819) | `phase2b-crossmodel-01` |
+
+- T 定義：$T=(M_{\text{patched}}-M_{\text{tgt}})/(M_{\text{src}}-M_{\text{tgt}})$；4B / Gemma 淺層 entity T>1 表示 patch 效果超過 source 自身 baseline margin 差（over-transfer）。
+- 4 個模型的 instruction peak 相對深度一致落在 0.48–0.53（±0.02），但絕對層不同（L15 / L25 / L19 / L12）；entity peak 在淺層（rel depth 0–0.33）。
+- \*GPT-OSS-20B 為 MoE（使用者要求的例外納入）；gpt-oss-20b 與 gemma4-12b-it 的 2A gate 失敗後以記錄在案的 `--gate-override` 繼續（開發階段描述性比較）。
+- 第 5 個模型 Qwen3.8-27B（FP8 checkpoint）在 idlab 上執行中，完成後回填本表。
+
+**判定：** **Incomplete。** `span × layer` residual patching map 現已涵蓋 entity 與 instruction spans 的完整 layer range（4 個模型，見上表）；4B 的 instruction peak 在 L15、entity peak 在最早層，與 claim 方向一致。仍未涵蓋 evidence／answer-prefix spans，被選層沒有 greedy decision check，layer selection rule 未事先固定，「0--5」邊界也未直接證實。
 
 **建議論文 wording：** 暫時改成「在既有 Qwen3.5-4B development characterization 中，L15 是 instruction-span stance readout 的候選高點；本文把 layer selection 視為 model-specific procedure。」等完整 map 後再恢復更精確的 layer claim。
 
