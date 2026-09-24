@@ -85,26 +85,129 @@ than claiming a new general-purpose steering algorithm.
 
 ## 3. Study Design
 
-**Placeholder:** Define the model, company cohort, canonical and scenario prompt templates,
-continuation margin, greedy JSON decision, layer-15 prefill intervention, DIM construction,
-four-dimensional cone construction, and matched controls.
+We formulate investment stance steering as an intervention on the residual representation during
+prompt prefill. The current instantiation uses Qwen3.5-4B, a 32-layer decoder model with hidden
+size 2560. The protocol selects the intervention layer separately for each model; the layer index
+reported for Qwen3.5-4B should therefore be read as a model-specific result.
+
+### 3.1 Task and measurements
+
+Each prompt contains a company identity, a financial evidence block, and an instruction requiring
+a single JSON object with a `buy` or `sell` decision and a short reason. We measure a continuation
+margin at the answer prefix,
+
+$$M = \log p(\text{buy}) - \log p(\text{sell}),$$
+
+using the same fixed answer-token scorer for every condition. This margin measures the movement of
+the fixed-token readout. We separately generate the complete response with greedy decoding
+($T=0$, at most 48 new tokens), parse the JSON decision, and record whether the output is `buy`,
+`sell`, or unparsed. A positive margin and a generated `buy` are therefore separate outcomes.
+
+The canonical balanced prompt uses the frozen decision template. Evidence-condition probes vary
+the evidence block while keeping the company and decision format fixed. Because the exploratory
+scripts previously used both frozen and custom renderers, all scenario results require a single
+frozen prompt renderer and a recorded prompt hash before they can be pooled in the paper.
+
+### 3.2 Cohort and operator construction
+
+Operator construction starts from the 200-company cohort in
+`entity-to-dial-heldout-transfer-v1-01`. Companies are ranked by their clean continuation margin.
+The token-wise DIM direction uses the ten highest- and ten lowest-margin companies. At each of the
+100 instruction-span token positions, we subtract the mean residual state of the low-margin group
+from the mean residual state of the high-margin group:
+
+$$v_{\mathrm{DIM}}[p] = \mu_{\mathrm{high}}[p] - \mu_{\mathrm{low}}[p].$$
+
+The multi-dimensional operator uses the twenty highest- and twenty lowest-margin companies. We
+subtract the mean state of each sector before forming paired high-minus-low residual differences,
+perform SVD independently at each instruction token, retain the leading four directions, and align
+their signs with the positive contrast. The cone centroid is the normalized sum of these four
+directions.
+
+The current construction and pilot evaluation draw from the same 200-company cohort. They therefore
+measure steering feasibility on the construction cohort; they do not establish held-out company
+generalization. A generalization claim requires a company-disjoint evaluation split fixed before
+operator construction.
+
+### 3.3 Intervention and controls
+
+For an operator $v[p]$, we add a scaled direction to the instruction-span residual states during
+prefill,
+
+$$h_{15,p} \leftarrow h_{15,p} + \alpha v[p].$$
+
+The transform is disabled during one-token decode steps, so the intervention acts on the prompt
+representation rather than repeatedly modifying the generated continuation. The operator study
+compares a scalar intervention on one neuron, the one-dimensional DIM direction, and the
+four-dimensional cone. The final comparison must use a common dose convention or matched
+per-token intervention norm; raw alpha values alone are not comparable across operators.
+
+The controls are matched-norm random directions and identity-stripped prompts. Random controls
+test whether the learned direction has a larger effect than an arbitrary residual perturbation.
+Identity-stripped prompts test whether the learned direction acts only on a company identifier or
+also shifts the general investment stance. These controls do not by themselves establish semantic
+independence or entity debiasing.
+
+### 3.4 Analysis protocol
+
+We report margin displacement, monotonicity over the dose sweep, greedy decision flips, JSON parse
+rate, and the number of evaluated companies for every arm. Layer localization is selected before
+the operator comparison and is evaluated with the same prompt and scoring protocol. Evidence
+sensitivity is assessed by paired positive, negative, mixed, and zero-evidence conditions; generated
+reasons are qualitative examples rather than a standalone measure of explanation faithfulness.
+
+The primary behavioral claim is based on generated decision flips. Margin movement without a
+corresponding greedy decision change is reported as a readout effect and is not counted as a
+decision flip.
 
 ## 4. Layer-localized Steering Analysis
 
-**Placeholder:** Report the span × layer residual-patching map and explain why the instruction-span
-peak identifies a practical steering site without claiming that it is the origin of entity bias.
+**Draft result structure:** Report a complete span × layer residual-patching map for entity,
+evidence, instruction, and answer-prefix spans. Select the steering layer with a rule fixed before
+the operator comparison, using fixed-token margin displacement as the primary localization metric
+and greedy generation as a secondary check.
+
+The existing Qwen3.5-4B development characterization makes L15 a candidate site: the stance
+direction explains `R²=0.605` of the final margin variation in a 16-company layer scan, with L15
+the highest value among the tested layers. This observation is not a substitute for the complete
+span × layer map, and the final section should not claim that the selected layer is the origin of
+entity-dependent behavior.
 
 ## 5. Representation-steering Operators
 
-**Placeholder:** Compare the single-neuron dial, DIM direction, and multi-dimensional cone. Report
-dose-response behavior, pilot greedy flips, anonymous-prompt behavior, random-direction control,
-and the exploratory anti-saturation comparison.
+**Draft result structure:** Compare the single-neuron scalar intervention, DIM, and four-dimensional
+cone on the same target set and dose convention. For each arm, report the complete dose-response
+curve, intervention norm, margin displacement, greedy decision, parse rate, and matched-norm random
+control.
+
+The current frozen DIM pilot provides a decision-level feasibility result: MO, CNC, and FOXA move
+from clean `sell` outputs toward `buy`, with observed flips at alpha 4, 5, and 4 respectively.
+The same pilot contains one random-direction control and one identity-stripped prompt. These are
+pilot observations until the multi-seed and multi-target confirmation run is stored as a compact
+result artifact.
+
+The cone construction artifact is available, but the current persisted cone evaluation is only a
+smoke result at alpha 0. Claims about smoother scaling, reduced saturation, or an advantage over a
+one-dimensional operator require a new output JSON with dimension ablations and matched-norm
+controls. Generated reasons may illustrate different outputs, but they do not identify individual
+cone axes with distinct financial concepts.
 
 ## 6. Decision-level Steering Boundaries
 
-**Placeholder:** Separate fixed-token margin movement from greedy decision changes. Report evidence
-polarity, strong adverse evidence, zero-evidence prompts, sampled rationale behavior, and the
-descriptive macro-context probe.
+**Draft result structure:** Organize this section around the distinction between fixed-token margin
+movement and generated decisions. For every evidence condition, report the clean and steered margin,
+the generated JSON decision, the flip indicator, and parse status.
+
+The first boundary is readout-to-generation divergence: a positive margin can coexist with a greedy
+`sell`, as in the current DIM pilot for CNC. The second boundary is evidence sensitivity: strong
+adverse evidence may delay or prevent a greedy flip even when the intervention moves the margin in
+the opposite direction. This second result must be rerun with one frozen renderer because the
+current note mixes frozen balanced prompts with custom scenario prompts.
+
+Zero-evidence prompts and identity-stripped prompts can test whether the operator shifts a general
+stance under missing company evidence. Macro-context probes are exploratory extensions and should
+remain outside the primary claim unless they receive the same prompt, split, and compact-artifact
+provenance as the main evaluation.
 
 ## 7. Discussion
 

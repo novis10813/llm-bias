@@ -22,6 +22,7 @@ dependencies = [
     "wordfreq>=3.1.1",
     "simplemma>=2.0.0",
     "seaborn>=0.13.2",
+    "kernels>=0.15.2,<0.16.0",
 ]
 
 [project.scripts]

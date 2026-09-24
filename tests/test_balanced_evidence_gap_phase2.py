@@ -20,6 +20,7 @@ from llm_bias.balanced_evidence_gap.analysis import (
     detect_handoff,
     exact_sign_flip_p,
     evaluate_gate_2a,
+    evaluate_gate_2a_reference_free,
     evaluate_gate_2a_rev2,
     evaluate_gate_2c,
     holm_adjusted,
@@ -43,15 +44,17 @@ from llm_bias.balanced_evidence_gap.intervention import (
     patched_final_margin,
     random_match_positions,
 )
-from llm_bias.balanced_evidence_gap.spans import prompt_char_spans, resolve_row
+from llm_bias.balanced_evidence_gap.spans import prompt_char_spans, resolve_row, resolve_row_v2
 from llm_bias.balanced_evidence_gap.template import (
     ALL_TICKERS,
     DIAL_LAYER,
+    EVIDENCE_MARKER,
     EVIDENCE_N1,
     EVIDENCE_N2,
     EVIDENCE_P1,
     EVIDENCE_P2,
     build_prompt,
+    build_prompt_v2,
     variant_id,
 )
 
@@ -307,7 +310,7 @@ class _AttnModel(nn.Module):
 
 
 def _fake_load_model(model: nn.Module, tokenizer: _CharTokenizer):
-    def _load(model_path, *, dtype=None):
+    def _load(model_path, *, dtype=None, device_map=None):
         return model, tokenizer, torch.device("cpu")
 
     return _load
@@ -460,6 +463,26 @@ def test_evaluate_gate_2a_pass_and_failure_modes():
     assert anticorrelated["criteria"]["spearman_vs_phase1"]["pass"] is False
 
     framed = evaluate_gate_2a(**_gate_2a_inputs(framing_pair_deltas=[2.0] * 8))
+    assert framed["criteria"]["framing_stability"]["pass"] is False
+
+
+def test_evaluate_gate_2a_reference_free_skips_phase1_criterion():
+    inputs = _gate_2a_inputs()
+    inputs.pop("phase1_named_margins")
+    gate = evaluate_gate_2a_reference_free(**inputs)
+    assert gate["pass"] and gate["phase2b_authorized"]
+    spearman_crit = gate["criteria"]["spearman_vs_phase1"]
+    assert spearman_crit["value"] is None and spearman_crit["pass"] is None
+    assert spearman_crit["skipped"] == "no_phase1_reference"
+
+    tight_inputs = _gate_2a_inputs(pure_entity_margins={f"T{i:02d}": 0.05 * i for i in range(12)})
+    tight_inputs.pop("phase1_named_margins")
+    tight = evaluate_gate_2a_reference_free(**tight_inputs)
+    assert tight["criteria"]["iqr"]["pass"] is False and tight["pass"] is False
+
+    framed = evaluate_gate_2a_reference_free(
+        **{k: v for k, v in _gate_2a_inputs(framing_pair_deltas=[2.0] * 8).items() if k != "phase1_named_margins"}
+    )
     assert framed["criteria"]["framing_stability"]["pass"] is False
 
 
@@ -859,7 +882,7 @@ def _write_fake_phase1_summary(tmp_path: Path) -> Path:
 def test_run_phase2a_smoke_with_fake_model(tmp_path, monkeypatch):
     tokenizer = _CharTokenizer()
     model = _PatchingModel()
-    monkeypatch.setattr(phase2a_pipeline, "load_tokenizer", lambda _path: tokenizer)
+    monkeypatch.setattr(phase2a_pipeline, "load_tokenizer_for_inference", lambda _path: tokenizer)
     monkeypatch.setattr(phase2a_pipeline, "load_model", _fake_load_model(model, tokenizer))
 
     run_root = phase2a_pipeline.run_phase2a(
@@ -913,7 +936,7 @@ class _DialModel(nn.Module):
 def test_run_phase2a_formal_analysis_with_fake_model(tmp_path, monkeypatch):
     tokenizer = _CharTokenizer()
     model = _DialModel()
-    monkeypatch.setattr(phase2a_pipeline, "load_tokenizer", lambda _path: tokenizer)
+    monkeypatch.setattr(phase2a_pipeline, "load_tokenizer_for_inference", lambda _path: tokenizer)
     monkeypatch.setattr(phase2a_pipeline, "load_model", _fake_load_model(model, tokenizer))
 
     run_root = phase2a_pipeline.run_phase2a(
@@ -1200,3 +1223,165 @@ def test_package_does_not_import_other_experiment_packages():
                 assert not any(name == p or name.startswith(p + ".") for p in forbidden_prefixes), (
                     f"{path.name} imports {name}"
                 )
+
+
+# ── v2 condition family (proposal-phase2-v2) ────────────────────────────────
+
+
+def test_v2_prompt_two_sentence_conditions_and_spans():
+    pos = build_prompt_v2("C", "Citigroup", "pos", False)
+    neg = build_prompt_v2("C", "Citigroup", "neg", False)
+    assert f"- {EVIDENCE_P1}\n- {EVIDENCE_P2}" in pos
+    assert f"- {EVIDENCE_N1}\n- {EVIDENCE_N2}" in neg
+    assert EVIDENCE_N1 not in pos and EVIDENCE_N2 not in pos
+    assert EVIDENCE_P1 not in neg and EVIDENCE_P2 not in neg
+    # Skeleton (entity header + instruction tail) is v1-identical.
+    v1 = build_prompt("C", "Citigroup", 0, False)
+    assert v1.split(EVIDENCE_MARKER)[0] == pos.split(EVIDENCE_MARKER)[0]
+    assert v1.split("—\n\n")[-1] == pos.split("—\n\n")[-1]
+    # Reverse option axis is preserved per condition.
+    assert '"sell" or "buy"' in build_prompt_v2("C", "Citigroup", "pos", True)
+    # Character-span mechanics apply unchanged.
+    spans = prompt_char_spans(pos)
+    e, ev, ins = spans["entity"], spans["evidence"], spans["instruction"]
+    assert e[0] < e[1] < ev[0] < ev[1] < ins[0] < ins[1]
+    with pytest.raises(ValueError, match="condition must be one of"):
+        build_prompt_v2("C", "Citigroup", "mixed", False)
+
+
+def test_resolve_row_v2_fields_and_condition_invariance():
+    tokenizer = _CharTokenizer()
+    row_pos = resolve_row_v2(
+        tokenizer, "C", "Citigroup", "Financials", "pos", False, format_fn=_identity_format
+    )
+    row_neg = resolve_row_v2(
+        tokenizer, "C", "Citigroup", "Financials", "neg", False, format_fn=_identity_format
+    )
+    assert row_pos["condition"] == "pos" and row_pos["key"] == "C:pos"
+    assert row_pos["id"] == "C:pos:rev0" and row_pos["order"] == 0
+    assert row_pos["final_position"] == len(row_pos["prompt_ids"]) - 1
+    assert row_pos["entity_span"][0] < row_pos["evidence_span"][0] < row_pos["instruction_span"][0]
+    # Same company: entity and instruction text are identical across
+    # conditions, so those spans have equal token length (offset identity).
+    for span in ("entity_span", "instruction_span"):
+        assert row_neg[span][1] - row_neg[span][0] == row_pos[span][1] - row_pos[span][0]
+    # Evidence text differs between conditions.
+    assert row_neg["evidence_span"][1] - row_neg["evidence_span"][0] != (
+        row_pos["evidence_span"][1] - row_pos["evidence_span"][0]
+    )
+
+
+def test_build_prepared_rows_v2_grid():
+    tokenizer = _CharTokenizer()
+    names = {t: f"Name {t}" for t in ("A", "B", "C")}
+    rows = phase2a_pipeline.build_prepared_rows_v2(names, tokenizer, ["A", "B", "C"])
+    assert len(rows) == 3 * 2 * 2  # tickers x conditions x reverses
+    assert len({(r["ticker"], r["condition"], r["reverse"]) for r in rows}) == 12
+    smoke = phase2a_pipeline.build_prepared_rows_v2(names, tokenizer, ["A", "B", "C"], smoke=True)
+    assert len(smoke) == 3 * 2 * 1  # smoke keeps one reverse per condition
+
+
+def test_select_directions_v2_orientations_and_min_gap():
+    margins = {
+        "A:pos": 2.0, "A:neg": -2.0,    # gap 4 -> both orientations
+        "B:pos": 0.05, "B:neg": -0.05,  # gap 0.1 -> kept (not below min)
+        "C:pos": 0.02, "C:neg": -0.02,  # gap 0.04 -> skipped
+        "D:pos": 1.0,                    # missing condition -> skipped
+    }
+    directions, skipped = patch_pipeline.select_directions_v2(margins, min_gap=0.1)
+    assert len(directions) == 4
+    assert ("A:pos", "A:neg") in directions and ("A:neg", "A:pos") in directions
+    assert ("B:pos", "B:neg") in directions and ("B:neg", "B:pos") in directions
+    assert not any(k.startswith(("C:", "D:")) for d in directions for k in d)
+    assert [s["ticker"] for s in skipped] == ["C", "D"]
+    assert {s["reason"] for s in skipped} == {"gap_below_min", "missing_condition"}
+
+
+def _write_fake_input_v2(tmp_path: Path, tickers: tuple[str, ...]) -> Path:
+    path = tmp_path / "input_v2.json"
+    path.write_text(
+        json.dumps({"companies": [{"ticker": t, "name": f"Name {t}"} for t in tickers]}),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_run_phase2a_v2_formal_with_fake_model(tmp_path, monkeypatch):
+    tokenizer = _CharTokenizer()
+    model = _PatchingModel(n_layers=N_LAYERS_16)
+    monkeypatch.setattr(phase2a_pipeline, "load_tokenizer_for_inference", lambda _path: tokenizer)
+    monkeypatch.setattr(phase2a_pipeline, "load_model", _fake_load_model(model, tokenizer))
+
+    run_root = phase2a_pipeline.run_phase2a(
+        model_path="fake-model",
+        run_id="v2-fake",
+        artifact_root=tmp_path / "artifacts",
+        input_data=_write_fake_input_v2(tmp_path, ("A", "B", "C", "D")),
+        tickers=("A", "B", "C", "D"),
+        family="v2",
+        smoke=False,
+    )
+    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "complete"
+    prompts = (run_root / "prepare" / "prompts.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(prompts) == 16  # 4 tickers x 2 conditions x 2 reverses
+    summary = json.loads((run_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["family"] == "v2"
+    assert summary["n_prompts"] == 16
+    assert set(summary["condition_diff_median"]) == {"A", "B", "C", "D"}
+    assert set(summary["margin_pos_median"]) == set(summary["margin_neg_median"]) == {"A", "B", "C", "D"}
+    for t in ("A", "B", "C", "D"):
+        expected = summary["margin_pos_median"][t] - summary["margin_neg_median"][t]
+        assert summary["condition_diff_median"][t] == pytest.approx(expected)
+    assert summary["gate_2a"]["criteria"]["spearman_vs_phase1"]["pass"] is None
+    assert "h4_dial" not in summary  # v2 force-disables the Qwen dial readout
+
+
+def _fake_phase2a_v2_run(tmp_path: Path, tokenizer: _CharTokenizer) -> Path:
+    pos = resolve_row_v2(
+        tokenizer, "A", "Name A", "", "pos", False, format_fn=_identity_format
+    )
+    neg = resolve_row_v2(
+        tokenizer, "A", "Name A", "", "neg", False, format_fn=_identity_format
+    )
+    run_dir = tmp_path / "phase2a_v2"
+    _write_jsonl(run_dir / "prepare" / "prompts.jsonl", [pos, neg])
+    _write_jsonl(
+        run_dir / "forward" / "results.jsonl",
+        [
+            {"ticker": "A", "condition": "pos", "reverse": False, "margin": 2.0},
+            {"ticker": "A", "condition": "pos", "reverse": True, "margin": 2.1},
+            {"ticker": "A", "condition": "neg", "reverse": False, "margin": -1.5},
+            {"ticker": "A", "condition": "neg", "reverse": True, "margin": -1.4},
+        ],
+    )
+    return run_dir
+
+
+def test_run_phase2b_v2_smoke_with_fake_model(tmp_path, monkeypatch):
+    tokenizer = _CharTokenizer()
+    model = _PatchingModel(n_layers=N_LAYERS_16)
+    monkeypatch.setattr(patch_pipeline, "load_model", _fake_load_model(model, tokenizer))
+
+    run_root = patch_pipeline.run_phase2b(
+        model_path="fake-model",
+        run_id="v2-smoke-fake",
+        phase2a_run=_fake_phase2a_v2_run(tmp_path, tokenizer),
+        artifact_root=tmp_path / "artifacts",
+        smoke=True,
+        family="v2",
+    )
+    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "complete"
+    records = [json.loads(l) for l in (run_root / "sweep" / "records.jsonl").read_text(encoding="utf-8").strip().splitlines()]
+    # 2 condition-flip directions x 3 layers x 4 spans
+    assert len(records) == 24
+    assert {r["direction"] for r in records} == {"A:pos->A:neg", "A:neg->A:pos"}
+    pairs = json.loads((run_root / "pairs" / "directions.json").read_text(encoding="utf-8"))
+    assert pairs["family"] == "v2"
+    assert pairs["directions"] == [["A:pos", "A:neg"], ["A:neg", "A:pos"]]
+    assert pairs["pure_entity_margins"] == {"A:pos": 2.05, "A:neg": -1.45}
+    summary = json.loads((run_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
+    for span, curve in summary["curves"].items():
+        for stats in curve.values():
+            assert stats["n_directions"] == 2

@@ -39,6 +39,8 @@ from llm_bias.balanced_evidence_gap.patch_pipeline import run_phase2b, run_phase
 
 def _sweep(args: argparse.Namespace) -> None:
     phase2a = Path(args.phase2a_run)
+    gate_pass = False
+    gate_name = None
     if not args.smoke:
         if args.gate_run:
             gate_root = Path(args.gate_run)
@@ -49,12 +51,20 @@ def _sweep(args: argparse.Namespace) -> None:
             summary = json.loads((phase2a / "analyze" / "summary.json").read_text(encoding="utf-8"))
             gate = summary["gate_2a"]
             gate_name = "gate 2A (Rev 1)"
-        if not gate["pass"]:
-            sys.exit(
-                f"ERROR: {gate_name} did not pass; 2B is not authorized "
-                "(rerun the gate or use a passing run)"
+        gate_pass = bool(gate["pass"])
+        if not gate_pass:
+            if not args.gate_override:
+                sys.exit(
+                    f"ERROR: {gate_name} did not pass; 2B is not authorized "
+                    "(rerun the gate or use a passing run)"
+                )
+            print(
+                f"[phase2b] WARNING: {gate_name} did not pass; proceeding under "
+                f"development override: {args.gate_override}",
+                flush=True,
             )
-        print(f"[phase2b] authorization: {gate_name} pass=True", flush=True)
+        else:
+            print(f"[phase2b] authorization: {gate_name} pass=True", flush=True)
     run_id = args.run_id or (
         f"phase2b-smoke-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
         if args.smoke else
@@ -68,6 +78,13 @@ def _sweep(args: argparse.Namespace) -> None:
         phase2a_run=phase2a,
         artifact_root=args.artifact_root,
         smoke=args.smoke,
+        device_map=args.device_map,
+        dtype=args.dtype,
+        gate_pass=gate_pass if not args.smoke else None,
+        gate_override=(args.gate_override if (not args.smoke and not gate_pass) else None),
+        gate_name=gate_name,
+        family=args.family,
+        direction_min_gap=args.direction_min_gap,
     )
     elapsed = time.time() - started
     out = json.loads((Path(run_root) / "analyze" / "summary.json").read_text(encoding="utf-8"))
@@ -98,6 +115,7 @@ def _attribute(args: argparse.Namespace) -> None:
         phase2b_run=phase2b,
         artifact_root=args.artifact_root,
         smoke=args.smoke,
+        dtype=args.dtype,
     )
     elapsed = time.time() - started
     out = json.loads((Path(run_root) / "analyze" / "summary.json").read_text(encoding="utf-8"))
@@ -129,6 +147,19 @@ def main() -> None:
     p_sweep.add_argument("--run-id", default=None)
     p_sweep.add_argument("--artifact-root", default="artifacts")
     p_sweep.add_argument("--smoke", action="store_true")
+    p_sweep.add_argument("--device-map", default=None,
+                         help="Multi-GPU sharded load map (e.g. qwen27b_two_gpu); default: single device")
+    p_sweep.add_argument("--dtype", default=None,
+                         help="load_model dtype: 'native' keeps the checkpoint's stored dtypes "
+                              "(e.g. gpt-oss-20b packed MXFP4 experts); default: CUDA-bf16 / CPU-fp32")
+    p_sweep.add_argument("--gate-override", default=None,
+                         help="Proceed with 2B even when gate 2A did not pass; the reason is "
+                              "recorded in the run pairs artifact (development use only)")
+    p_sweep.add_argument("--family", choices=("v1", "v2"), default="v1",
+                         help="Prompt family of the 2A run. v2 = within-company "
+                              "pos/neg condition-flip directions (proposal-phase2-v2.md)")
+    p_sweep.add_argument("--direction-min-gap", type=float, default=0.1,
+                         help="v2: skip companies whose |M_pos - M_neg| is below this (nats)")
     p_sweep.set_defaults(func=_sweep)
 
     p_attr = sub.add_parser("attribute", help="2C component attribution")
@@ -138,6 +169,9 @@ def main() -> None:
     p_attr.add_argument("--run-id", default=None)
     p_attr.add_argument("--artifact-root", default="artifacts")
     p_attr.add_argument("--smoke", action="store_true")
+    p_attr.add_argument("--dtype", default=None,
+                        help="load_model dtype: 'native' keeps the checkpoint's stored dtypes "
+                             "(e.g. gpt-oss-20b packed MXFP4 experts); default: CUDA-bf16 / CPU-fp32")
     p_attr.set_defaults(func=_attribute)
 
     args = parser.parse_args()

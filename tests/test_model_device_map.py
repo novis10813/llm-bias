@@ -16,12 +16,28 @@ def test_explicit_cpu_dtype_preserves_default(monkeypatch):
         seen.append(kwargs["dtype"])
         return torch.nn.Linear(2, 2, dtype=kwargs["dtype"])
     monkeypatch.setattr(module, "load_tokenizer", lambda _: object())
-    monkeypatch.setattr(module, "_is_conditional_generation_checkpoint", lambda _: False)
+    monkeypatch.setattr(module, "_is_conditional_generation_checkpoint", lambda name, trust_remote_code=True: False)
     monkeypatch.setattr(module.transformers.AutoModelForCausalLM, "from_pretrained", load)
     monkeypatch.setattr(module.jlens, "from_hf", lambda raw, *a, **kw: SimpleNamespace(_hf_model=raw, layers=[]))
     module.load_model("fake")
     module.load_model("fake", dtype=torch.bfloat16)
     assert seen == [torch.float32, torch.bfloat16]
+
+
+def test_native_dtype_omits_dtype_kwarg(monkeypatch):
+    import torch
+    from types import SimpleNamespace
+    from llm_bias.core import model as module
+    seen = []
+    def load(name, **kwargs):
+        seen.append(kwargs)
+        return torch.nn.Linear(2, 2)
+    monkeypatch.setattr(module, "load_tokenizer", lambda _: object())
+    monkeypatch.setattr(module, "_is_conditional_generation_checkpoint", lambda name, trust_remote_code=True: False)
+    monkeypatch.setattr(module.transformers.AutoModelForCausalLM, "from_pretrained", load)
+    monkeypatch.setattr(module.jlens, "from_hf", lambda raw, *a, **kw: SimpleNamespace(_hf_model=raw, layers=[]))
+    module.load_model("fake", dtype="native")
+    assert "dtype" not in seen[0]
 
 
 def test_balanced_map_splits_32_32():

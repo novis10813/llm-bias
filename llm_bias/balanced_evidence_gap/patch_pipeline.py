@@ -55,12 +55,30 @@ def _load_rows(run_root: Path) -> dict[str, dict]:
     return {f"{r['ticker']}": r for r in rows if r["reverse"] is False and r["order"] == 0}
 
 
+def _load_rows_v2(run_root: Path) -> dict[str, dict]:
+    """Canonical v2 rows: reverse=False per (ticker, condition), keyed by ``<ticker>:<condition>``."""
+    rows = read_jsonl(run_root / "prepare" / "prompts.jsonl")
+    return {
+        r["key"]: r
+        for r in rows
+        if r.get("condition") is not None and r["reverse"] is False
+    }
+
+
 def _clean_margins(run_root: Path) -> dict[str, float]:
     results = read_jsonl(run_root / "forward" / "results.jsonl")
     margins: dict[str, list[float]] = {}
     for row in results:
         margins.setdefault(row["ticker"], []).append(float(row["margin"]))
     return {t: statistics.median(v) for t, v in margins.items()}
+
+
+def _clean_margins_v2(run_root: Path) -> dict[str, float]:
+    results = read_jsonl(run_root / "forward" / "results.jsonl")
+    margins: dict[str, list[float]] = {}
+    for row in results:
+        margins.setdefault(f"{row['ticker']}:{row['condition']}", []).append(float(row["margin"]))
+    return {k: statistics.median(v) for k, v in margins.items()}
 
 
 def _scoring_ids(tokenizer: Any, row: dict) -> list[int]:
@@ -101,6 +119,32 @@ def select_directions(pure_margins: dict[str, float]) -> list[tuple[str, str]]:
     return directions
 
 
+def select_directions_v2(
+    margins: dict[str, float], *, min_gap: float = 0.1
+) -> tuple[list[tuple[str, str]], list[dict]]:
+    """v2 condition-flip directions: per company, pos <-> neg, both orientations.
+
+    A company whose condition difference ``|M_pos − M_neg| < min_gap`` cannot
+    define a normalized transfer (division by ~0) and is skipped; skips are
+    returned for the run metadata.
+    """
+    directions: list[tuple[str, str]] = []
+    skipped: list[dict] = []
+    tickers = sorted({k.rsplit(":", 1)[0] for k in margins if ":" in k})
+    for ticker in tickers:
+        pos_key, neg_key = f"{ticker}:pos", f"{ticker}:neg"
+        if pos_key not in margins or neg_key not in margins:
+            skipped.append({"ticker": ticker, "reason": "missing_condition"})
+            continue
+        gap = margins[pos_key] - margins[neg_key]
+        if abs(gap) < min_gap:
+            skipped.append({"ticker": ticker, "reason": "gap_below_min", "gap": gap})
+            continue
+        directions.append((pos_key, neg_key))
+        directions.append((neg_key, pos_key))
+    return directions, skipped
+
+
 # ── 2B ───────────────────────────────────────────────────────────────────────
 
 def _sweep_one_direction(
@@ -114,6 +158,11 @@ def _sweep_one_direction(
     layers: list[int],
 ) -> list[dict]:
     device = model.input_device if hasattr(model, "input_device") else "cuda" if torch.cuda.is_available() else "cpu"
+    direction_label = (
+        f"{source_row['key']}->{target_row['key']}"
+        if "key" in source_row
+        else f"{source_row['ticker']}->{target_row['ticker']}"
+    )
     source_ids = _scoring_ids(tokenizer, source_row)
     target_ids = _scoring_ids(tokenizer, target_row)
     source_tensor = torch.tensor([source_ids], dtype=torch.long, device=device)
@@ -139,7 +188,7 @@ def _sweep_one_direction(
                     "phase": "2b",
                     "layer": layer,
                     "span": span,
-                    "direction": f"{source_row['ticker']}->{target_row['ticker']}",
+                    "direction": direction_label,
                     "patched_margin": patched,
                     "toward_source_delta_m": toward_source_delta(patched, m_source, m_target),
                     "normalized_transfer": normalized_transfer(patched, m_source, m_target),
@@ -165,39 +214,78 @@ def run_phase2b(
     phase2a_run: str | Path,
     artifact_root: str | Path = "artifacts",
     smoke: bool = False,
+    device_map: str | None = None,
+    dtype: torch.dtype | str | None = None,
+    gate_pass: bool | None = None,
+    gate_override: str | None = None,
+    gate_name: str | None = None,
+    family: str = "v1",
+    direction_min_gap: float = 0.1,
 ) -> Path:
     phase2a = Path(phase2a_run)
-    rows = _load_rows(phase2a)
-    clean = _clean_margins(phase2a)
+    if family == "v2":
+        rows = _load_rows_v2(phase2a)
+        clean = _clean_margins_v2(phase2a)
+    else:
+        rows = _load_rows(phase2a)
+        clean = _clean_margins(phase2a)
+    skipped: list[dict] = []
     if smoke:
-        top = sorted(clean, key=lambda t: clean[t], reverse=True)[:2]
-        bottom = sorted(clean, key=lambda t: clean[t])[:2]
-        directions = [(top[0], bottom[0]), (bottom[0], top[0])]
-        layers = [3, 7, 15]
+        if family == "v2":
+            tickers = sorted({k.rsplit(":", 1)[0] for k in rows})
+            probe = next(
+                (t for t in tickers if f"{t}:pos" in rows and f"{t}:neg" in rows), None
+            )
+            if probe is None:
+                raise ValueError("v2 smoke: no ticker with both condition rows")
+            directions = [(f"{probe}:pos", f"{probe}:neg"), (f"{probe}:neg", f"{probe}:pos")]
+        else:
+            top = sorted(clean, key=lambda t: clean[t], reverse=True)[:2]
+            bottom = sorted(clean, key=lambda t: clean[t])[:2]
+            directions = [(top[0], bottom[0]), (bottom[0], top[0])]
+    elif family == "v2":
+        directions, skipped = select_directions_v2(clean, min_gap=direction_min_gap)
+        if not directions:
+            raise ValueError("no v2 directions survived the min_gap filter")
     else:
         directions = select_directions(clean)
-        layers = list(range(32))
 
     run = ArtifactRun.create(Path(model_path).name, DATASET, run_id, artifact_root=artifact_root)
     out_dir = run.run_directory
     try:
+        # Load before prepare-pairs so the swept layer range follows the
+        # model's actual depth (the protocol's L0–L31 is the 32-layer
+        # Qwen3.5-4B; cross-model runs sweep their own L0–L(n-1)).
+        model, tokenizer, device = load_model(model_path, dtype=dtype, device_map=device_map)
+        n_layers = int(model.n_layers)
+        if smoke:
+            layers = sorted({l for l in (3, 7, 15) if l < n_layers}) or list(range(min(3, n_layers)))
+        else:
+            layers = list(range(n_layers))
         with run.stage("prepare-pairs") as stage:
             pairs_dir = out_dir / "pairs"
             pairs_dir.mkdir(parents=True, exist_ok=True)
             payload = {
                 "schema_version": SCHEMA_VERSION,
+                "family": family,
                 "directions": [list(d) for d in directions],
                 "layers": layers,
                 "spans": list(SPAN_NAMES),
                 "pure_entity_margins": clean,
                 "smoke": smoke,
             }
+            if family == "v2":
+                payload["direction_min_gap"] = direction_min_gap
+                payload["skipped_directions"] = skipped
+            if gate_pass is not None:
+                payload["gate_2a"] = {"name": gate_name, "pass": gate_pass}
+            if gate_override is not None:
+                payload["gate_override"] = gate_override
             pairs_path = pairs_dir / "directions.json"
             write_json(pairs_path, payload, overwrite=True)
             run.manifest.register_artifact(pairs_path, artifact_type="balanced_evidence_gap_phase2b_pairs", stage="prepare-pairs", role="output")
             stage.count(len(directions))
 
-        model, tokenizer, device = load_model(model_path, dtype=None)
         records: list[dict] = []
         with run.stage("sweep") as stage:
             for index, (source, target) in enumerate(directions):
@@ -302,6 +390,7 @@ def run_phase2c(
     phase2b_run: str | Path,
     artifact_root: str | Path = "artifacts",
     smoke: bool = False,
+    dtype: torch.dtype | str | None = None,
 ) -> Path:
     phase2a = Path(phase2a_run)
     phase2b_summary = json.loads(
@@ -344,7 +433,7 @@ def run_phase2c(
             run.manifest.register_artifact(arms_path, artifact_type="balanced_evidence_gap_phase2c_arms", stage="prepare-arms", role="output")
             stage.count(len(attention_layers) + len(mlp_layers))
 
-        model, tokenizer, device = load_model(model_path, dtype=None)
+        model, tokenizer, device = load_model(model_path, dtype=dtype)
         attention_records: list[dict] = []
         mlp_records: list[dict] = []
         mlp_layer_summaries: list[dict] = []

@@ -38,10 +38,42 @@ def main() -> None:
     parser.add_argument("--run-id", default=None, help="Run identifier")
     parser.add_argument("--artifact-root", default="artifacts")
     parser.add_argument("--smoke", action="store_true", help="Preflight (1 ticker, 2 prompts)")
+    parser.add_argument("--no-dial", action="store_true",
+                        help="Skip the Qwen3.5-4B L15/n8490 H4 dial readout (cross-model runs)")
+    parser.add_argument("--phase1-summary", default=None,
+                        help="Phase 1 named-margin summary for the Spearman gate criterion. "
+                             "Default: the protocol Qwen3.5-4B reference. Pass 'none' for "
+                             "cross-model runs to skip the reference (gate covers IQR, framing, schema only)")
+    parser.add_argument("--device-map", default=None,
+                        help="Multi-GPU sharded load map (e.g. qwen27b_two_gpu); default: single device")
+    parser.add_argument("--dtype", default=None,
+                        help="load_model dtype: 'native' keeps the checkpoint's stored dtypes "
+                             "(e.g. gpt-oss-20b packed MXFP4 experts); default: CUDA-bf16 / CPU-fp32")
+    parser.add_argument("--companies-file", default=None,
+                        help="JSON with a 'companies' list ({ticker, name}, e.g. "
+                             "data/baseline/investment-dial/exploratory-v1.json); uses all its "
+                             "tickers instead of the frozen 16-ticker v1 universe (v2 development runs)")
+    parser.add_argument("--family", choices=("v1", "v2"), default="v1",
+                        help="Prompt family. v2 = two-sentence evidence conditions (pos/neg), "
+                             "within-company condition-flip design (proposal-phase2-v2.md); "
+                             "force-disables the dial readout and Phase 1 Spearman reference")
     args = parser.parse_args()
+
+    tickers = None
+    if args.companies_file is not None:
+        import json as _json
+        companies = _json.loads(Path(args.companies_file).read_text(encoding="utf-8"))["companies"]
+        tickers = [c["ticker"] for c in companies]
+        if len(tickers) < 8:
+            sys.exit(f"ERROR: need >=8 tickers for the gate, got {len(tickers)}")
+        print(f"[phase2a] custom universe: {len(tickers)} tickers from {args.companies_file}", flush=True)
 
     if not Path(args.model).is_dir():
         sys.exit(f"ERROR: model path not found: {args.model}")
+
+    phase1_summary = None
+    if args.phase1_summary is not None and args.phase1_summary.lower() != "none":
+        phase1_summary = Path(args.phase1_summary)
 
     if args.smoke:
         run_id = f"phase2a-smoke-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
@@ -55,6 +87,12 @@ def main() -> None:
         run_id=run_id,
         artifact_root=args.artifact_root,
         smoke=args.smoke,
+        no_dial=args.no_dial,
+        phase1_summary=phase1_summary,
+        device_map=args.device_map,
+        dtype=args.dtype,
+        tickers=tickers,
+        family=args.family,
     )
     elapsed = time.time() - started
 
@@ -74,14 +112,21 @@ def main() -> None:
     gate = summary["gate_2a"]
     print("── gate 2A ──")
     for name, crit in gate["criteria"].items():
-        print(f"  {name:22s} value={crit['value']:+.4f}  threshold={crit['threshold']}  pass={crit['pass']}")
+        if crit["value"] is None:
+            print(f"  {name:22s} value=skipped  threshold={crit['threshold']}  pass=None")
+        else:
+            print(f"  {name:22s} value={crit['value']:+.4f}  threshold={crit['threshold']}  pass={crit['pass']}")
     print(f"  gate_2a pass           : {gate['pass']}")
     print(f"  phase2b authorized     : {gate['phase2b_authorized']}")
-    h4 = summary["h4_dial"]
+    h4 = summary.get("h4_dial")
     print("── H4 (descriptive) ──")
-    print(f"  dial L{h4['coordinate'][0]}/n{h4['coordinate'][1]}")
-    print(f"  entity-position ρ vs pure entity margin: {h4['entity_position_pearson']:+.3f}")
-    print(f"  final-position ρ   vs pure entity margin: {h4['final_position_pearson']:+.3f}")
+    if h4 is None or h4.get("skipped"):
+        reason = h4.get("skipped") if h4 else "not_run (v2 family)"
+        print(f"  skipped ({reason})")
+    else:
+        print(f"  dial L{h4['coordinate'][0]}/n{h4['coordinate'][1]}")
+        print(f"  entity-position ρ vs pure entity margin: {h4['entity_position_pearson']:+.3f}")
+        print(f"  final-position ρ   vs pure entity margin: {h4['final_position_pearson']:+.3f}")
 
 
 if __name__ == "__main__":

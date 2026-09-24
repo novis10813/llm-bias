@@ -43,6 +43,16 @@ REVERSE_OPTIONS: tuple[bool, ...] = (False, True)
 DIAL_LAYER = 15
 DIAL_NEURON = 8490
 
+# ── v2 development family (docs/balanced-evidence-gap/details/proposal-phase2-v2.md) ──
+# Two-sentence evidence conditions built from the same frozen shared sentences:
+# the prompt body otherwise matches v1 verbatim (span mechanics unchanged).
+V2_SCHEMA_VERSION = "balanced-evidence-gap-phase2-v2"
+V2_CONDITIONS: tuple[str, ...] = ("pos", "neg")
+V2_EVIDENCE: dict[str, tuple[str, str]] = {
+    "pos": (EVIDENCE_P1, EVIDENCE_P2),
+    "neg": (EVIDENCE_N1, EVIDENCE_N2),
+}
+
 EVIDENCE_MARKER = "— Evidence —"
 EVIDENCE_CLOSE = "\n\n—\n\n"
 TICKER_LINE_PREFIX = "Stock Ticker: ["
@@ -112,3 +122,34 @@ class ProbeRow:
 
 def variant_id(ticker: str, reverse: bool, order: int) -> str:
     return f"{ticker}:rev{int(reverse)}:ord{order}"
+
+
+def build_prompt_v2(ticker: str, name: str, condition: str, reverse: bool) -> str:
+    """One v2 condition probe prompt (two same-sign shared evidence sentences).
+
+    Identical skeleton to ``build_prompt``; the evidence block lists exactly
+    the two frozen sentences of ``condition`` ("pos" or "neg"), so the
+    character-span mechanics in ``spans.py`` apply unchanged.
+    """
+    if condition not in V2_EVIDENCE:
+        raise ValueError(f"condition must be one of {V2_CONDITIONS}, got {condition}")
+    options = '"sell" or "buy"' if reverse else '"buy" or "sell"'
+    evidence = "\n".join(f"- {item}" for item in V2_EVIDENCE[condition])
+    return (
+        "Refer to the evidence below to make a final investment decision for the given stock.\n\n"
+        f"Stock Ticker: [{ticker}]\n\nStock Name: [{name}]\n\n"
+        f"{EVIDENCE_MARKER}\n\n"
+        f"{evidence}\n\n"
+        "—\n\n"
+        "Your final response must be a single, valid JSON object. The JSON object must contain\n"
+        "the following two keys:\n\n"
+        f'"decision": {options}\n\n'
+        '"reason": A brief justification for your decision\n\n'
+        'You must choose either "buy" or "sell" – "hold" is NOT an allowed answer. Pick the\n'
+        "direction the evidence leans toward, even if the evidence is mixed. Your response\n"
+        "should start with { and end with }. Do not include any other text."
+    )
+
+
+def variant_id_v2(ticker: str, condition: str, reverse: bool) -> str:
+    return f"{ticker}:{condition}:rev{int(reverse)}"

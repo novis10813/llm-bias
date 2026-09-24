@@ -37,8 +37,8 @@ class ModelDiagnostics:
         }
 
 
-def _is_conditional_generation_checkpoint(name: str) -> bool:
-    config = transformers.AutoConfig.from_pretrained(name, trust_remote_code=False)
+def _is_conditional_generation_checkpoint(name: str, *, trust_remote_code: bool = True) -> bool:
+    config = transformers.AutoConfig.from_pretrained(name, trust_remote_code=trust_remote_code)
     architectures = getattr(config, "architectures", None) or ()
     return any("ForConditionalGeneration" in architecture for architecture in architectures)
 
@@ -162,12 +162,28 @@ def qwen27b_two_gpu_16_device_map() -> dict[str, int]:
     return mapping
 
 
+def gptoss20b_device_map() -> dict[str, int]:
+    """Return the deterministic GPU-only GPT-OSS-20B split used by the workflow.
+
+    24 MoE layers split 14/10 across the two GPUs. The GPU 1 shard (upper
+    layers + lm_head, ~17.5 GB measured) co-fits with the ~1.9 GB robot
+    process only; the GPU 0 shard (~21 GB) co-fits with the ~7 GB
+    llama-server. Measured against the 2026-09-23 OOMs: the upper layers are
+    the heavier ones (~1.6 GB vs ~0.8 GB per layer), so the heavy tail stays
+    on the GPU that hosts no other experiment.
+    """
+    mapping = {"model.embed_tokens": 0, "model.norm": 1, "lm_head": 1}
+    mapping.update({f"model.layers.{i}": (0 if i <= 13 else 1) for i in range(24)})
+    return mapping
+
+
 def load_model(
     model: str = DEFAULT_MODEL,
     *,
     device_map: str | Mapping[str, int | str] | None = None,
     max_memory: Mapping[int | str, int | str] | None = None,
-    dtype: torch.dtype | None = None,
+    dtype: torch.dtype | str | None = None,
+    trust_remote_code: bool = True,
 ) -> tuple[Any, Any, torch.device]:
     """Load a decoder and wrap it in jlens' HF adapter.
 
@@ -175,6 +191,12 @@ def load_model(
     map opts into GPU-only Accelerate dispatch and fails closed on offload.
     An explicit floating dtype supports bounded CPU integration checks; omitting
     it preserves the historical CUDA-bf16 / CPU-fp32 defaults.
+    ``dtype="native"`` omits the dtype argument entirely so the checkpoint keeps
+    its stored representation (e.g. gpt-oss-20b's packed MXFP4 expert weights,
+    which a bf16 cast would dequantize into a much larger live footprint).
+
+    ``trust_remote_code=True`` (default) lets checkpoints that bundle custom
+    modeling code (e.g. MiMo) load; it is a no-op for standard architectures.
     """
     name = resolve_model_name(model)
     sharded = device_map is not None
@@ -182,18 +204,22 @@ def load_model(
         raise RuntimeError("Sharded loading requires at least two CUDA GPUs")
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
+    native = dtype == "native"
     if dtype is None:
         dtype = torch.bfloat16 if use_cuda else torch.float32
-    if dtype not in (torch.bfloat16, torch.float16, torch.float32, torch.float64):
+    if not native and dtype not in (torch.bfloat16, torch.float16, torch.float32, torch.float64):
         raise ValueError("model dtype must be floating point")
-    print(f"Loading {name} on {device} with {dtype} (transformers {transformers.__version__})")
+    dtype_label = "native (checkpoint dtypes)" if native else dtype
+    print(f"Loading {name} on {device} with {dtype_label} (transformers {transformers.__version__})")
     tokenizer = load_tokenizer(name)
     auto_model = transformers.AutoModelForCausalLM
-    if _is_conditional_generation_checkpoint(name):
+    if _is_conditional_generation_checkpoint(name, trust_remote_code=trust_remote_code):
         auto_model = getattr(transformers, "AutoModelForMultimodalLM", None)
         if auto_model is None:
             raise RuntimeError("This checkpoint requires transformers.AutoModelForMultimodalLM")
-    kwargs: dict[str, Any] = {"dtype": dtype, "low_cpu_mem_usage": True}
+    kwargs: dict[str, Any] = {"low_cpu_mem_usage": True, "trust_remote_code": trust_remote_code}
+    if not native:
+        kwargs["dtype"] = dtype
     requested_map = device_map
     if device_map == "qwen27b_two_gpu":
         requested_map = qwen27b_two_gpu_device_map()
@@ -201,6 +227,8 @@ def load_model(
         requested_map = qwen27b_two_gpu_24_device_map()
     elif device_map == "qwen27b_two_gpu_16":
         requested_map = qwen27b_two_gpu_16_device_map()
+    elif device_map == "gptoss20b_two_gpu":
+        requested_map = gptoss20b_device_map()
     if sharded:
         if device_map == "auto":
             raise ValueError("Use an explicit GPU-only map or qwen27b_two_gpu; auto may offload")

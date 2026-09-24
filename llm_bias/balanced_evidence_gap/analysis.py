@@ -183,6 +183,55 @@ def evaluate_gate_2a(
     }
 
 
+def evaluate_gate_2a_reference_free(
+    *,
+    pure_entity_margins: dict[str, float],
+    framing_pair_deltas: Sequence[float],
+    valid_rate: float,
+) -> dict:
+    """Gate 2A without the Qwen3.5-4B Phase 1 Spearman reference.
+
+    Used by cross-model development runs, where the model's own Phase 1
+    named-margin baseline does not exist. The Spearman criterion is recorded
+    as skipped (pass=None) instead of dropping the criterion key, so the
+    gate schema stays comparable with the protocol-default gate.
+    """
+    margins = [pure_entity_margins[t] for t in sorted(pure_entity_margins)]
+    iqr_value = iqr(margins)
+    framing_median = statistics.median(abs(v) for v in framing_pair_deltas)
+    criteria = {
+        "iqr": {
+            "value": iqr_value,
+            "threshold": GATE_2A["iqr_threshold_nats"],
+            "pass": iqr_value > GATE_2A["iqr_threshold_nats"],
+        },
+        "spearman_vs_phase1": {
+            "value": None,
+            "threshold": GATE_2A["spearman_threshold"],
+            "pass": None,
+            "skipped": "no_phase1_reference",
+        },
+        "framing_stability": {
+            "value": framing_median,
+            "threshold": GATE_2A["framing_max_median_nats"],
+            "pass": framing_median < GATE_2A["framing_max_median_nats"],
+        },
+        "schema_valid_rate": {
+            "value": valid_rate,
+            "threshold": 1.0,
+            "pass": valid_rate >= 1.0,
+        },
+    }
+    pass_flag = all(c["pass"] for c in criteria.values() if c["pass"] is not None)
+    return {
+        "gate": "2A",
+        "reference": "none",
+        "criteria": criteria,
+        "pass": pass_flag,
+        "phase2b_authorized": pass_flag,
+    }
+
+
 # ── gate 2A Rev 2 (docs/balanced-evidence-gap/details/proposal-phase2-rev2.md) ───
 
 def select_margin_groups(

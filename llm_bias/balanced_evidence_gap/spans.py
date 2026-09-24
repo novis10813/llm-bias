@@ -15,6 +15,8 @@ from .template import (
     NAME_LINE_PREFIX,
     TICKER_LINE_PREFIX,
     build_prompt,
+    build_prompt_v2,
+    variant_id_v2,
 )
 
 
@@ -101,3 +103,59 @@ def resolve_row(
         entity_position=entity_position,
     )
     return row.to_dict()
+
+
+def resolve_row_v2(
+    tokenizer: Any,
+    ticker: str,
+    name: str,
+    sector: str,
+    condition: str,
+    reverse: bool,
+    *,
+    format_fn: Any,
+) -> "dict[str, Any]":
+    """Build and resolve one v2 condition probe row (two-sentence evidence).
+
+    Row schema matches v1 (``order`` is 0; the sentence-order axis does not
+    exist for a same-sign pair) plus ``condition`` and ``key``
+    (``<ticker>:<condition>``, the canonical row identifier used by the 2B
+    condition-flip directions).
+    """
+    from .template import ProbeRow
+
+    prompt = build_prompt_v2(ticker, name, condition, reverse)
+    formatted = format_fn(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
+    ids = input_ids(tokenizer, formatted, add_special_tokens=True)
+    char_spans = prompt_char_spans(prompt)
+
+    resolved: dict[str, tuple[int, int]] = {}
+    for region, (char_start, char_end) in char_spans.items():
+        body_start = formatted.find(prompt)
+        if body_start < 0:
+            raise ValueError("prompt body not found in formatted text")
+        span = token_span(
+            tokenizer, formatted, body_start + char_start, body_start + char_end,
+            add_special_tokens=True,
+        )
+        if span is None:
+            raise ValueError(f"could not map {region} character span to tokens")
+        resolved[region] = span
+
+    row = ProbeRow(
+        id=variant_id_v2(ticker, condition, reverse),
+        ticker=ticker,
+        name=name,
+        sector=sector,
+        reverse=reverse,
+        order=0,
+        prompt=prompt,
+        formatted=formatted,
+        prompt_ids=ids,
+        entity_span=resolved["entity"],
+        evidence_span=resolved["evidence"],
+        instruction_span=resolved["instruction"],
+        final_position=len(ids) - 1,
+        entity_position=resolved["entity"][1] - 1,
+    )
+    return row.to_dict() | {"condition": condition, "key": f"{ticker}:{condition}"}
