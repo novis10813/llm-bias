@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from llm_bias.core.inference import GenerationConfig, encode_batch, extract_logits, finish_reason
-from llm_bias.core.inference.interventions import mid_residual_interventions, record_block_states
+from llm_bias.core.inference.interventions import mid_residual_interventions, pre_residual_interventions, record_block_states
 
 
 def test_encode_batch_tracks_each_final_non_padding_position():
@@ -48,6 +48,34 @@ def test_finish_reason_distinguishes_eos_and_length():
 
 
 # ── block states and mid-residual interventions ──────────────────────────────────────
+
+
+def test_pre_residual_hook_changes_prefill_and_single_token_decode_and_cleans_up():
+    class Block(torch.nn.Module):
+        def forward(self, hidden_states):
+            return hidden_states * 2
+
+    block = Block()
+    model = SimpleNamespace(layers=[block])
+    with pre_residual_interventions(model, {0: lambda state: state + 1}):
+        assert torch.equal(block(torch.zeros(1, 5, 3)), torch.full((1, 5, 3), 2.0))
+        assert torch.equal(block(torch.zeros(1, 1, 3)), torch.full((1, 1, 3), 2.0))
+        assert torch.equal(block(hidden_states=torch.zeros(1, 1, 3)), torch.full((1, 1, 3), 2.0))
+    assert not block._forward_pre_hooks
+    assert torch.count_nonzero(block(torch.zeros(1, 1, 3))) == 0
+    with pytest.raises(ValueError, match="preserve"):
+        with pre_residual_interventions(model, {0: lambda state: state[..., :2]}):
+            block(torch.zeros(1, 4, 3))
+    assert not block._forward_pre_hooks
+    with pytest.raises(RuntimeError, match="failure"):
+        with pre_residual_interventions(model, {0: lambda state: state + 1}):
+            raise RuntimeError("failure")
+    assert not block._forward_pre_hooks
+    with pytest.raises(ValueError, match="out of range"):
+        with pre_residual_interventions(model, {1: lambda state: state}):
+            pass
+    assert not block._forward_pre_hooks
+
 
 
 def _qwen_fake(num_layers: int = 2) -> tuple[object, object]:

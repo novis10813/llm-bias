@@ -46,7 +46,7 @@ RUN_DIR = Path("artifacts/qwen3.5-4b/balanced-evidence-gap-phase2/runs/phase2b-g
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", default="./docs/assets/concept-cone-steering")
+    parser.add_argument("--out", default="./docs/concept-cone-steering/c2-phase2b-16/figures")
     args = parser.parse_args()
 
     # --- Data ---

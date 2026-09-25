@@ -65,6 +65,47 @@ def residual_interventions(
             handle.remove()
 
 
+@contextmanager
+def pre_residual_interventions(
+    model: Any,
+    transforms: Mapping[int, ResidualTransform],
+) -> Iterator[None]:
+    """Temporarily transform decoder block inputs, including cached decode steps.
+
+    The supplied transform receives and returns ``[batch, sequence, d_model]``.
+    Position and dose policy remain the caller's responsibility.
+    """
+    if not transforms:
+        yield
+        return
+    layers = getattr(model, "layers", None)
+    if layers is None:
+        raise TypeError("model does not expose decoder layers")
+    handles: list[Any] = []
+    try:
+        for raw_layer, transform in sorted(transforms.items()):
+            layer = int(raw_layer)
+            if layer < 0 or layer >= len(layers):
+                raise ValueError(f"intervention layer {layer} is out of range")
+
+            def hook(_module: Any, args: tuple[Any, ...], kwargs: Any, *, fn=transform) -> Any:
+                tensor = _block_hidden(args, kwargs)
+                replacement = fn(tensor)
+                if not torch.is_tensor(replacement) or replacement.shape != tensor.shape:
+                    raise ValueError("pre residual transform must preserve tensor shape")
+                if replacement is tensor:
+                    return None
+                if args:
+                    return ((replacement, *args[1:]), kwargs)
+                return (args, {**kwargs, "hidden_states": replacement})
+
+            handles.append(layers[layer].register_forward_pre_hook(hook, with_kwargs=True))
+        yield
+    finally:
+        for handle in handles:
+            handle.remove()
+
+
 def _block_hidden(args: tuple[Any, ...], kwargs: Any) -> torch.Tensor:
     """First hidden-states tensor of a decoder-block / norm-module forward."""
     hidden = args[0] if args else (kwargs or {}).get("hidden_states")
@@ -204,6 +245,7 @@ def record_block_states(
 __all__ = [
     "ResidualTransform",
     "mid_residual_interventions",
+    "pre_residual_interventions",
     "record_block_states",
     "residual_interventions",
 ]

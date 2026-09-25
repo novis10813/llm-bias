@@ -43,7 +43,7 @@
 | J-space token **V2** | 已完成 | 依答案梯度選的方向能把受測 sell 推向 buy，但 sell 方向樣本不足，且最後位置的對照也能翻轉，未建立位置特異性。 | [報告](jspace-token-experiments/report.md) · [協議](jspace-token-experiments/details/proposal-v2.md) |
 | Activation patching（獨立測試） | 已完成 | 能轉移買賣傾向的狀態，隨層數由證據區移到指令區、再到最後位置，且這個位置變化在獨立測試中重現。 | [報告](activation-patching-causal-tracing/report.md) · [協議](activation-patching-causal-tracing/proposal.md) |
 | Sector/context follow-up（B V1 校準） | 已完成 | 固定負面證據下，跨產業換入指令區狀態的效果不比同產業換公司更強，未支持產業專屬的解釋。 | [報告](sector-context-followup/report.md) · [協議](sector-context-followup/proposal.md) |
-| Concept Cone steering（探索） | 進行中 | 復現 Wollschläger (2025) 與 Arditi (2024)，以 200 家產業去均值 SVD 構建 4D Concept Cone，在多空平衡與零證據下以 100% 成功率跨產業翻轉極端 Sell 決策，驗證多維抗飽和與語義互補性。 | [筆記](concept-cone-steering/note.md) · [腳本](research-scripts.md#concept-cone-steering-wollschläger-et-al-2025--arditi-et-al-2024-replication) |
+| Concept Cone steering（含 Qwen DIM 層比較） | 進行中 | Qwen 的逐 token DIM 在多個中層改變生成判定，L16 並非唯一有效層；單向量補充臂無翻轉，選層資料重疊且缺隨機方向對照，不能宣稱獨立定位或原文完整復現。 | [DIM 層比較與限制](concept-cone-steering/details/status-dim-layer-sweep-v1.md) · [DIM V1 協議與勘誤](concept-cone-steering/details/proposal-dim-layer-sweep-v1.md) · [跨模型 cone 主實驗](concept-cone-steering/crossmodel-cone-paper/status.md) · [舊探索筆記](concept-cone-steering/note.md) |
 | J-space evaluation | 規劃中 | 只有合成任務的 J-space 輔助評估設計，尚無研究結果，也不作為其他實驗的執行門檻。 | [狀態](j-space-evaluation/report.md) · [提案](j-space-evaluation/proposal.md) |
 
 ## Shared inputs and instruments

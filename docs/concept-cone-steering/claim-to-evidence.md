@@ -45,6 +45,8 @@
 
 ### C2：A useful steering site can be localized by layer and span
 
+**2026-09-24 版本核對：** C2 的 **427 家同公司條件翻轉**結果與缺項見 [C2 v2 狀態](c2-v2-427/status.md)；下方的 16 家／8 direction 峰值表及 L15 論述是[早期跨公司版本](c2-phase2b-16/status.md)的歷史紀錄，**不可當作 427 家結果**。兩版 direction、prompt 與 2A gate 不同。兩版 summary 都已有 `evidence` span；`final` 卻不是 answer-prefix，因此舊段落「未涵蓋 evidence」不再準確。舊段落第 5 模型 `Qwen3.8-27B` 與本地 registry `Qwen3.6-27B` 命名不一致，遠端狀態待查；以下原文留存，不把它視為已完成。
+
 **論文 claim：** entity-span transfer 在 layers 0--5 最大，instruction-span transfer 在 L15 達峰，因此 L15 是 practical steering site。
 
 **目前證據：** `phase1-v2-stance-char16-01` 顯示 L15 的 stance direction 對 16 家公司 final margin 有 `R²=0.605`，而候選層 profile 在 L15 最高。`docs/proposal/progress-after-investment-dial.md` 另記錄過 L15 instruction transfer peak，以及較早 entity handoff 的描述。

@@ -66,6 +66,12 @@ implementing token-wise sector-demeaned contrastive SVD across the 200-company h
 enforces cone sign alignment, and evaluates individual basis rays versus the Cone Centroid across
 balanced, zero-evidence, and macroeconomic evidence scenarios (`--evidence-mode`, `--k-contrast-pairs`,
 `--k-cone-dim`, `--target-tickers`, `--alphas`, `--eval-individual-rays`, `--output-json`).
+`scripts/probe_operator_comparison.py` 執行 P2 operator comparison 的 frozen 協議：
+在 matched per-token norm grid 下比較 L15/N8490 dial（`mlp_addition`）、token-wise
+DIM、4D cone centroid（加 1/2/3-axis ablation），含多 seed matched-norm random
+control 與 anonymous prompt control（`--smoke`、`--output-dir`）。Canonical
+document: [P2 operator comparison proposal v1](concept-cone-steering/details/proposal-p2-operator-comparison-v1.md).
+
 Canonical document: [Concept Cone steering note](concept-cone-steering/note.md).
 
 ## Selective-intervention V1

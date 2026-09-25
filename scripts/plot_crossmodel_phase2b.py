@@ -68,7 +68,7 @@ def load_run(slug: str, run_id: str):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", default="./docs/assets/concept-cone-steering")
+    parser.add_argument("--out", default="./docs/concept-cone-steering/c2-phase2b-16/figures")
     args = parser.parse_args()
 
     sns.set_theme(font_scale=1.0, style="whitegrid", font="DejaVu Sans")

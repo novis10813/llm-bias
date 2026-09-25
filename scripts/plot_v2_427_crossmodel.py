@@ -57,7 +57,7 @@ def load_model(run_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", default="./docs/assets/concept-cone-steering")
+    parser.add_argument("--out", default="./docs/concept-cone-steering/c2-v2-427/figures")
     args = parser.parse_args()
 
     rows = []
