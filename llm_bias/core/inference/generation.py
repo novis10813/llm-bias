@@ -54,6 +54,22 @@ def generate_tokens(model: Any, prompt_ids: torch.Tensor, config: GenerationConf
     return sequences
 
 
+def generate_with_logits(
+    model: Any, prompt_ids: torch.Tensor, config: GenerationConfig,
+) -> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
+    """Greedy/sampled batch-one generation plus the raw (pre-processor) logits of every new token."""
+    with torch.no_grad():
+        result = model.hf_model.generate(
+            prompt_ids, **config.as_kwargs(), output_logits=True, return_dict_in_generate=True)
+    sequences = result.sequences
+    if sequences.ndim != 2 or sequences.shape[0] != 1:
+        raise ValueError("generation requires exactly one sequence")
+    logits = tuple(step[0] for step in (result.logits or ()))
+    if len(logits) != sequences.shape[1] - prompt_ids.shape[1]:
+        raise ValueError("generation logits do not align with new tokens")
+    return sequences, logits
+
+
 def finish_reason(generated_ids: list[int], *, eos_token_id: int | list[int] | tuple[int, ...] | None, max_new_tokens: int) -> str:
     if not generated_ids:
         return "empty"
@@ -65,4 +81,4 @@ def finish_reason(generated_ids: list[int], *, eos_token_id: int | list[int] | t
     return "model_stop"
 
 
-__all__ = ["GenerationConfig", "finish_reason", "generate_tokens"]
+__all__ = ["GenerationConfig", "finish_reason", "generate_tokens", "generate_with_logits"]
