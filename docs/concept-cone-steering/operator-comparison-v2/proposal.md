@@ -29,7 +29,7 @@ v2–v4 與 `d` 正交，Top 與 Bottom 的均值差在其上的投影為 0，�
 
 ### Single neuron（使用者決定：四個模型都做）
 
-- 規則：主要層上 `argmax_n cos(write_n, mean_p d[p])`，只用 construction 資料。候選集合與寫入向量：
+- 規則：主要層上 `argmax_n cos(write_n, mean_p d̂[p])`（逐 token 單位化後的平均，等於最大化共用寫入向量與各 token `d̂[p]` 的平均 cos），只用 construction 資料。候選集合與寫入向量：
   - Qwen3.5-4B：`mlp.down_proj.weight` 的第 n 欄。
   - Gemma-4-12B：第 n 欄乘上 `post_feedforward_layernorm.weight`（逐元素 gain）。
   - GLM-4-9B：第 n 欄乘上 `post_mlp_layernorm.weight`。
@@ -58,3 +58,8 @@ v2–v4 與 `d` 正交，Top 與 Bottom 的均值差在其上的投影為 0，�
 ## Tier
 
 `ops`：Qwen、Gemma 在 tier1；GLM、GPT-OSS 在 tier2（原 R3c）。`random`、`jitter`：四模型 tier1。`shuffle`：Qwen、Gemma tier2。
+
+## 修訂紀錄
+
+- 2026-09-25（Qwen smoke 後、任何 full 結果之前）：single-neuron 目標由 `mean_p d[p]` 改為 `mean_p d̂[p]`。Colab L4 smoke 顯示 `‖d[p]‖` 在 steer suffix 內相差約 20 倍（0.09–2.04），原目標被少數高範數 token 主導，選中的 neuron 與各 token `d̂[p]` 的 cos 中位數約 −0.001（等同 random）。新目標與逐 token 等範數劑量慣例一致。
+

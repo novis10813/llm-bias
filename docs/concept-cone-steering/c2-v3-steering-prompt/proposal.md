@@ -21,7 +21,7 @@ C2-427 用 BEG pos↔neg 的同公司條件翻轉、固定前綴 readout，而 s
 ## R7：patch-under-generation（`arm_c2v3_gen`）
 
 - 層：R6 peak 與 peak ± 2；span：`steer_suffix`、`entity`；40 個方向；patch 只作用在 prefill（decode 步略過）。
-- 指標：source 與 target 的 α0 決策不同的方向中，patched 生成決策等於 source α0 決策的數量（toward-source flips），加 parse 數。
+- 指標：source 與 target 的 α0 決策不同的方向中，patched 生成決策等於 source α0 決策的數量（toward-source flips），加 parse 數；另報 patched 生成的 realized-path margin 朝 source 乾淨 realized margin 方向的平均位移（2026-09-25 smoke 後補入：Qwen 的 α0 幾乎全為 sell，toward-source flip 沒有分母）。
 - 10 家 self-patch 生成必須與 α0 逐字相同。
 
 ## C2 可寫範圍與 A2

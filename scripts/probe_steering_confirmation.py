@@ -710,13 +710,16 @@ def arm_ops(job: Job) -> dict[str, Any]:
                                   [margins[t] for t in top], [margins[t] for t in bottom])
     orth, orth_sha = D.orth_random_axes(d, ORTH_SEEDS)
     writes, labels = D.neuron_write_vectors(job.model_dir, job.spec, job.spec.peak)
-    pick = D.select_neuron(writes, labels, d.mean(dim=0))
+    # target = token-mean of unit DIM directions: maximizes the mean per-token cosine of a shared
+    # write vector (a raw token mean is dominated by the few high-norm suffix tokens)
+    pick = D.select_neuron(writes, labels, D.unit_rows(d).mean(dim=0))
     neuron_info = {k: v for k, v in pick.items() if k not in ("unit", "cos_by_label")}
+    neuron_info["target"] = "mean_p d_hat[p]"
     if job.slug == "qwen3.5-4b":
         layer, neuron = QWEN_DIAL
         d15, _ = job.dim(layer)
         w15, l15 = D.neuron_write_vectors(job.model_dir, job.spec, layer)
-        pick15 = D.select_neuron(w15, l15, d15.mean(dim=0))
+        pick15 = D.select_neuron(w15, l15, D.unit_rows(d15).mean(dim=0))
         cos = pick15["cos_by_label"]
         neuron_info["historical_L15"] = {"rule_selects": pick15["neuron"], "n8490_cos": float(cos[neuron]),
                                          "n8490_rank": int((cos > cos[neuron]).sum()) + 1,
@@ -1108,15 +1111,22 @@ def arm_c2v3_gen(job: Job) -> dict[str, Any]:
     for layer in layers:
         for span in R7_SPANS:
             moved = eligible = parsed = 0
+            shifts = []
             for key in keys:
                 src, tgt = key.split("->")
                 row = next(e for e in arm.result["rows"]["patch_generation"][key] if e["layer"] == layer and e["span"] == span)
                 parsed += row["decision"] in S.PARSED
+                # realized-path margin moved toward the source's clean realized margin (sign-aligned)
+                m_src, m_tgt = base[src]["realized_margin"], base[tgt]["realized_margin"]
+                if None not in (row["realized_margin"], m_src, m_tgt) and m_src != m_tgt:
+                    shifts.append((row["realized_margin"] - m_tgt) * (1 if m_src > m_tgt else -1))
                 if base[src]["decision"] in S.PARSED and base[tgt]["decision"] in S.PARSED and base[src]["decision"] != base[tgt]["decision"]:
                     eligible += 1
                     moved += row["decision"] == base[src]["decision"]
             summary["per_cell"].append({"layer": layer, "span": span, "toward_source_flips": moved,
-                                        "eligible_pairs": eligible, "parsed": parsed, "n": len(keys)})
+                                        "eligible_pairs": eligible, "parsed": parsed, "n": len(keys),
+                                        "mean_realized_shift_toward_source": fmean(shifts) if shifts else None,
+                                        "realized_shift_n": len(shifts)})
     arm.finish(summary)
     if job.smoke and not self_ok:
         raise RuntimeError("self-patch generation differs from alpha 0")
