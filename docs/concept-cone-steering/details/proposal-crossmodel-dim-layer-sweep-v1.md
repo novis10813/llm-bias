@@ -1,5 +1,7 @@
 # 三模型 paper cohort DIM 跨層掃描 V1：協議與實作規格
 
+> **已由 [V2](proposal-crossmodel-dim-layer-sweep-v2.md) 取代（2026-09-25）。**V1 只跑過單家公司 smoke，從未執行 101 家正式評估；其 CLI（`sp500_dim_crossmodel`）與 schema 已自程式移除。以下為凍結原文，不再更新。
+
 **狀態：**事前協議，2026-09-25；尚未執行新的三模型 DIM run。**範圍：**Gemma-4-12B、GLM-4-9B、GPT-OSS-20B 的 2024 S&P 500 母體 503 家（402 建方向／101 受測）；承接 [Qwen DIM V1](proposal-dim-layer-sweep-v1.md)，不更名或改寫[四模型 paper cone 主實驗](../crossmodel-cone-paper/proposal.md)、[Qwen V1 結果](status-dim-layer-sweep-v1.md)或其他舊產物。以下規則在新模型任何受測結果揭露前固定；若方向、選層、主要指標、controls 改變，另立版本。
 
 ## 高 C2 `T` 是否對應本模型局部 DIM 的較強效果，須同時報計分和真生成

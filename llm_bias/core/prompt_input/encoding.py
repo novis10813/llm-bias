@@ -34,6 +34,7 @@ def format_messages(
     *,
     use_chat_template: bool,
     enable_thinking: bool = False,
+    chat_template_kwargs: dict[str, Any] | None = None,
 ) -> str:
     """Render messages while preserving the raw-prompt compatibility mode."""
     if not use_chat_template:
@@ -48,6 +49,7 @@ def format_messages(
         tokenize=False,
         add_generation_prompt=True,
         enable_thinking=enable_thinking,
+        **(chat_template_kwargs or {}),
     )
     if not isinstance(rendered, str):
         raise TypeError("tokenizer chat template must return text when tokenize=False")
@@ -60,6 +62,7 @@ def format_prompt(
     *,
     use_chat_template: bool,
     enable_thinking: bool = False,
+    chat_template_kwargs: dict[str, Any] | None = None,
 ) -> str:
     """Render one user prompt; retained as the canonical legacy facade."""
     return format_messages(
@@ -67,6 +70,7 @@ def format_prompt(
         [{"role": "user", "content": prompt}],
         use_chat_template=use_chat_template,
         enable_thinking=enable_thinking,
+        chat_template_kwargs=chat_template_kwargs,
     )
 
 

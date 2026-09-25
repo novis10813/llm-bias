@@ -461,51 +461,104 @@ def test_crossmodel_preselection_uses_frozen_threshold_and_peak_neighbors():
             cone.validate_dim_crossmodel_curve(curve, spec)
 
 
-def test_crossmodel_legacy_ranking_and_dynamic_direction_lengths():
-    build = [f"B{i:03}" for i in range(402)]
-    heldout = [f"E{i:03}" for i in range(101)]
-    for slug in cone.DIM_CROSSMODEL_CONFIG:
-        spec = cone.DIM_CROSSMODEL_CONFIG[slug]
-        fields = [f for f in cone.DIM_PAPER_SOURCE_FIELDS
-                  if f != "c2_layer_source" or slug != "glm4-9b-0414"]
-        expected = {k: f"value_{k}" for k in fields}
-        expected.update({"schema": spec["source_schema"], "mode": "evaluation", "model_slug": slug,
-                         "layer": spec["peak"], "dtype": spec["dtype"], "split_seed": 20260923,
-                         "alphas": [0.0, 2.0, 3.0, 4.0, 5.0, 6.0], "max_new_tokens": 192,
-                         "decision_prefix": cone.DECISION_PREFIX, "construction_tickers": build,
-                         "evaluation_tickers": heldout, "k_pairs": 20, "k_cone": 4})
-        ranked = [{"ticker": ticker, "margin": float(i)} for i, ticker in enumerate(build)]
-        source = {"metadata": expected.copy(), "complete": True, "effective_tokens": spec["suffix_tokens"],
-                  "ranking": ranked, "top_20": build[-20:], "bottom_20": build[:20]}
-        opts = dict(spec, slug=slug)
-        assert cone.validate_dim_paper_ranking(source, expected, build, heldout, source_spec=opts) == (
-            build[-10:], build[:10])
-        if slug == "glm4-9b-0414":
-            source["metadata"]["c2_layer_source"] = {"incorrect": "retroactive"}
-            with pytest.raises(ValueError, match="metadata"):
-                cone.validate_dim_paper_ranking(source, expected, build, heldout, source_spec=opts)
-            del source["metadata"]["c2_layer_source"]
-        source["effective_tokens"] -= 1
-        with pytest.raises(ValueError, match="protocol"):
-            cone.validate_dim_paper_ranking(source, expected, build, heldout, source_spec=opts)
-        source["effective_tokens"] += 1
-        top = torch.zeros(10, spec["suffix_tokens"], 3)
-        bottom = torch.zeros_like(top)
-        top[:, :, 0] = 3
-        bottom[:, :, 0] = 1
-        ray, diagnostics = cone.fit_dim_direction(top, bottom)
-        assert ray.shape == (spec["suffix_tokens"], 3)
-        assert diagnostics["min"] == pytest.approx(2)
+def test_template_render_kwargs_pins_strftime_date_only_when_template_uses_it(monkeypatch):
+    import datetime as dt
+    import transformers.utils.chat_template_utils as ctu
+
+    template = "{{ reasoning_effort | default('medium') }} {{ strftime_now('%Y-%m-%d') }}"
+    harmony = SimpleNamespace(chat_template=template)
+
+    class Tomorrow(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime(2026, 9, 26, 0, 30)
+
+    monkeypatch.setattr(ctu, "datetime", Tomorrow)
+    render = lambda kwargs: ctu.render_jinja_template([[{"role": "user", "content": "x"}]], chat_template=template, **kwargs)[0][0]
+    assert render(cone.low_reasoning_kwargs(harmony)) == "low 2026-09-26"
+    assert render(cone.template_render_kwargs(harmony)) == "low 2026-09-25"
+    plain = SimpleNamespace(chat_template="{{ messages[0].content }}")
+    assert cone.template_render_kwargs(plain) == {} and not cone.template_uses_date(plain)
+
+
+def test_dim_difference_keeps_raw_scale_and_allows_structural_zero():
+    top = torch.zeros(10, 20, 3)
+    bottom = torch.zeros_like(top)
+    top[:, :, 0] = 3
+    bottom[:, :, 0] = 1
+    difference, norms = cone.fit_dim_difference(top, bottom)
+    assert torch.allclose(difference[:, 0], torch.full((20,), 2.0))
+    assert norms == {"min": 2.0, "median": 2.0, "max": 2.0}
+    zero, zero_norms = cone.fit_dim_difference(bottom[:, -1, :], bottom[:, -1, :])
+    assert torch.count_nonzero(zero) == 0 and zero_norms["max"] == 0.0
+    with pytest.raises(ValueError, match="degenerate"):
+        cone.fit_dim_direction(bottom[:, -1, :], bottom[:, -1, :])
+
+
+def v2_row(alpha, margin, text):
+    return {"alpha": alpha, "margin": margin, "generated_text": text, **cone.parse_generation(text)}
+
+
+BUY = '{"decision":"buy","reason":"evidence"}'
+SELL = '{"decision":"sell","reason":"evidence"}'
+
+
+def test_dim_v2_summary_pairs_both_directions_against_shared_baseline():
+    nonzero = [a for a in cone.DIM_V2_ALPHAS if a != 0]
+
+    def layer(texts):
+        return {"rows": [v2_row(a, a, texts.get(a, "analysis only")) for a in nonzero]}
+
+    targets = {
+        "A": {"baseline": v2_row(0.0, 0.0, "analysis x.assistantfinal" + SELL),
+              "L5": layer({1.0: BUY, 2.0: BUY, -2.0: SELL})},
+        "B": {"baseline": v2_row(0.0, 0.0, "thought\n" + BUY),
+              "L5": layer({-2.0: SELL, 2.0: BUY})},
+    }
+    assert targets["A"]["baseline"]["format"] == "harmony_final_bare_json"
+    assert targets["A"]["baseline"]["strict_decision"] == "unparsed"
+    summary = {row["alpha"]: row for row in cone.dim_v2_layer_summary(targets, ["A", "B"], 5)}
+    assert [row for row in summary] == list(cone.DIM_V2_ALPHAS)
+    assert summary[0.0]["parsed"] == 2 and summary[0.0]["strict_parsed"] == 0
+    assert summary[2.0]["sell_to_buy"] == 1 and summary[2.0]["buy_to_sell"] == 0
+    assert summary[-2.0]["buy_to_sell"] == 1 and summary[-2.0]["buy_valid_pairs"] == 1
+    assert summary[-0.5]["valid_flip_pairs"] == 0 and summary[-0.5]["flip_rate"] is None
+    assert summary[2.0]["mean_delta_margin"] == pytest.approx(2.0)
+    table = cone.dim_v2_alpha_table({5: list(summary.values())})
+    assert "| layer | alpha=-2 | alpha=-1 | alpha=-0.5 | alpha=0 | alpha=0.5 | alpha=1 | alpha=2 |" in table
+    assert "| L5 | 0/1 | 0/0" not in table and "—" in table
+
+
+def test_dim_v2_resume_requires_baseline_and_rederived_decisions():
+    nonzero = [a for a in cone.DIM_V2_ALPHAS if a != 0]
+    meta = {"schema": "dim-tokenwise-crossmodel-v2"}
+    result = {"metadata": meta, "complete": False, "targets": {"A": {
+        "baseline": v2_row(0.0, 1.0, BUY), "L5": {"rows": [v2_row(a, a, SELL) for a in nonzero]}}}}
+    cone.validate_dim_v2_resume(result, meta, ["A"], [5, 7])
+    result["targets"]["A"]["L5"]["rows"][0]["decision"] = "buy"
+    with pytest.raises(ValueError, match="do not match"):
+        cone.validate_dim_v2_resume(result, meta, ["A"], [5, 7])
+    result["targets"]["A"]["L5"]["rows"][0]["decision"] = "sell"
+    result["targets"]["A"]["L5"]["rows"][0]["parse_ok"] = True
+    with pytest.raises(ValueError, match="row fields"):
+        cone.validate_dim_v2_resume(result, meta, ["A"], [5, 7])
+    del result["targets"]["A"]["L5"]["rows"][0]["parse_ok"]
+    del result["targets"]["A"]["baseline"]
+    with pytest.raises(ValueError, match="layer mismatch"):
+        cone.validate_dim_v2_resume(result, meta, ["A"], [5, 7])
+    result["targets"]["A"]["baseline"] = v2_row(0.0, 1.0, BUY)
+    result["complete"] = True
+    with pytest.raises(ValueError, match="incomplete"):
+        cone.validate_dim_v2_resume(result, meta, ["A"], [5, 7])
 
 
 @pytest.mark.parametrize("slug", ["gemma4-12b-it", "glm4-9b-0414", "gpt-oss-20b"])
 @pytest.mark.parametrize("arm", ["tokenwise", "single_all"])
-def test_crossmodel_fake_run_binds_sources_and_keeps_layer_rows(tmp_path, monkeypatch, slug, arm):
+def test_dim_v2_fake_run_ranks_locally_and_shares_alpha_zero(tmp_path, monkeypatch, slug, arm):
     import hashlib
 
     monkeypatch.chdir(tmp_path)
-    original = cone.DIM_CROSSMODEL_CONFIG[slug]
-    spec = dict(original)
+    spec = dict(cone.DIM_CROSSMODEL_CONFIG[slug])
     model_dir = tmp_path / slug
     model_dir.mkdir()
     (model_dir / "config.json").write_text("{}")
@@ -519,116 +572,79 @@ def test_crossmodel_fake_run_binds_sources_and_keeps_layer_rows(tmp_path, monkey
     monkeypatch.setattr(cone, "split_population", lambda *args: (companies, construction, evaluation))
     monkeypatch.setattr(cone, "_render_frozen_prompt", lambda ticker, name, **kw: ticker)
     monkeypatch.setattr(cone, "prepare_instruction_suffix", lambda *args: spec["suffix_tokens"])
-    tokenizer = SimpleNamespace(name_or_path="toy tokenizer")
+    template = "{{ reasoning_effort }}" if slug == "gpt-oss-20b" else "{{ enable_thinking }}"
+    tokenizer = SimpleNamespace(name_or_path="toy tokenizer", chat_template=template)
 
     def fake_load_model(path, *, dtype):
         assert dtype == ("native" if slug == "gpt-oss-20b" else None)
         return SimpleNamespace(n_layers=spec["n_layers"]), tokenizer, None
 
     monkeypatch.setattr(cone, "load_model", fake_load_model)
-    digest = lambda b: hashlib.sha256(b).hexdigest()
-    c2 = {"curves": {"instruction": {
-        str(i): {"mean_normalized_transfer": -.005, "n_directions": 854}
-        for i in range(spec["n_layers"])}}}
-    threshold_groups = {
-        "gemma4-12b-it": {26: .1544, 27: .1903, 28: .1430, 29: .1429, 30: .1549, 31: .1555, 32: .1391},
-        "glm4-9b-0414": {17: .2394, 18: .2281, 19: .4592, 20: .2579, 21: .2199},
-        "gpt-oss-20b": {12: .3162, 13: .4978, 14: .5323, 15: .5190, 16: .3276},
-    }
-    for layer, t in threshold_groups[slug].items():
+    ranking = [{"ticker": t, "margin": float(-i)} for i, t in enumerate(reversed(construction))]
+    ranking.sort(key=lambda r: (r["margin"], r["ticker"]))
+    monkeypatch.setattr(cone, "rank_construction", lambda model, tok, comp, tickers: (
+        tickers == construction or pytest.fail("ranks only construction")) and ranking)
+    c2 = {"curves": {"instruction": {str(i): {"mean_normalized_transfer": -.005, "n_directions": 854}
+                                     for i in range(spec["n_layers"])}}}
+    high = {"gemma4-12b-it": {26: .1544, 27: .1903, 28: .1430, 29: .1429, 30: .1549, 31: .1555, 32: .1391},
+            "glm4-9b-0414": {17: .2394, 18: .2281, 19: .4592, 20: .2579, 21: .2199},
+            "gpt-oss-20b": {12: .3162, 13: .4978, 14: .5323, 15: .5190, 16: .3276}}[slug]
+    for layer, t in high.items():
         c2["curves"]["instruction"][str(layer)]["mean_normalized_transfer"] = t
     c2_path = tmp_path / "c2.json"
     c2_path.write_text(json.dumps(c2))
-    spec["c2_sha256"] = digest(c2_path.read_bytes())
-    c2_info = {"path": str(c2_path), "sha256": spec["c2_sha256"],
-               "instruction_peak": spec["peak"], "n_directions": 854}
-    monkeypatch.setattr(cone, "c2_427_layer_source", lambda s: c2_info)
-    split = json.dumps({"construction": construction, "evaluation": evaluation}, sort_keys=True).encode()
-    prompts = json.dumps([(t, t) for t in sorted(companies)],
-                         ensure_ascii=False, separators=(",", ":")).encode()
-    metadata = {"schema": spec["source_schema"], "mode": "evaluation", "model": str(model_dir),
-                "model_slug": slug, "model_config_sha256": digest(b"{}"),
-                "tokenizer_config_sha256": digest(b"{}"), "tokenizer": tokenizer.name_or_path,
-                "checkpoint_files": [{"name": "model.safetensors", "bytes": 4}],
-                "population_sha256": digest(population.read_bytes()), "split_seed": 20260923,
-                "split_sha256": digest(split), "construction_tickers": construction,
-                "evaluation_tickers": evaluation, "prompt_family_sha256": digest(prompts),
-                "prompt_renderer": "entity_to_dial.heldout_transfer._render_frozen_prompt(order=0,reverse=False)",
-                "decision_prefix": cone.DECISION_PREFIX, "layer": spec["peak"], "k_pairs": 20,
-                "k_cone": 4, "alphas": [0.0, 2.0, 3.0, 4.0, 5.0, 6.0], "dtype": spec["dtype"],
-                "max_new_tokens": 192}
-    if slug != "glm4-9b-0414":
-        metadata["c2_layer_source"] = c2_info
-    ranked = [{"ticker": t, "margin": float(i)} for i, t in enumerate(construction)]
-    source = {"metadata": metadata, "complete": True, "effective_tokens": spec["suffix_tokens"],
-              "ranking": ranked, "top_20": construction[-20:], "bottom_20": construction[:20]}
-    base = tmp_path / "artifacts" / slug / "concept-cone-steering" / "runs"
-    source_path = base / spec["source_run"] / "result.json"
-    source_path.parent.mkdir(parents=True)
-    source_path.write_text(json.dumps(source))
-    spec["source_sha256"] = digest(source_path.read_bytes())
+    spec["c2_sha256"] = hashlib.sha256(c2_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(cone, "c2_427_layer_source", lambda s: {
+        "path": str(c2_path), "sha256": spec["c2_sha256"], "instruction_peak": spec["peak"], "n_directions": 854})
     monkeypatch.setattr(cone, "DIM_CROSSMODEL_CONFIG", {slug: spec})
-    out = base / f"dim-crossmodel-layer-sweep-v1-test/{arm}/result.json"
-    args = SimpleNamespace(model=str(model_dir), model_dtype=spec["dtype"], dim_arm=arm,
-                           dim_layers=[spec["peak"], spec["n_layers"] - 1], alphas=metadata["alphas"],
-                           split_seed=20260923, evidence_mode="balanced", inject_layer=None,
-                           eval_individual_rays=False, centroid_dims=None, skip_eval=False,
+    base = tmp_path / "artifacts" / slug / "concept-cone-steering" / "runs"
+    out = base / f"dim-crossmodel-layer-sweep-v2-test/{arm}/result.json"
+    layers = [spec["peak"], spec["n_layers"] - 1]
+    args = SimpleNamespace(model=str(model_dir), model_dtype=spec["dtype"], dim_arm=arm, dim_layers=layers,
+                           alphas=list(cone.DIM_V2_ALPHAS), split_seed=20260923, evidence_mode="balanced",
+                           inject_layer=None, eval_individual_rays=False, centroid_dims=None, skip_eval=False,
                            leave_out_sector=None, persist_directions=None, output_json=str(out),
-                           population_csv=str(population), smoke_tickers=[evaluation[0]])
+                           population_csv=str(population), smoke_tickers=evaluation[:2])
+
+    def extract(_model, _tokenizer, _companies, top, bottom, layer_list, length, *, arm, normalize):
+        assert not normalize and top == [r["ticker"] for r in ranking[-10:]]
+        assert bottom == [r["ticker"] for r in ranking[:10]] and length == spec["suffix_tokens"]
+        ray = torch.full((3,), 5.0) if arm == "single_all" else torch.full((length, 3), 5.0)
+        return {layer: (ray, {"min": 5.0, "median": 5.0, "max": 5.0}) for layer in layer_list}
+
     calls = []
 
-    def extract(_model, _tokenizer, _companies, top, bottom, layers, length, *, arm):
-        assert top == construction[-10:] and bottom == construction[:10]
-        assert length == spec["suffix_tokens"]
-        ray = torch.ones(3) if arm == "single_all" else torch.ones(length, 3)
-        return {layer: (ray, {"min": 1., "median": 1., "max": 1.}) for layer in layers}
-
     def evaluate(_model, _tokenizer, ray, _companies, tickers, alphas, **kw):
-        layer = kw["inject_layer"]
-        calls.append(layer)
-        assert ray.shape == ((3, 1) if arm == "single_all" else (spec["suffix_tokens"], 3, 1))
-        assert kw["fixed_prefix"] and kw["save_full_text"] and kw["pre_block_all"] == (arm == "single_all")
-        rows = [{"alpha": a, "margin": a if a else 0., "decision": "unparsed", "parse_ok": False,
-                 "generated_text": "truncated"} for a in alphas]
+        calls.append((kw["inject_layer"], tuple(alphas)))
+        assert torch.all(ray == 5.0)  # raw difference, never unit-normalized
+        assert kw["pre_block_all"] == (arm == "single_all") and kw["max_new_tokens"] == 192
+        text = lambda a: ("analysis.assistantfinal" if slug == "gpt-oss-20b" else "") + (BUY if a > 0 else SELL)
+        rows = [{"alpha": a, "margin": a, "decision": "unparsed", "parse_ok": False, "generated_text": text(a)}
+                for a in alphas]
         return {"targets": {tickers[0]: {"cone_centroid": rows}}}
 
     monkeypatch.setattr(cone, "extract_dim_layer_directions", extract)
     monkeypatch.setattr(cone, "run_cone_evaluation", evaluate)
-    cone.run_dim_paper(args, crossmodel=True)
+    cone.run_dim_crossmodel_v2(args)
     result = json.loads(out.read_text())
-    assert calls == args.dim_layers
-    assert set(result["targets"][evaluation[0]]) == {f"L{i}" for i in args.dim_layers}
-    assert result["metadata"]["model_dtype"] == spec["dtype"]
-    assert result["metadata"]["source_cone_schema"] == spec["source_schema"]
-    assert result["summary"][str(spec["peak"])][1]["sell_to_buy_rate"] is None
-    cone.run_dim_paper(args, crossmodel=True)
-    assert calls == args.dim_layers  # complete result is read-only
-    source_path.write_text(source_path.read_text() + " ")
-    with pytest.raises(ValueError, match="source SHA"):
-        cone.run_dim_paper(args, crossmodel=True)
-    args.model_dtype = "native" if spec["dtype"] == "bf16" else "bf16"
-    with pytest.raises(ValueError, match="dtype"):
-        cone.run_dim_paper(args, crossmodel=True)
-    if arm == "single_all":
-        source_path.write_text(json.dumps(source))
-        args.model_dtype = spec["dtype"]
-        args.dim_layers = [0]
-        args.output_json = str(base / "dim-crossmodel-layer-sweep-v1-l0-smoke/single_all/result.json")
-        monkeypatch.setattr(cone, "extract_dim_layer_directions", lambda *a, **k: (
-            _ for _ in ()).throw(cone.DegenerateDimDirection(0.0, 0)))
-        with pytest.raises(ValueError, match="degenerate"):
-            cone.run_dim_paper(args, crossmodel=True)
-        diag = Path(args.output_json).with_name("l0_fit_diagnostic.json")
-        assert json.loads(diag.read_text())["difference_norm"] == 0.0
-        assert not Path(args.output_json).exists()  # no invented result for a failed layer
-
-
-def test_crossmodel_alpha_zero_consistency_does_not_confuse_scored_margin_with_generation():
-    row = lambda margin, text: {"alpha": 0.0, "margin": margin, "generated_text": text,
-                                "decision": "unparsed", "parse_ok": False}
-    targets = {"A": {"L14": {"rows": [row(-1., "analysis")]},
-                     "L15": {"rows": [row(-1.0001, "analysis")]}}}
-    cone.validate_dim_baseline_consistency(targets, ["A"], [14, 15])
-    targets["A"]["L15"]["rows"][0]["generated_text"] = "not same"
-    with pytest.raises(ValueError, match="baseline"):
-        cone.validate_dim_baseline_consistency(targets, ["A"], [14, 15])
+    nonzero = tuple(a for a in cone.DIM_V2_ALPHAS if a != 0)
+    assert calls == [(layers[0], (0.0,))] * 2 + [(layers[0], nonzero)] * 2 + [(layers[1], nonzero)] * 2
+    meta = result["metadata"]
+    assert meta["schema"] == f"dim-{'tokenwise' if arm == 'tokenwise' else 'single-all'}-crossmodel-v2"
+    assert meta["chat_template_kwargs"] == ({"reasoning_effort": "low"} if slug == "gpt-oss-20b" else {})
+    assert meta["top_10"] == [r["ticker"] for r in ranking[-10:]] and result["ranking"] == ranking
+    peak = {row["alpha"]: row for row in result["summary"][str(spec["peak"])]}
+    assert peak[0.0]["baseline_sell_n"] == 2 and peak[0.5]["sell_to_buy"] == 2
+    assert result["format_counts"] == {("harmony_final_bare_json" if slug == "gpt-oss-20b" else "bare_json"): 26}
+    cone.run_dim_crossmodel_v2(args)
+    assert len(calls) == 6  # complete result is read-only
+    result["metadata"]["top_10"] = list(reversed(result["metadata"]["top_10"]))
+    out.write_text(json.dumps(result))
+    with pytest.raises(ValueError, match="metadata"):
+        cone.run_dim_crossmodel_v2(args)
+    for field, value, match in (("alphas", [0.0, 2.0], "alpha"),
+                                ("model_dtype", "native" if spec["dtype"] == "bf16" else "bf16", "dtype"),
+                                ("output_json", str(base / f"dim-crossmodel-layer-sweep-v1-x/{arm}/result.json"), "output")):
+        bad = SimpleNamespace(**{**vars(args), field: value})
+        with pytest.raises(ValueError, match=match):
+            cone.run_dim_crossmodel_v2(bad)

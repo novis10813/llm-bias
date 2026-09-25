@@ -19,7 +19,7 @@ import math
 import random
 import re
 import subprocess
-from collections import defaultdict
+from collections import Counter, defaultdict
 from statistics import median
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +28,7 @@ from typing import Any, Mapping, Sequence
 import torch
 
 from llm_bias.core.continuation_scoring import fp32_next_token_log_probs
+from llm_bias.core.decision_parsing import FORMATS, parse_complete_decision, parse_strict_decision
 from llm_bias.core.inference.adapter import InjectedModelAdapter
 from llm_bias.core.inference.forward import record_residuals
 from llm_bias.core.inference.generation import GenerationConfig, generate_tokens
@@ -150,8 +151,8 @@ def parse_args() -> argparse.Namespace:
         help="Extract only (no evaluation); used for cosine measurement / persistence runs",
     )
     parser.add_argument("--output-json", default=None, help="Optional path to write compact derived results")
-    parser.add_argument("--cohort-mode", choices=["legacy", "sp500_v1", "sp500_paper", "sp500_dim_paper", "sp500_dim_crossmodel"], default="legacy",
-                        help="sp500_v1: old 16-company C2 pilot; sp500_paper: 427-company-selected cone; sp500_dim_paper: Qwen DIM; sp500_dim_crossmodel: Gemma/GLM/GPT DIM")
+    parser.add_argument("--cohort-mode", choices=["legacy", "sp500_v1", "sp500_paper", "sp500_dim_paper", "sp500_dim_crossmodel_v2"], default="legacy",
+                        help="sp500_v1: old 16-company C2 pilot; sp500_paper: 427-company-selected cone; sp500_dim_paper: Qwen DIM V1; sp500_dim_crossmodel_v2: Gemma/GLM/GPT DIM V2")
     parser.add_argument("--dim-arm", choices=["tokenwise", "single_all"], default="tokenwise",
                         help="DIM paper arm; ignored by other cohort modes")
     parser.add_argument("--dim-layers", nargs="+", type=int, default=list(DIM_PAPER_LAYERS),
@@ -162,6 +163,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--smoke-tickers", nargs="+", default=None,
                         help="Evaluate these tickers instead of the 101 held-out companies (non-confirmatory)")
     return parser.parse_args()
+
+
+def low_reasoning_kwargs(tokenizer: Any) -> dict[str, Any]:
+    """Detect a Harmony-style chat template and request its lowest reasoning effort.
+
+    Qwen-style templates already stop chain-of-thought via enable_thinking=False,
+    but that flag is a no-op on GPT-OSS's Harmony template, which instead reads a
+    reasoning_effort variable (default "medium") into the rendered system message.
+    Without lowering it, GPT-OSS spends the whole 192-token budget on the analysis
+    channel and never reaches the final JSON decision.
+    """
+    template = getattr(tokenizer, "chat_template", None) or ""
+    return {"reasoning_effort": "low"} if "reasoning_effort" in template else {}
+
+
+TEMPLATE_DATE = datetime(2026, 9, 25)
+
+
+def template_uses_date(tokenizer: Any) -> bool:
+    return "strftime_now" in (getattr(tokenizer, "chat_template", None) or "")
+
+
+def template_render_kwargs(tokenizer: Any) -> dict[str, Any]:
+    """low_reasoning_kwargs plus a pinned date for templates that call strftime_now.
+
+    GPT-OSS's Harmony template writes "Current date: <today>" into the system
+    message via transformers' strftime_now (datetime.now()), so a run crossing
+    midnight would silently mix two prompt renderings. The render-time variable
+    shadows the Jinja global and pins the date to TEMPLATE_DATE.
+    """
+    kwargs = low_reasoning_kwargs(tokenizer)
+    if template_uses_date(tokenizer):
+        kwargs["strftime_now"] = TEMPLATE_DATE.strftime
+    return kwargs
 
 
 DECISION_PREFIX = '{"decision": "'
@@ -187,30 +222,20 @@ def c2_427_layer_source(slug: str) -> dict[str, Any]:
 
 
 DIM_PAPER_LAYERS = (0, 14, 15, 16, 17, 18, 31)
-# Freeze source bytes, model identity and preselected C2 layer sets before new DIM evaluations.
+# Frozen model identity and C2-preselected layers for the three-model DIM V2 sweep.
 DIM_CROSSMODEL_CONFIG = {
-    "gemma4-12b-it": {
-        "n_layers": 48, "peak": 27, "layers": (0, 26, 27, 28, 29, 30, 31, 32, 47),
-        "dtype": "bf16", "suffix_tokens": 100, "source_run": "c2-guided-paper-20260924",
-        "source_schema": "concept-cone-sp500-paper-v1",
-        "source_sha256": "13c2b4a6f1538a7ab84183e86c7e8ba4fe63decff5a898e5d3251a73eb09c7e7",
-        "c2_sha256": "295170b9c09ca453ce7b285c37a0f128d99cf68fc1a20970f390f084fdd54635",
-    },
-    "glm4-9b-0414": {
-        "n_layers": 40, "peak": 19, "layers": (0, 17, 18, 19, 20, 21, 39),
-        "dtype": "bf16", "suffix_tokens": 98, "source_run": "crossmodel-v1-eval-20260924",
-        "source_schema": "concept-cone-sp500-v1",
-        "source_sha256": "025a1b4a76f0a564b8b593a19a6ed2805278e2a23d5799a9eaa50ce574a926be",
-        "c2_sha256": "d0b7e41ac21adc1cb858fbdc6a75e34338109cab84f3630bcd6f839119b480a6",
-    },
-    "gpt-oss-20b": {
-        "n_layers": 24, "peak": 14, "layers": (0, 12, 13, 14, 15, 16, 23),
-        "dtype": "native", "suffix_tokens": 99, "source_run": "c2-guided-paper-20260924",
-        "source_schema": "concept-cone-sp500-paper-v1",
-        "source_sha256": "6987e4197e683965018ac5f92347daafe841bc80b7ff41e00fa376d7db7ae393",
-        "c2_sha256": "f8ccb7c24d25048d358a32562ba8fffd799384a482b1e17152d7f0bef543a506",
-    },
+    "gemma4-12b-it": {"n_layers": 48, "peak": 27, "layers": (0, 26, 27, 28, 29, 30, 31, 32, 47),
+                      "dtype": "bf16", "suffix_tokens": 100,
+                      "c2_sha256": "295170b9c09ca453ce7b285c37a0f128d99cf68fc1a20970f390f084fdd54635"},
+    "glm4-9b-0414": {"n_layers": 40, "peak": 19, "layers": (0, 17, 18, 19, 20, 21, 39),
+                     "dtype": "bf16", "suffix_tokens": 98,
+                     "c2_sha256": "d0b7e41ac21adc1cb858fbdc6a75e34338109cab84f3630bcd6f839119b480a6"},
+    "gpt-oss-20b": {"n_layers": 24, "peak": 14, "layers": (0, 12, 13, 14, 15, 16, 23),
+                    "dtype": "native", "suffix_tokens": 99,
+                    "c2_sha256": "f8ccb7c24d25048d358a32562ba8fffd799384a482b1e17152d7f0bef543a506"},
 }
+# Multiples of the raw Top-minus-Bottom mean difference, symmetric so both flip directions are testable.
+DIM_V2_ALPHAS = (-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0)
 DIM_PAPER_SOURCE_FIELDS = (
     "schema", "mode", "model", "model_slug", "model_config_sha256",
     "tokenizer_config_sha256", "tokenizer", "checkpoint_files", "population_sha256",
@@ -270,24 +295,19 @@ def validate_dim_crossmodel_curve(
 def validate_dim_paper_ranking(
     source: Mapping[str, Any], expected: Mapping[str, Any],
     construction: Sequence[str], evaluation: Sequence[str],
-    *, source_spec: Mapping[str, Any] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Accept only the complete model-local cone ranking of the same disjoint cohort."""
-    spec = source_spec or {"suffix_tokens": 100, "source_schema": "concept-cone-sp500-paper-v1",
-                           "slug": "qwen3.5-4b", "peak": 16, "dtype": "bf16"}
-    fields = tuple(field for field in DIM_PAPER_SOURCE_FIELDS
-                   if field != "c2_layer_source" or spec["slug"] != "glm4-9b-0414")
     metadata = source.get("metadata")
     if not isinstance(metadata, dict) or any(
         field not in expected or field not in metadata or metadata[field] != expected[field]
-        for field in fields
-    ) or (spec["slug"] == "glm4-9b-0414" and "c2_layer_source" in metadata):
+        for field in DIM_PAPER_SOURCE_FIELDS
+    ):
         raise ValueError("paper cone source metadata mismatch")
-    if (source.get("complete") is not True or source.get("effective_tokens") != spec["suffix_tokens"]
-            or metadata["schema"] != spec["source_schema"]
-            or metadata["mode"] != "evaluation" or metadata["model_slug"] != spec["slug"]
-            or metadata["layer"] != spec["peak"] or metadata["k_pairs"] != 20 or metadata["k_cone"] != 4
-            or metadata["split_seed"] != 20260923 or metadata["dtype"] != spec["dtype"]
+    if (source.get("complete") is not True or source.get("effective_tokens") != 100
+            or metadata["schema"] != "concept-cone-sp500-paper-v1"
+            or metadata["mode"] != "evaluation" or metadata["model_slug"] != "qwen3.5-4b"
+            or metadata["layer"] != 16 or metadata["k_pairs"] != 20 or metadata["k_cone"] != 4
+            or metadata["split_seed"] != 20260923 or metadata["dtype"] != "bf16"
             or metadata["alphas"] != [0.0, 2.0, 3.0, 4.0, 5.0, 6.0]
             or metadata["decision_prefix"] != DECISION_PREFIX or metadata["max_new_tokens"] != 192):
         raise ValueError("paper cone source protocol mismatch")
@@ -322,8 +342,8 @@ class DegenerateDimDirection(ValueError):
         self.layer = layer
 
 
-def fit_dim_direction(top: torch.Tensor, bottom: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
-    """Compute model-local 1D mean difference in fp32, without storing raw states."""
+def fit_dim_difference(top: torch.Tensor, bottom: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+    """Model-local fp32 Top-minus-Bottom mean difference, without storing raw states."""
     if (top.shape != bottom.shape or top.ndim not in (2, 3) or top.shape[0] != 10
             or (top.ndim == 3 and top.shape[1] < 16) or top.shape[-1] < 2):
         raise ValueError("DIM state shape must be [10,d] or [10,K>=16,d]")
@@ -333,13 +353,20 @@ def fit_dim_direction(top: torch.Tensor, bottom: torch.Tensor) -> tuple[torch.Te
     norms = difference.norm(dim=-1)
     if not torch.isfinite(norms).all():
         raise ValueError("DIM direction has nonfinite norm")
+    flat = norms.reshape(-1)
+    return difference, {"min": float(flat.min()), "median": float(flat.median()), "max": float(flat.max())}
+
+
+def fit_dim_direction(top: torch.Tensor, bottom: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+    """Unit-normalized DIM direction (Qwen V1); a zero difference cannot be normalized."""
+    difference, stats = fit_dim_difference(top, bottom)
+    norms = difference.norm(dim=-1)
     if torch.any(norms <= 1e-8):
         raise DegenerateDimDirection(float(norms.min()))
     unit = difference / norms.unsqueeze(-1)
     if not torch.isfinite(unit).all() or torch.any((unit.norm(dim=-1) - 1).abs() > 1e-5):
         raise ValueError("DIM unit direction failed normalization")
-    flat = norms.reshape(-1)
-    return unit, {"min": float(flat.min()), "median": float(flat.median()), "max": float(flat.max())}
+    return unit, stats
 
 
 def split_population(path: Path, seed: int) -> tuple[dict[str, dict[str, str]], list[str], list[str]]:
@@ -364,7 +391,10 @@ def prepare_instruction_suffix(tokenizer: Any, companies: Mapping[str, Mapping[s
     common: list[int] | None = None
     for ticker, company in companies.items():
         prompt = _render_frozen_prompt(ticker, company["name"], order=0, reverse=False)
-        fmt = format_prompt(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
+        fmt = format_prompt(
+            tokenizer, prompt, use_chat_template=True, enable_thinking=False,
+            chat_template_kwargs=template_render_kwargs(tokenizer),
+        )
         begin = fmt.find(prompt)
         if begin < 0:
             raise ValueError(f"chat template omitted prompt for {ticker}")
@@ -396,7 +426,10 @@ def rank_construction(model: Any, tokenizer: Any, companies: Mapping[str, Mappin
     for index, ticker in enumerate(tickers):
         c = companies[ticker]
         prompt = _render_frozen_prompt(ticker, c["name"], order=0, reverse=False)
-        fmt = format_prompt(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
+        fmt = format_prompt(
+            tokenizer, prompt, use_chat_template=True, enable_thinking=False,
+            chat_template_kwargs=template_render_kwargs(tokenizer),
+        )
         scoring = fmt + DECISION_PREFIX
         buy_id, sell_id = answer_token_ids(tokenizer, scoring)
         ids = torch.tensor([input_ids(tokenizer, scoring)], dtype=torch.long, device=model.input_device)
@@ -481,21 +514,6 @@ def validate_dim_resume(
         set(targets[t]) != valid_layers for t in tickers
     )):
         raise ValueError("DIM resume marked complete but layer/ticker matrix is incomplete")
-
-
-def validate_dim_baseline_consistency(
-    targets: Mapping[str, Any], tickers: Sequence[str], layers: Sequence[int],
-) -> None:
-    """The unhooked alpha-zero score and generation must agree across sweep layers."""
-    if not layers:
-        raise ValueError("DIM baseline requires candidate layers")
-    for ticker in tickers:
-        baseline = targets[ticker][f"L{layers[0]}"]["rows"][0]
-        for layer in layers[1:]:
-            other = targets[ticker][f"L{layer}"]["rows"][0]
-            if (abs(baseline["margin"] - other["margin"]) > 1e-3
-                    or baseline["generated_text"] != other["generated_text"]):
-                raise ValueError(f"crossmodel DIM alpha-zero baseline differs across layers for {ticker}")
 
 
 def dim_layer_summary(
@@ -617,7 +635,10 @@ def extract_concept_cone_basis(
     def get_company_span_state(ticker: str) -> tuple[torch.Tensor, str]:
         c = company_by_ticker[ticker]
         prompt = _render_frozen_prompt(ticker, c["name"], order=0, reverse=False)
-        fmt = format_prompt(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
+        fmt = format_prompt(
+            tokenizer, prompt, use_chat_template=True, enable_thinking=False,
+            chat_template_kwargs=template_render_kwargs(tokenizer),
+        )
         c_start, c_end = instruction_char_span(prompt)
         b_start = fmt.find(prompt)
         span = token_span(tokenizer, fmt, b_start + c_start, b_start + c_end, add_special_tokens=True)
@@ -793,7 +814,10 @@ def run_cone_evaluation(
             bullets = MACRO_SCENARIOS[evidence_mode]
             prompt = render_custom_prompt(ticker, c["name"], bullets)
 
-        fmt = format_prompt(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
+        fmt = format_prompt(
+            tokenizer, prompt, use_chat_template=True, enable_thinking=False,
+            chat_template_kwargs=template_render_kwargs(tokenizer),
+        )
         inst_marker = "Your final response must be a single, valid JSON object."
         c_start = prompt.find(inst_marker)
         c_end = len(prompt)
@@ -890,9 +914,9 @@ def run_cone_evaluation(
 def extract_dim_layer_directions(
     model: Any, tokenizer: Any, companies: Mapping[str, Mapping[str, str]],
     top: Sequence[str], bottom: Sequence[str], layers: Sequence[int], suffix_length: int,
-    *, arm: str = "tokenwise",
+    *, arm: str = "tokenwise", normalize: bool = True,
 ) -> dict[int, tuple[torch.Tensor, dict[str, float]]]:
-    """Reduce 20 clean construction prompts to each layer's own DIM ray."""
+    """Reduce 20 clean construction prompts to each layer's own DIM ray (unit or raw difference)."""
     if arm not in ("tokenwise", "single_all"):
         raise ValueError("unknown DIM arm")
     if len(top) != 10 or len(bottom) != 10 or set(top) & set(bottom) or suffix_length < 16:
@@ -902,7 +926,10 @@ def extract_dim_layer_directions(
         for ticker in tickers:
             company = companies[ticker]
             prompt = _render_frozen_prompt(ticker, company["name"], order=0, reverse=False)
-            fmt = format_prompt(tokenizer, prompt, use_chat_template=True, enable_thinking=False)
+            fmt = format_prompt(
+                tokenizer, prompt, use_chat_template=True, enable_thinking=False,
+                chat_template_kwargs=template_render_kwargs(tokenizer),
+            )
             begin = fmt.find(prompt)
             c_start, c_end = instruction_char_span(prompt)
             if begin < 0:
@@ -919,32 +946,36 @@ def extract_dim_layer_directions(
                             if arm == "single_all" else states[layer][0, span[1] - suffix_length:span[1], :])
                 samples[layer][group].append(selected.float())
             del states
+    fit = fit_dim_direction if normalize else fit_dim_difference
     directions = {}
     for layer in layers:
         try:
-            directions[layer] = fit_dim_direction(torch.stack(samples[layer]["top"]),
-                                                  torch.stack(samples[layer]["bottom"]))
+            directions[layer] = fit(torch.stack(samples[layer]["top"]), torch.stack(samples[layer]["bottom"]))
         except DegenerateDimDirection as exc:
             raise DegenerateDimDirection(exc.norm, layer) from exc
     return directions
 
 
-def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None:
-    """DIM layer sweep with versioned Qwen and three-model entrypoints."""
+def validate_dim_output(out: Path, slug: str, arm: str, prefix: str) -> None:
+    """New DIM runs live under their own versioned run id and arm, never elsewhere."""
+    base = Path("artifacts") / slug / "concept-cone-steering" / "runs"
+    run_name = out.parent.parent.name
+    if (out.name != "result.json" or len(out.parts) < 4 or out.parent.name != arm
+            or not run_name.startswith(prefix) or run_name == prefix[:-1]
+            or not out.resolve().is_relative_to(base.resolve())):
+        raise ValueError(f"DIM output must be artifacts/<model>/concept-cone-steering/runs/{prefix}<id>/<arm>/result.json")
+
+
+def run_dim_paper(args: argparse.Namespace) -> None:
+    """Qwen V1 DIM layer sweep over the 427-company C2-selected layers."""
     slug = Path(args.model).resolve().name
-    spec = DIM_CROSSMODEL_CONFIG.get(slug) if crossmodel else None
-    if crossmodel and spec is None:
-        raise ValueError("crossmodel DIM requires Gemma4, GLM4 or GPT-OSS")
     layers = list(args.dim_layers)
-    allowed_layers = spec["layers"] if spec else DIM_PAPER_LAYERS
     alphas = [0.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    if not crossmodel and (slug != "qwen3.5-4b" or args.model_dtype != "bf16"):
+    if slug != "qwen3.5-4b" or args.model_dtype != "bf16":
         raise ValueError("DIM V1 requires Qwen3.5-4B with bf16 model dtype")
-    if spec and args.model_dtype != spec["dtype"]:
-        raise ValueError(f"crossmodel DIM requires {spec['dtype']} model dtype for {slug}")
     if (not layers or len(layers) != len(set(layers)) or layers != sorted(layers)
-            or not set(layers).issubset(allowed_layers)):
-        raise ValueError(f"DIM candidate layers must be an ordered subset of {allowed_layers}")
+            or not set(layers).issubset(DIM_PAPER_LAYERS)):
+        raise ValueError(f"DIM candidate layers must be an ordered subset of {DIM_PAPER_LAYERS}")
     if args.alphas != alphas or args.split_seed != 20260923 or args.evidence_mode != "balanced":
         raise ValueError("DIM paper alpha grid, split seed and balanced evidence are frozen")
     if (args.inject_layer is not None or args.eval_individual_rays or args.centroid_dims
@@ -954,29 +985,17 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
         raise ValueError("DIM paper mode requires --output-json")
     out = Path(args.output_json)
     base = Path("artifacts") / slug / "concept-cone-steering" / "runs"
-    run_name = out.parent.parent.name
-    prefix = "dim-crossmodel-layer-sweep-v1-" if crossmodel else "dim-layer-sweep-v1-"
-    if (out.name != "result.json" or len(out.parts) < 4 or out.parent.name != args.dim_arm
-            or not run_name.startswith(prefix) or run_name == prefix[:-1]
-            or not out.resolve().is_relative_to(base.resolve())):
-        raise ValueError(f"DIM output must be artifacts/<model>/concept-cone-steering/runs/{prefix}<id>/<arm>/result.json")
+    validate_dim_output(out, slug, args.dim_arm, "dim-layer-sweep-v1-")
     companies, construction, evaluation = split_population(Path(args.population_csv), args.split_seed)
     smoke = args.smoke_tickers is not None
     tickers = list(args.smoke_tickers) if smoke else evaluation
     if not tickers or len(set(tickers)) != len(tickers) or not set(tickers).issubset(evaluation):
         raise ValueError("DIM smoke/evaluation targets must be distinct members of the 101 held-out companies")
     c2_info = c2_427_layer_source(slug)
-    c2_bytes = Path(c2_info["path"]).read_bytes()
-    if spec and (hashlib.sha256(c2_bytes).hexdigest() != spec["c2_sha256"]
-                 or c2_info["sha256"] != spec["c2_sha256"]):
-        raise ValueError("crossmodel C2 source SHA differs from frozen protocol")
-    c2_data = json.loads(c2_bytes)
-    transfer = (validate_dim_crossmodel_curve(c2_data["curves"]["instruction"], spec) if spec
-                else validate_dim_c2_curve(c2_data["curves"]["instruction"]))
-    paper_path = base / (spec["source_run"] if spec else "c2-guided-paper-20260924") / "result.json"
+    c2_data = json.loads(Path(c2_info["path"]).read_bytes())
+    transfer = validate_dim_c2_curve(c2_data["curves"]["instruction"])
+    paper_path = base / "c2-guided-paper-20260924" / "result.json"
     paper_bytes = paper_path.read_bytes()
-    if spec and hashlib.sha256(paper_bytes).hexdigest() != spec["source_sha256"]:
-        raise ValueError("crossmodel ranking source SHA differs from frozen protocol")
     paper = json.loads(paper_bytes)
     cfg = Path(args.model) / "config.json"
     tokenizer_cfg = Path(args.model) / "tokenizer_config.json"
@@ -988,11 +1007,11 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
         for ticker in sorted(companies)
     ], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     split = json.dumps({"construction": construction, "evaluation": evaluation}, sort_keys=True).encode()
-    model, tokenizer, _ = load_model(args.model, dtype="native" if spec and spec["dtype"] == "native" else None)
-    if model.n_layers != (spec["n_layers"] if spec else 32) or max(layers) >= model.n_layers:
+    model, tokenizer, _ = load_model(args.model, dtype=None)
+    if model.n_layers != 32 or max(layers) >= model.n_layers:
         raise ValueError("DIM model layer count differs from C2 source")
     expected = {
-        "schema": spec["source_schema"] if spec else "concept-cone-sp500-paper-v1",
+        "schema": "concept-cone-sp500-paper-v1",
         "mode": "evaluation", "model": str(Path(args.model).resolve()),
         "model_slug": slug, "model_config_sha256": hashlib.sha256(cfg.read_bytes()).hexdigest(),
         "tokenizer_config_sha256": hashlib.sha256(tokenizer_cfg.read_bytes()).hexdigest(),
@@ -1003,21 +1022,16 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
         "construction_tickers": construction, "evaluation_tickers": evaluation,
         "prompt_family_sha256": hashlib.sha256(prompts).hexdigest(),
         "prompt_renderer": "entity_to_dial.heldout_transfer._render_frozen_prompt(order=0,reverse=False)",
-        "decision_prefix": DECISION_PREFIX, "layer": spec["peak"] if spec else 16, "k_pairs": 20, "k_cone": 4,
-        "alphas": alphas, "dtype": spec["dtype"] if spec else "bf16", "max_new_tokens": 192,
+        "decision_prefix": DECISION_PREFIX, "layer": 16, "k_pairs": 20, "k_cone": 4,
+        "alphas": alphas, "dtype": "bf16", "max_new_tokens": 192, "c2_layer_source": c2_info,
     }
-    if slug != "glm4-9b-0414" or not crossmodel:
-        expected["c2_layer_source"] = c2_info
-    top, bottom = validate_dim_paper_ranking(
-        paper, expected, construction, evaluation,
-        source_spec={**spec, "slug": slug} if spec else None)
+    top, bottom = validate_dim_paper_ranking(paper, expected, construction, evaluation)
     if set(tickers) & (set(top) | set(bottom)):
         raise ValueError("DIM evaluation overlaps direction construction")
     suffix_length = prepare_instruction_suffix(tokenizer, companies)
-    if suffix_length != (spec["suffix_tokens"] if spec else 100):
+    if suffix_length != 100:
         raise ValueError("DIM instruction suffix differs from source cone")
-    metadata = {"schema": (f"dim-{'tokenwise' if args.dim_arm == 'tokenwise' else 'single-all'}-crossmodel-v1" if crossmodel
-                           else "dim-tokenwise-paper-v1" if args.dim_arm == "tokenwise" else "dim-single-all-paper-v1"),
+    metadata = {"schema": "dim-tokenwise-paper-v1" if args.dim_arm == "tokenwise" else "dim-single-all-paper-v1",
                 "dim_arm": args.dim_arm, "mode": "smoke" if smoke else "evaluation", "model": expected["model"],
                 "model_slug": slug, "layers": layers, "alphas": alphas, "construction_tickers": construction,
                 "evaluation_tickers": evaluation, "target_tickers": tickers, "top_10": top, "bottom_10": bottom,
@@ -1029,10 +1043,6 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
                 "tokenizer_config_sha256": expected["tokenizer_config_sha256"],
                 "checkpoint_files": expected["checkpoint_files"], "tokenizer": expected["tokenizer"],
                 "decision_prefix": DECISION_PREFIX, "max_new_tokens": 192, "suffix_tokens": suffix_length}
-    if spec:
-        metadata.update({"model_dtype": spec["dtype"], "protocol": "crossmodel-dim-layer-sweep-v1",
-                         "frozen_source_sha256": spec["source_sha256"], "frozen_c2_sha256": spec["c2_sha256"],
-                         "source_cone_schema": spec["source_schema"]})
     if out.exists():
         result = json.loads(out.read_text(encoding="utf-8"))
         validate_dim_resume(result, metadata, tickers, layers, alphas)
@@ -1041,27 +1051,8 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
             return
     else:
         result = {"metadata": metadata, "direction_diagnostics": {}, "targets": {}, "complete": False}
-    try:
-        directions = extract_dim_layer_directions(model, tokenizer, companies, top, bottom, layers,
-                                                  suffix_length, arm=args.dim_arm)
-    except DegenerateDimDirection as exc:
-        if crossmodel and args.dim_arm == "single_all" and exc.layer == 0:
-            diagnostic = {"schema": "dim-crossmodel-fit-diagnostic-v1", "model_slug": slug,
-                          "dim_arm": args.dim_arm, "layer": 0, "difference_norm": exc.norm,
-                          "threshold": 1e-8, "status": "fail_closed", "source_paper_result": str(paper_path),
-                          "source_paper_sha256": hashlib.sha256(paper_bytes).hexdigest(),
-                          "c2_layer_source": c2_info, "suffix_tokens": suffix_length,
-                          "top_10": top, "bottom_10": bottom}
-            diag_path = out.parent / "l0_fit_diagnostic.json"
-            diag_path.parent.mkdir(parents=True, exist_ok=True)
-            if diag_path.exists():
-                if json.loads(diag_path.read_text(encoding="utf-8")) != diagnostic:
-                    raise ValueError(f"DIM L0 diagnostic already exists with different provenance: {diag_path}") from exc
-            else:
-                diag_path.write_text(json.dumps(diagnostic, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
-                                     encoding="utf-8")
-            print(f"L0 single_all failed closed; compact diagnostic: {diag_path}", flush=True)
-        raise
+    directions = extract_dim_layer_directions(model, tokenizer, companies, top, bottom, layers,
+                                              suffix_length, arm=args.dim_arm)
     diagnostics = {str(layer): {**norms, "unit_sha256": hashlib.sha256(
         ray.detach().cpu().contiguous().numpy().tobytes()).hexdigest()}
                    for layer, (ray, norms) in directions.items()}
@@ -1091,8 +1082,6 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
                 "rows": evaluated["targets"][ticker]["cone_centroid"]}
             save()
     validate_dim_resume(result, metadata, tickers, layers, alphas)
-    if crossmodel:
-        validate_dim_baseline_consistency(result["targets"], tickers, layers)
     result["summary"] = {str(layer): dim_layer_summary(result["targets"], tickers, layer, alphas)
                          for layer in layers}
     result["complete"] = True
@@ -1100,12 +1089,256 @@ def run_dim_paper(args: argparse.Namespace, *, crossmodel: bool = False) -> None
     save()
     method = ("Pre-block one-vector addition at all prompt and decode tokens"
               if args.dim_arm == "single_all" else f"Post-block token-wise addition at the {suffix_length}-token instruction suffix")
-    report = (f"# {slug if crossmodel else 'Qwen3.5-4B'} {args.dim_arm} DIM layer sweep ({'smoke' if smoke else '101-company evaluation'})\n\n"
+    report = (f"# Qwen3.5-4B {args.dim_arm} DIM layer sweep ({'smoke' if smoke else '101-company evaluation'})\n\n"
               f"{method}. Descriptive only: no random-direction control or independent confirmation; "
               "identical alpha is not an equal whole-sequence injection dose across arms.\n\n"
               + dim_alpha_table({layer: result["summary"][str(layer)] for layer in layers}, alphas))
     out.with_suffix(".md").write_text(report, encoding="utf-8")
     print(f"DIM complete: {out}")
+
+
+V2_ROW_FIELDS = {"alpha", "margin", "generated_text", "decision", "format", "strict_decision"}
+
+
+def parse_generation(text: str) -> dict[str, str]:
+    """Primary complete-object decision plus the secondary whole-text strict JSON decision."""
+    decision, kind = parse_complete_decision(text)
+    return {"decision": decision or "unparsed", "format": kind,
+            "strict_decision": parse_strict_decision(text) or "unparsed"}
+
+
+def validate_dim_v2_row(row: Any, alpha: float, where: str) -> None:
+    if not isinstance(row, dict) or set(row) != V2_ROW_FIELDS or row["alpha"] != alpha:
+        raise ValueError(f"DIM V2 alpha grid or row fields mismatch for {where}")
+    value = row["margin"]
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"DIM V2 nonfinite margin for {where}")
+    text = row["generated_text"]
+    if not isinstance(text, str) or {k: row[k] for k in ("decision", "format", "strict_decision")} != parse_generation(text):
+        raise ValueError(f"DIM V2 decisions do not match generated text for {where}")
+
+
+def validate_dim_v2_resume(
+    result: Mapping[str, Any], metadata: Mapping[str, Any], tickers: Sequence[str], layers: Sequence[int],
+) -> None:
+    """Fail closed on changed provenance or corrupted baseline/layer records."""
+    if result.get("metadata") != metadata or result.get("complete") not in (True, False):
+        raise ValueError("DIM V2 resume metadata or completion flag mismatch")
+    targets = result.get("targets")
+    if not isinstance(targets, dict) or not set(targets).issubset(tickers):
+        raise ValueError("DIM V2 resume target cohort differs")
+    nonzero = [a for a in DIM_V2_ALPHAS if a != 0]
+    keys = {"baseline"} | {f"L{layer}" for layer in layers}
+    for ticker, entry in targets.items():
+        if not isinstance(entry, dict) or "baseline" not in entry or not set(entry).issubset(keys):
+            raise ValueError(f"DIM V2 resume layer mismatch for {ticker}")
+        validate_dim_v2_row(entry["baseline"], 0.0, f"{ticker}/baseline")
+        for name, layer_entry in entry.items():
+            if name == "baseline":
+                continue
+            rows = layer_entry.get("rows") if isinstance(layer_entry, dict) else None
+            if not isinstance(rows, list) or len(rows) != len(nonzero):
+                raise ValueError(f"DIM V2 alpha grid mismatch for {ticker}/{name}")
+            for alpha, row in zip(nonzero, rows, strict=True):
+                validate_dim_v2_row(row, alpha, f"{ticker}/{name}")
+    if result["complete"] and (set(targets) != set(tickers) or any(set(targets[t]) != keys for t in tickers)):
+        raise ValueError("DIM V2 resume marked complete but layer/ticker matrix is incomplete")
+
+
+def dim_v2_layer_summary(targets: Mapping[str, Any], tickers: Sequence[str], layer: int) -> list[dict[str, Any]]:
+    """Transitions conditioned on the shared alpha-zero complete-object decision, per alpha."""
+    baseline = [targets[t]["baseline"] for t in tickers]
+    nonzero = [a for a in DIM_V2_ALPHAS if a != 0]
+    by_alpha = {0.0: baseline} | {alpha: [targets[t][f"L{layer}"]["rows"][j] for t in tickers]
+                                   for j, alpha in enumerate(nonzero)}
+    n = len(tickers)
+    summary: list[dict[str, Any]] = []
+    for alpha in DIM_V2_ALPHAS:
+        current = by_alpha[alpha]
+        valid = [(b["decision"], r["decision"]) for b, r in zip(baseline, current, strict=True)
+                 if b["decision"] in ("buy", "sell") and r["decision"] in ("buy", "sell")]
+        buy_valid = sum(b == "buy" for b, _ in valid)
+        sell_valid = sum(b == "sell" for b, _ in valid)
+        buy_to_sell = sum(b == "buy" and r == "sell" for b, r in valid)
+        sell_to_buy = sum(b == "sell" and r == "buy" for b, r in valid)
+        summary.append({
+            "alpha": alpha, "n": n,
+            "parsed": sum(r["decision"] != "unparsed" for r in current),
+            "strict_parsed": sum(r["strict_decision"] != "unparsed" for r in current),
+            "median_margin": median(r["margin"] for r in current),
+            "mean_delta_margin": sum(r["margin"] - b["margin"] for b, r in zip(baseline, current, strict=True)) / n,
+            "baseline_buy_n": sum(b["decision"] == "buy" for b in baseline),
+            "baseline_sell_n": sum(b["decision"] == "sell" for b in baseline),
+            "buy_valid_pairs": buy_valid, "sell_valid_pairs": sell_valid,
+            "buy_to_sell": buy_to_sell, "sell_to_buy": sell_to_buy,
+            "buy_to_sell_rate": buy_to_sell / buy_valid if buy_valid else None,
+            "sell_to_buy_rate": sell_to_buy / sell_valid if sell_valid else None,
+            "valid_flip_pairs": len(valid), "flipped": buy_to_sell + sell_to_buy,
+            "flip_rate": (buy_to_sell + sell_to_buy) / len(valid) if valid else None,
+        })
+    return summary
+
+
+def dim_v2_alpha_table(summaries: Mapping[int, Sequence[Mapping[str, Any]]]) -> str:
+    """One metric per table, with alpha as columns and layer as rows."""
+    def table(label: str, render: Any) -> str:
+        lines = [f"### {label}", "| layer | " + " | ".join(f"alpha={a:g}" for a in DIM_V2_ALPHAS) + " |",
+                 "|---|" + "---|" * len(DIM_V2_ALPHAS)]
+        lines += [f"| L{layer} | " + " | ".join(render(r) for r in rows) + " |"
+                  for layer, rows in sorted(summaries.items())]
+        return "\n".join(lines)
+
+    def paired(count: str, denominator: str) -> Any:
+        return lambda r: f"{r[count]}/{r[denominator]}" if r[denominator] else "—"
+
+    return "\n\n".join([
+        table("Median fixed-prefix margin (nats)", lambda r: f"{r['median_margin']:+.3f}"),
+        table("Mean paired margin shift ΔM (nats)", lambda r: f"{r['mean_delta_margin']:+.3f}"),
+        table("Complete-object decisions / n (primary)", lambda r: f"{r['parsed']}/{r['n']}"),
+        table("Strict whole-text JSON decisions / n (secondary)", lambda r: f"{r['strict_parsed']}/{r['n']}"),
+        table("Sell→buy / valid alpha-zero sell pairs", paired("sell_to_buy", "sell_valid_pairs")),
+        table("Buy→sell / valid alpha-zero buy pairs", paired("buy_to_sell", "buy_valid_pairs")),
+        table("Any decision flip / all valid pairs", paired("flipped", "valid_flip_pairs")),
+    ]) + "\n"
+
+
+def run_dim_crossmodel_v2(args: argparse.Namespace) -> None:
+    """Gemma/GLM/GPT-OSS DIM V2: raw mean-difference dose, symmetric alphas, model-local ranking."""
+    slug = Path(args.model).resolve().name
+    spec = DIM_CROSSMODEL_CONFIG.get(slug)
+    if spec is None:
+        raise ValueError("DIM V2 requires Gemma4, GLM4 or GPT-OSS")
+    layers = list(args.dim_layers)
+    alphas = list(DIM_V2_ALPHAS)
+    if args.model_dtype != spec["dtype"]:
+        raise ValueError(f"DIM V2 requires {spec['dtype']} model dtype for {slug}")
+    if (not layers or len(layers) != len(set(layers)) or layers != sorted(layers)
+            or not set(layers).issubset(spec["layers"])):
+        raise ValueError(f"DIM V2 layers must be an ordered subset of {spec['layers']}")
+    if args.alphas != alphas or args.split_seed != 20260923 or args.evidence_mode != "balanced":
+        raise ValueError("DIM V2 alpha grid, split seed and balanced evidence are frozen")
+    if (args.inject_layer is not None or args.eval_individual_rays or args.centroid_dims
+            or args.skip_eval or args.leave_out_sector or args.persist_directions):
+        raise ValueError("DIM V2 rejects legacy cone controls")
+    if not args.output_json:
+        raise ValueError("DIM V2 requires --output-json")
+    out = Path(args.output_json)
+    validate_dim_output(out, slug, args.dim_arm, "dim-crossmodel-layer-sweep-v2-")
+    companies, construction, evaluation = split_population(Path(args.population_csv), args.split_seed)
+    smoke = args.smoke_tickers is not None
+    tickers = list(args.smoke_tickers) if smoke else evaluation
+    if not tickers or len(set(tickers)) != len(tickers) or not set(tickers).issubset(evaluation):
+        raise ValueError("DIM smoke/evaluation targets must be distinct members of the 101 held-out companies")
+    c2_info = c2_427_layer_source(slug)
+    c2_bytes = Path(c2_info["path"]).read_bytes()
+    if hashlib.sha256(c2_bytes).hexdigest() != spec["c2_sha256"] or c2_info["sha256"] != spec["c2_sha256"]:
+        raise ValueError("DIM V2 C2 source SHA differs from frozen protocol")
+    transfer = validate_dim_crossmodel_curve(json.loads(c2_bytes)["curves"]["instruction"], spec)
+    cfg = Path(args.model) / "config.json"
+    tokenizer_cfg = Path(args.model) / "tokenizer_config.json"
+    weights = sorted(Path(args.model).glob("*.safetensors"))
+    if not weights:
+        raise ValueError("DIM model checkpoint weights missing")
+    prompts = json.dumps([
+        (ticker, _render_frozen_prompt(ticker, companies[ticker]["name"], order=0, reverse=False))
+        for ticker in sorted(companies)
+    ], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    split = json.dumps({"construction": construction, "evaluation": evaluation}, sort_keys=True).encode()
+    model, tokenizer, _ = load_model(args.model, dtype="native" if spec["dtype"] == "native" else None)
+    if model.n_layers != spec["n_layers"]:
+        raise ValueError("DIM model layer count differs from C2 source")
+    suffix_length = prepare_instruction_suffix(tokenizer, companies)
+    if suffix_length != spec["suffix_tokens"]:
+        raise ValueError("DIM instruction suffix differs from frozen protocol")
+    ranking = rank_construction(model, tokenizer, companies, construction)
+    top = [row["ticker"] for row in ranking[-10:]]
+    bottom = [row["ticker"] for row in ranking[:10]]
+    metadata = {
+        "schema": f"dim-{'tokenwise' if args.dim_arm == 'tokenwise' else 'single-all'}-crossmodel-v2",
+        "protocol": "crossmodel-dim-layer-sweep-v2", "dim_arm": args.dim_arm,
+        "mode": "smoke" if smoke else "evaluation", "model": str(Path(args.model).resolve()),
+        "model_slug": slug, "model_dtype": spec["dtype"], "layers": layers, "alphas": alphas,
+        "dose": "alpha * raw fp32 mean(Top10) - mean(Bottom10)",
+        "construction_tickers": construction, "evaluation_tickers": evaluation, "target_tickers": tickers,
+        "top_10": top, "bottom_10": bottom, "c2_layer_source": c2_info,
+        "c2_instruction_T": {str(layer): transfer[layer] for layer in layers},
+        "split_sha256": hashlib.sha256(split).hexdigest(),
+        "population_sha256": hashlib.sha256(Path(args.population_csv).read_bytes()).hexdigest(),
+        "prompt_family_sha256": hashlib.sha256(prompts).hexdigest(),
+        "prompt_renderer": "entity_to_dial.heldout_transfer._render_frozen_prompt(order=0,reverse=False)",
+        "chat_template_sha256": hashlib.sha256((getattr(tokenizer, "chat_template", None) or "").encode()).hexdigest(),
+        "chat_template_kwargs": low_reasoning_kwargs(tokenizer),
+        "model_config_sha256": hashlib.sha256(cfg.read_bytes()).hexdigest(),
+        "tokenizer_config_sha256": hashlib.sha256(tokenizer_cfg.read_bytes()).hexdigest(),
+        "checkpoint_files": [{"name": path.name, "bytes": path.stat().st_size} for path in weights],
+        "tokenizer": str(getattr(tokenizer, "name_or_path", "unknown")),
+        "decision_prefix": DECISION_PREFIX, "max_new_tokens": 192, "suffix_tokens": suffix_length,
+        "primary_parse": "complete_object", "allowed_formats": list(FORMATS),
+    }
+    if template_uses_date(tokenizer):
+        metadata["chat_template_date"] = TEMPLATE_DATE.date().isoformat()
+    if out.exists():
+        result = json.loads(out.read_text(encoding="utf-8"))
+        validate_dim_v2_resume(result, metadata, tickers, layers)
+        if result["complete"]:
+            print(f"Already complete: {out}")
+            return
+    else:
+        result = {"metadata": metadata, "ranking": ranking, "direction_diagnostics": {},
+                  "targets": {}, "complete": False}
+    directions = extract_dim_layer_directions(model, tokenizer, companies, top, bottom, layers,
+                                              suffix_length, arm=args.dim_arm, normalize=False)
+    diagnostics = {str(layer): {**norms, "difference_sha256": hashlib.sha256(
+        ray.detach().cpu().contiguous().numpy().tobytes()).hexdigest()}
+                   for layer, (ray, norms) in directions.items()}
+    if result["direction_diagnostics"] not in ({}, diagnostics):
+        raise ValueError("DIM directions changed during resume")
+    result["direction_diagnostics"] = diagnostics
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    def save() -> None:
+        tmp = out.with_name(out.name + ".tmp")
+        tmp.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+        tmp.replace(out)
+
+    def evaluate(ticker: str, layer: int, grid: list[float], label: str) -> list[dict[str, Any]]:
+        evaluated = run_cone_evaluation(
+            model, tokenizer, directions[layer][0].unsqueeze(-1), companies, [ticker], grid,
+            inject_layer=layer, evidence_mode="balanced", fixed_prefix=True, max_new_tokens=192,
+            save_full_text=True, operator_label=label, pre_block_all=args.dim_arm == "single_all")
+        return [{"alpha": row["alpha"], "margin": row["margin"], "generated_text": row["generated_text"],
+                 **parse_generation(row["generated_text"])}
+                for row in evaluated["targets"][ticker]["cone_centroid"]]
+
+    save()
+    for ticker in tickers:
+        if ticker not in result["targets"]:
+            result["targets"][ticker] = {"baseline": evaluate(ticker, layers[0], [0.0], "alpha-zero baseline")[0]}
+            save()
+    nonzero = [alpha for alpha in alphas if alpha != 0]
+    for layer in layers:
+        for ticker in tickers:
+            if f"L{layer}" not in result["targets"][ticker]:
+                result["targets"][ticker][f"L{layer}"] = {
+                    "rows": evaluate(ticker, layer, nonzero, f"L{layer} {args.dim_arm} DIM")}
+                save()
+    validate_dim_v2_resume(result, metadata, tickers, layers)
+    result["summary"] = {str(layer): dim_v2_layer_summary(result["targets"], tickers, layer) for layer in layers}
+    rows = [entry["baseline"] for entry in result["targets"].values()] + [
+        row for entry in result["targets"].values() for layer in layers for row in entry[f"L{layer}"]["rows"]]
+    result["format_counts"] = dict(sorted(Counter(row["format"] for row in rows).items()))
+    result["complete"] = True
+    validate_dim_v2_resume(result, metadata, tickers, layers)
+    save()
+    method = ("Pre-block one-vector addition at all prompt and decode tokens"
+              if args.dim_arm == "single_all" else f"Post-block token-wise addition at the {suffix_length}-token instruction suffix")
+    report = (f"# {slug} {args.dim_arm} DIM V2 layer sweep ({'smoke' if smoke else '101-company evaluation'})\n\n"
+              f"{method}; dose is alpha times the raw Top10-minus-Bottom10 mean difference. "
+              "Primary decisions are complete two-key objects behind the pre-registered wrappers; alpha zero is "
+              "generated once per company and shared by all layers. Descriptive only: no random-direction control.\n\n"
+              + dim_v2_alpha_table({layer: result["summary"][str(layer)] for layer in layers}))
+    out.with_suffix(".md").write_text(report, encoding="utf-8")
+    print(f"DIM V2 complete: {out}")
 
 
 def run_sp500_v1(args: argparse.Namespace, *, paper: bool = False) -> None:
@@ -1254,8 +1487,11 @@ def run_sp500_v1(args: argparse.Namespace, *, paper: bool = False) -> None:
 
 def main() -> None:
     args = parse_args()
-    if args.cohort_mode in ("sp500_dim_paper", "sp500_dim_crossmodel"):
-        run_dim_paper(args, crossmodel=args.cohort_mode == "sp500_dim_crossmodel")
+    if args.cohort_mode == "sp500_dim_paper":
+        run_dim_paper(args)
+        return
+    if args.cohort_mode == "sp500_dim_crossmodel_v2":
+        run_dim_crossmodel_v2(args)
         return
     if args.cohort_mode in ("sp500_v1", "sp500_paper"):
         run_sp500_v1(args, paper=args.cohort_mode == "sp500_paper")
