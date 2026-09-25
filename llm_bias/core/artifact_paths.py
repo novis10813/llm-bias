@@ -10,18 +10,27 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from llm_bias.core.lens_artifacts import (
-    canonical_lens_path,
-    lens_artifact_root,
-    model_slug,
-)
-
 DEFAULT_ARTIFACT_ROOT = Path("artifacts")
+
+
+def model_slug(model_name: str) -> str:
+    """Return a stable artifact directory name for a local path or Hub ID."""
+    normalized = model_name.rstrip("/")
+    path = Path(normalized)
+    if path.exists() or normalized.startswith((".", "/")):
+        candidate = path.name
+    else:
+        candidate = normalized.replace("/", "--")
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", candidate).strip("-")
+    if not slug:
+        raise ValueError(f"cannot derive an artifact name from model {model_name!r}")
+    return slug
 
 
 def _safe_slug(value: str, *, label: str) -> str:
@@ -58,27 +67,6 @@ def model_artifact_root(
 ) -> Path:
     """Return ``artifacts/<model-slug>`` for a model identity."""
     return Path(artifact_root) / model_slug(model_name)
-
-
-def jacobian_lens_root(
-    model_name: str, *, artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT
-) -> Path:
-    """Return the model's Jacobian-lens directory."""
-    return lens_artifact_root(model_name, artifact_root=artifact_root)
-
-
-def jacobian_lens_path(
-    model_name: str,
-    *,
-    artifact_root: str | Path = DEFAULT_ARTIFACT_ROOT,
-    filename: str = "jacobian_lens.pt",
-) -> Path:
-    """Return the canonical Jacobian-lens file path for a model."""
-    if Path(filename).name != filename or not filename:
-        raise ValueError("filename must be a single non-empty file name")
-    if filename == "jacobian_lens.pt":
-        return canonical_lens_path(model_name, artifact_root=artifact_root)
-    return jacobian_lens_root(model_name, artifact_root=artifact_root) / filename
 
 
 def dataset_artifact_root(

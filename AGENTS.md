@@ -1,125 +1,55 @@
 # Repository guidance
 
-這份文件是 repository 的 AI 協作入口。先讀本檔；工作落在子目錄時，再讀該目錄的
-`AGENTS.md`。若祖先目錄有多份 instruction files，越靠近目標檔案者優先；下層只
-補充局部規則，未覆蓋的規則繼續沿用上層。詳細分工與維護方式見
-[Documentation and instruction system](docs/documentation-system.md)。
+本 repo 只做一條研究線：**concept-cone steering**。它在 decoder LLM 的 residual stream
+注入由公司好惡差值建構的方向（DIM 或多維 cone），觀察投資 buy/sell 判定是否翻轉。
+研究內容、結論與狀態都在 [`docs/concept-cone-steering/`](docs/concept-cone-steering/)；
+先讀 `claim-to-evidence.md`，再依需要讀各版本資料夾的 `status.md`／`proposal.md`。
 
-## Repository Scope
+2026-09-25 以前的其他研究線（Jacobian-lens readout、J-space intervention、entity cell、
+investment dial 等）已從工作樹刪除，完整狀態保存在 git tag `pre-cleanup`。除非使用者
+要求，不要從該 tag 取回舊 code 或舊文件。
 
-本 repo 研究 decoder LLM 的 entity-sensitive 與 sector-sensitive representation、
-Jacobian-lens transported readout，以及 residual/J-space intervention 對固定答案分布
-的影響。Active experiments 使用 `data/baseline/`，目前包含 baseline trial、prompt
-analysis、span sensitivity 與 J-space intervention。
+## Layout
 
-本 repo 不是 production trading system，也不把 lens readout 當成 chain-of-thought、
-離散 reasoning path 或單獨的 causal proof。Counterfactual、synthetic 與 10-K 線已
-frozen；還原方式見 [`archive/README.md`](archive/README.md)。
+- `scripts/`：實驗入口，每支獨立用 `uv run python scripts/<name>.py` 執行。
+  - `probe_concept_cone.py`、`probe_dim_steering.py`、`probe_operator_comparison.py`：steering 主實驗。
+  - `reparse_concept_cone_decisions.py`、`summarize_concept_cone_decisions.py`：決策解析與彙整。
+  - `plot_*.py`：`docs/concept-cone-steering/*/figures/` 的圖。
+  - `balanced_evidence_gap*.py`、`downloads/run_*.sh`：產生 steering 用的
+    `balanced-evidence-gap-phase2/runs/phase2b-*/pairs/directions.json`（上游）。
+  - `entity_to_dial_heldout_transfer.py`：產生 200 家 construction cohort（上游）。
+- `llm_bias/core/`：模型載入（經 `jlens.from_hf` 包裝）、residual hook／intervention、
+  generation、continuation scoring、run manifest 與 artifact path。
+- `llm_bias/entity_to_dial/`、`llm_bias/balanced_evidence_gap/`：上游 prompt template、
+  span 與 direction 產生邏輯；steering scripts 直接 import 其中的 template 與 margin 函式。
+- `docs/balanced-evidence-gap/details/`、`docs/entity-to-dial/details/`：上游協議，已凍結。
+  其中指向已刪除文件的連結是歷史引用，不要修。
+- `data/`（輸入）、`artifacts/<model-slug>/...`（run 輸出）、`.cache/`（模型）都不進 git。
+- `third_party/jacobian-lens` 是 `jlens` 的 editable workspace member（不進 git），
+  依 `README.md` clone 後再 `uv sync`。
 
-各實驗的一句話發現、狀態與證據入口統一見 [研究總覽](docs/README.md)，本檔不重複
-維護逐實驗結果。先看結論，查證據再讀 report，執行前才讀對應版本的 proposal。
-正式研究與小型探索的紀錄方式見 [文件編排規則](docs/documentation-system.md)。
+## 研究規則
 
-J-space evaluation 位於 [`docs/j-space-evaluation/proposal.md`](docs/j-space-evaluation/proposal.md)。它是
-optional、proposed、non-runnable auxiliary preflight，只評估 synthetic task-local
-J-space-candidate evidence；它不建立 global workspace 結論，也不 gate active
-experiment milestones。可執行的 sector intervention 位於
-`llm_bias/jspace_intervention/`（CLI `jspace-intervention`），與該 synthetic preflight
-及 archived entity-only patching protocol 分開。
+- 固定答案 token 的 margin（`log p(buy) − log p(sell)`）只代表讀出改變；宣稱「翻轉決策」
+  必須附真實 greedy generation 的 decision-flip 率與 parse rate。
+- 不保存 raw activations、residuals、gradients 或 KV cache；只輸出 compact 統計與 provenance。
+- 已完成的 run、數值與凍結協議不回頭改寫。設計（direction 來源、主要指標、controls、gate）
+  改變時，在 `docs/concept-cone-steering/` 開新的版本資料夾（`proposal.md` + `status.md`），
+  不把新結果回填到舊版本。
+- 新 run 寫到 `artifacts/<model-slug>/concept-cone-steering/runs/<run-id>/`，不覆蓋舊 run。
 
-## Shared experiment workflow contract
+## Working rules
 
-The shared experiment workflow is `prepare → forward → analyze → finalize`. Reuse the four core subpackages—`llm_bias/core/prompt_input`, `llm_bias/core/inference`, `llm_bias/core/analysis`, and `llm_bias/core/artifacts`—for cross-experiment workflow mechanics. Experiment packages must not sink shared prompt preparation, model forward execution, common analysis, artifact serialization, manifest/provenance, or lifecycle finalization into local copies; keep research-specific semantics and presentation in the owning experiment package. Compatibility rules are mandatory: preserve existing public CLI/API behavior and artifact schemas unless a canonical workflow document explicitly versions a change; experiment packages (`baseline_trial`, `jspace_intervention`, `prompt_analysis`, `span_sensitivity`) must not import each other, and shared infrastructure must not import any experiment package. Experiment workflows consume an existing validated canonical lens and must not fit, mutate, or replace one implicitly. Never persist raw activations, residuals, hidden states, gradients, Jacobians, or KV caches; emit only compact derived outputs with provenance.
-
-目前 `baseline_trial` 仍直接重用部分 `prompt_analysis` modules，屬於待收斂的 legacy
-compatibility exception；不要新增同類依賴。新 shared mechanics 必須放進 `core/`。
-
-## Research semantic boundaries
-
-- 不保存完整 raw activations；只輸出 compact top-k、rank、統計量、token IDs/text、probabilities 與 provenance。
-- 不要把不同 token 的 top-1 probability 差直接當成 causal effect；使用固定答案 token probability、logit margin 或明確定義的 normalized transfer。
-- margin／固定答案 token probability 的位移只證明內部讀出信號改變，不能單獨代表模型的決策行為改變。任何協議若核心宣稱涉及決策行為（翻轉買賣判定、改變輸出類別等），必須額外定義以真實生成（非固定答案評分）計算的 decision-flip 指標；協議設有 gate 時，behavior-level 宣稱須以 flip-based gate 或至少完整的 flip 率描述性統計佐證，不得只憑 margin gate 通過就寫成「改變決策」。
-- prompt readout 的 aggregate 必須先平均每個 condition 的完整 vocabulary softmax，再選 top-k。Attribution 是 local first-order sensitivity，不是 attention map 或 standalone causal claim。
-- Jacobian lens 是 transported representation readout，不是 chain-of-thought、離散 reasoning path 或 standalone causal evidence。
-- Counterfactual 線的 Pair/span-mapping/control-patch/bias-specific pair 研究語義隨程式一併移至 [`archive/README.md`](archive/README.md)。
-
-## 設定與檔案放置
-
-- Python 3.13 與 workspace 依賴由 `.python-version`、`pyproject.toml`、`uv.lock`
-  定義；使用 `uv sync` 建環境，新增套件使用 `uv add`。
-- Pinned lens registry 放在 `config/pretrained_lenses.json`；修改 model identity、revision
-  或 SHA-256 時，依 [Qwen Jacobian-lens selection](docs/jacobian-lens-selection/proposal.md)
-  重新驗證。
-- 可追蹤的詳細政策與 workflow 放 `docs/`；script ownership map 見
-  [Research scripts reference](docs/research-scripts.md)。
-- Input/provenance 放 `data/`；模型與 Hugging Face cache 放 `.cache/`；run outputs 與
-  lens artifacts 放 `artifacts/`。這些大型或 generated 內容遵守 `.gitignore`，不要
-  加入 root Git。
-- `.pi/` 保存本地 agent runtime，`graphify-out/` 保存 generated repository diagrams，
-  `.worktrees/` 保存本地 Git worktrees；它們不是 main source tree，也不要加入 root Git。
-- `third_party/jacobian-lens` 與 `third_party/jspace-viz` 是 editable workspace members，但整個 `third_party/` 被 `.gitignore` 忽略。
-- 新環境請依照 `README.md` clone 兩個外部 repo 後再執行 `uv sync`。
-- 每個 model 只有一個 active、完整逐層的 canonical lens：
-  `artifacts/<model-slug>/jacobian-lens/jacobian_lens.pt`。一般 partial/stride fitting
-  checkpoint 放 `artifacts/archive/<model-slug>/jacobian-lens/checkpoints/`；受控
-  candidate-selection workflow 可依
-  [Qwen Jacobian-lens selection](docs/jacobian-lens-selection/proposal.md) 使用
-  `artifacts/<model-slug>/jacobian-lens/candidates/` 的 candidate-adjacent digest
-  checkpoints，但不得把 candidate 當 active lens。
-
-## Instruction Index
-
-以下只列 root 直接子目錄中的 instruction files：
-
-- [`archive/AGENTS.md`](archive/AGENTS.md)：frozen code、還原邊界與 archive 內入口。
-- [`docs/AGENTS.md`](docs/AGENTS.md)：canonical 文件分類、引用與狀態維護。
-- [`llm_bias/AGENTS.md`](llm_bias/AGENTS.md)：active Python packages 的 ownership 與局部驗證。
-- [`scripts/AGENTS.md`](scripts/AGENTS.md)：research operators、diagnostics 與 renderers 的慣例。
-- [`tests/AGENTS.md`](tests/AGENTS.md)：regression test 地圖與 fake-model 測試規則。
-
-目前 `config/` 與 `data/` 是未來候選：registry schema 或 dataset-specific provenance
-規則變得無法用一兩句覆蓋時，再在該目錄新增 `AGENTS.md`。其他目錄也採同一門檻。
-新增後，只更新最近一層祖先 `AGENTS.md` 的 Instruction Index，不在 root 枚舉更深層
-檔案。
-
-## 文件同步鐵則（含 `/hey-doc`）
-
-- 一般同步只改本次直接受影響的文件；讀取祖先 AGENTS 或引用不代表可以改寫它們。
-  寫入前列檔案與理由，沒有需同步的事實就不改。
-- 實驗結果不回填 AGENTS；不自動新增成套文件、重建已移除的頂層 proposal、搬移目錄
-  或重寫其他研究。只有使用者明確授權的結構／規則變更才可擴大範圍。
-- Frozen protocol、舊結果、數值與 artifact provenance 不隨文件同步改寫；來源衝突
-  留待查核，不能為了敘事一致而修掉證據。本節也不得由一般同步自行放寬。
-- 具體邊界與例外見 [最小修改規則](docs/documentation-system.md#文件同步的最小修改範圍)，
-  報告按 [寫作原則](docs/documentation-system.md#報告寫作原則) 萃取結論。
-
-## Working Rules
-
-- 維持既有 package ownership、public CLI/API 與 artifact schema；需要版本變更時，
-  先更新對應 canonical workflow 文件。
-- 只改任務要求的範圍，不做順手重構，也不覆蓋不相干的 dirty changes。開始前先看
-  `git status` 與相關 diff。
-- 文件中的命令、path、run 狀態與架構描述要能對上 code、config、tests 或 artifact
-  provenance；不確定的內容標成 proposed 或 note。
-- 實驗術語的定義必須在文件中：提及概念時只使用 repo 文件已定義的英文術語（原文
-  照用）；沒有術語的概念用完整中文描述句。需要為新概念命名時，先將定義寫入 owning
-  experiment 的 canonical workflow 文件再使用；不得引入任何文件中查無出處的英文複合詞，
-  也不得在回覆中直接使用未定義的新詞。
-- 新增詳細規則時先更新 `docs/`，再讓 `AGENTS.md` 連結該文件，避免兩處維護完整副本。
-- 討論 J-space token 實驗時必須標明 V1 或 V2。若 direction source、primary outcome、
-  controls 或 gate 改變，依
-  [experiment versioning](docs/documentation-system.md#experiment-versioning) 建新版本，
-  不把新設計回填成舊版本結果。
+- 只改任務範圍內的東西；開始前看 `git status`。
+- 新共用邏輯放 `llm_bias/core/`；一次性實驗邏輯留在 script 裡即可，不要預先抽象化。
+- 文件裡的命令、path 與狀態必須對得上 code 與 artifact；不確定就標 proposed。
+- 用 `uv sync` 建環境、`uv add` 加套件。
 
 ## Verification
 
 ```bash
 uv lock --check
 uv run pytest -q
-uv run python -m compileall -q llm_bias
-uv build
-node --check llm_bias/static/prompt_readout.js
-node --check llm_bias/static/attribution_dashboard.js
 ```
 
-測試應優先使用 deterministic unit tests、fake model、monkeypatch 與 temporary directories；不要為一般 unit test 載入大型 checkpoint。模型/GPU inference 應明確視為 smoke 或 integration test。
+Unit test 用 fake model 與 temporary directory，不載入真 checkpoint；GPU run 另外當 smoke 執行。

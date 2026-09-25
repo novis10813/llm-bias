@@ -13,7 +13,7 @@
 
 ## 要支持完整 C2 主張，還缺三件事
 
-1. **確認第 5 模型的身分與結果。** Ledger 記為 `Qwen3.8-27B`、在 idlab 執行中；本地 [`config/pretrained_lenses.json`](../../../config/pretrained_lenses.json) 指的是 `Qwen/Qwen3.6-27B`，且未找到對應的 Phase 2B 完成 artifact。兩者不可直接視為同一模型；遠端執行狀態待查。
+1. **確認第 5 模型的身分與結果。** Ledger 記為 `Qwen3.8-27B`、在 idlab 執行中；本地 `config/pretrained_lenses.json`（已移除，見 git tag `pre-cleanup`） 指的是 `Qwen/Qwen3.6-27B`，且未找到對應的 Phase 2B 完成 artifact。兩者不可直接視為同一模型；遠端執行狀態待查。
 2. **補 answer-prefix 與生成檢驗。** 現有四種 span 中的 `final` 是未附加 `{"decision": "` 的 formatted prompt 最後位置，**不是** answer-prefix。選定層仍欠同一 protocol 的 greedy decision check；固定答案 margin 不能充當 decision-flip 證據。
 3. **預先固定層選擇與解讀範圍。** 目前峰值是 development 掃描的事後描述，未在 steering evaluation 前凍結選層規則；原主張的 entity「L0–5 最大」邊界亦未直接完成檢驗。若要宣稱跨模型可轉移，需各模型重新建方向並分開報告模型內結果。
 

@@ -30,7 +30,6 @@ from llm_bias.balanced_evidence_gap.analysis import (
     spearman,
     toward_source_delta,
 )
-from llm_bias.balanced_evidence_gap.rev2 import run_rev2_gate
 from llm_bias.core.prompt_input.encoding import input_ids
 from llm_bias.balanced_evidence_gap.intervention import (
     AttentionEdgeZeroing,
@@ -539,58 +538,6 @@ def test_evaluate_gate_2a_rev2_pass_and_failure_modes():
 
     invalid = evaluate_gate_2a_rev2(**_gate_2a_rev2_inputs(valid_rate=0.99))
     assert invalid["criteria"]["schema_valid_rate"]["pass"] is False
-
-
-def test_run_rev2_gate_reanalysis(tmp_path):
-    import hashlib
-
-    base = {t: -2.0 + 0.1 * i for i, t in enumerate(ALL_TICKERS)}
-    rows = []
-    for t in ALL_TICKERS:
-        for reverse in (False, True):
-            for order in (0, 1):
-                margin = base[t] + (0.05 if reverse else 0.0) + (0.02 if order else 0.0)
-                rows.append({
-                    "id": f"{t}-r{int(reverse)}-o{order}",
-                    "ticker": t,
-                    "margin": margin,
-                    "reverse": reverse,
-                    "order": order,
-                    "decision": "sell",
-                })
-    phase2a_run = tmp_path / "phase2a-gpu-bf16-01"
-    (phase2a_run / "forward").mkdir(parents=True)
-    results_path = phase2a_run / "forward" / "results.jsonl"
-    results_path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-
-    phase1_summary = tmp_path / "phase1-summary.json"
-    phase1_summary.write_text(json.dumps({
-        "per_company": {
-            t: {"gap_mean": base[t], "named_margin_median": base[t] - 0.5}
-            for t in ALL_TICKERS
-        }
-    }), encoding="utf-8")
-
-    run_root = run_rev2_gate(
-        model_name="fake-model",
-        phase2a_run=phase2a_run,
-        phase1_summary=phase1_summary,
-        run_id="rev2-gate-test-01",
-        artifact_root=tmp_path / "artifacts",
-    )
-    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["status"] == "complete"
-    assert {s: v["status"] for s, v in manifest["stages"].items()} == {
-        "prepare": "complete", "analyze": "complete",
-    }
-    summary = json.loads((run_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
-    assert summary["gate_2a_rev2"]["pass"] is True
-    assert summary["gate_2a_rev2"]["phase2b_authorized"] is True
-    assert summary["n_prompts"] == 64
-    prov = json.loads((run_root / "prepare" / "provenance.json").read_text(encoding="utf-8"))
-    assert prov["phase2a_run"]["results_sha256"] == hashlib.sha256(results_path.read_bytes()).hexdigest()
-    assert prov["phase2a_run"]["n_records"] == 64
-    assert prov["reanalysis_only"] is True
 
 
 def test_detect_handoff_crossover_band_and_fallback():
@@ -1141,91 +1088,6 @@ def test_analyze_2c_records_attention_paired_difference_semantics():
     mlp_layer = gate["mlp_arm"]["per_layer"]["1"]
     assert mlp_layer["sign_flip_p_adjusted"] == pytest.approx(0.001)
     assert gate["mlp_arm"]["passing_layers"] == [1]
-
-
-def test_run_2c_gate_reanalysis(tmp_path):
-    import hashlib
-
-    from llm_bias.balanced_evidence_gap.gate_reanalysis import run_2c_gate_reanalysis
-
-    src = tmp_path / "phase2c"
-    (src / "attention").mkdir(parents=True)
-    (src / "mlp").mkdir(parents=True)
-    (src / "analyze").mkdir(parents=True)
-    records = []
-    for head in (0, 1):
-        for direction in range(8):
-            records.append({
-                "layer": 15, "head": head, "direction": f"d{direction}",
-                "entity_toward_source_delta_m": 0.5 + 0.01 * head,
-                "control_toward_source_delta_ms": [0.1, 0.2],
-            })
-    att_path = src / "attention" / "records.jsonl"
-    att_path.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
-    layer_summaries = {
-        "schema_version": "1", "layers": [
-            {"layer": 12, "top_neuron": 7, "top_spearman": 0.9, "abs_top_spearman": 0.9,
-             "control_max_abs_rho": 0.6, "control_mean_rho": 0.05, "sector_agreement": 1.0,
-             "sign_flip_p": 0.002, "control_rhos": []},
-            {"layer": 31, "top_neuron": 0, "top_spearman": 0.0, "abs_top_spearman": 0.0,
-             "control_max_abs_rho": 0.0, "control_mean_rho": 0.0, "sector_agreement": 0.0,
-             "sign_flip_p": 1.0, "control_rhos": []},
-        ]
-    }
-    mlp_path = src / "mlp" / "layer_summaries.json"
-    mlp_path.write_text(json.dumps(layer_summaries), encoding="utf-8")
-    (src / "analyze" / "summary.json").write_text(json.dumps({
-        "attention_layers": [15], "mlp_layers": [12, 31],
-    }), encoding="utf-8")
-
-    run_root = run_2c_gate_reanalysis(
-        model_name="fake-model", phase2c_run=src, run_id="gate-reanalysis-test",
-        artifact_root=tmp_path / "artifacts",
-    )
-    manifest = json.loads((run_root / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["status"] == "complete"
-    summary = json.loads((run_root / "analyze" / "summary.json").read_text(encoding="utf-8"))
-    gate = summary["gate_2c"]
-    # L31's structural zero must not contaminate the verdict
-    assert gate["mlp_arm"]["passing_layers"] == [12]
-    assert gate["mlp_arm"]["pass"] is True
-    assert gate["pass"] is True
-    assert gate["attention_arm"]["passing_heads"] == ["L15H0", "L15H1"]
-    prov = json.loads((run_root / "prepare" / "provenance.json").read_text(encoding="utf-8"))
-    assert prov["source_run"]["attention_records_sha256"] == hashlib.sha256(att_path.read_bytes()).hexdigest()
-    assert prov["source_run"]["attention_n_records"] == 16
-
-
-def test_package_does_not_import_other_experiment_packages():
-    import ast
-
-    root = Path(__file__).resolve().parents[1] / "llm_bias" / "balanced_evidence_gap"
-    forbidden_prefixes = (
-        "llm_bias.entity_cell",
-        "llm_bias.jspace_intervention",
-        "llm_bias.investment_dial",
-        "llm_bias.baseline_trial",
-        "llm_bias.span_sensitivity",
-        "llm_bias.prompt_analysis",
-        "llm_bias.financial_soundness",
-        "llm_bias.sector_context",
-    )
-    for path in root.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and not node.level:
-                names = [node.module or ""]
-            else:
-                continue
-            for name in names:
-                assert not any(name == p or name.startswith(p + ".") for p in forbidden_prefixes), (
-                    f"{path.name} imports {name}"
-                )
-
-
-# ── v2 condition family (proposal-phase2-v2) ────────────────────────────────
 
 
 def test_v2_prompt_two_sentence_conditions_and_spans():

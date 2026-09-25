@@ -60,42 +60,6 @@ def test_zero_and_exception_cleanup():
     assert not module._forward_pre_hooks
 
 
-def test_qwen35_hybrid_architecture_derivatives_and_cached_generation():
-    from transformers import Qwen3_5TextConfig, Qwen3_5ForCausalLM
-    from llm_bias.core.inference.coordinate_screen import coordinate_derivatives, next_token_margin, frozen_eval
-    from llm_bias.core.inference.adapter import InjectedModelAdapter
-    from llm_bias.core.inference.generation import generate_tokens, GenerationConfig
-    torch.manual_seed(42)
-    config = Qwen3_5TextConfig(
-        vocab_size=32, hidden_size=32, intermediate_size=64, num_hidden_layers=2,
-        num_attention_heads=2, num_key_value_heads=1, head_dim=16,
-        linear_num_key_heads=2, linear_num_value_heads=2, linear_key_head_dim=8,
-        linear_value_head_dim=8, layer_types=['linear_attention', 'full_attention'],
-        pad_token_id=0, eos_token_id=1)
-    config._attn_implementation = 'eager'
-    raw = Qwen3_5ForCausalLM(config)
-    model = SimpleNamespace(_hf_model=raw, layers=raw.model.layers)
-    ids = [4, 5, 6]
-    _, derivatives = coordinate_derivatives(model, ids, 2, 3, 'cpu', [0, 1])
-    with frozen_eval(model), torch.no_grad():
-        for layer in (0, 1):
-            neuron = int(derivatives[layer].abs().argmax())
-            with mlp_addition(model, layer, neuron, 1e-3):
-                plus = float(next_token_margin(model, ids, 2, 3, 'cpu'))
-            with mlp_addition(model, layer, neuron, -1e-3):
-                minus = float(next_token_margin(model, ids, 2, 3, 'cpu'))
-            assert (plus - minus) / .002 == pytest.approx(float(derivatives[layer][neuron]), rel=.01, abs=1e-4)
-        adapter = InjectedModelAdapter(model, hf_model=raw)
-        generation = GenerationConfig(max_new_tokens=3, pad_token_id=0)
-        baseline = generate_tokens(adapter, torch.tensor([ids]), generation)
-        with mlp_addition(model, 0, 0, 0):
-            assert torch.equal(generate_tokens(adapter, torch.tensor([ids]), generation), baseline)
-        with mlp_addition(model, 0, 0, .1):
-            changed = generate_tokens(adapter, torch.tensor([ids]), generation)
-            assert changed.shape[1] > len(ids)
-    assert all(not layer.mlp.down_proj._forward_pre_hooks for layer in raw.model.layers)
-
-
 @pytest.mark.parametrize("layer,neuron,delta", [(-1, 0, 0), (0, -1, 0), (0, 0, float('nan'))])
 def test_invalid(layer, neuron, delta):
     model, _ = fixture()

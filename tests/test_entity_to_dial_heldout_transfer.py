@@ -12,7 +12,6 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from llm_bias.evidence_insensitivity.population import load_population
 from llm_bias.entity_to_dial import heldout_transfer
 from llm_bias.entity_to_dial.heldout_transfer import (
     CONSTRUCTION_TICKERS,
@@ -24,6 +23,7 @@ from llm_bias.entity_to_dial.heldout_transfer import (
     build_sector_within_graph,
     prepare_heldout_cohort,
     prepare_heldout_prompt_records,
+    _load_population_contract,
     _run_heldout_transfer,
     random_orthonormal_bases,
     run_heldout_transfer,
@@ -33,6 +33,40 @@ from llm_bias.entity_to_dial.heldout_transfer import (
     verify_heldout_inputs,
     run_heldout_transfer,
 )
+
+
+def _qwen_fake(num_layers: int = 16, seed: int = 0) -> object:
+    """Small real Qwen3.5 fake model."""
+    from transformers import Qwen3_5TextConfig, Qwen3_5ForCausalLM
+
+    torch.manual_seed(seed)
+    config = Qwen3_5TextConfig(
+        vocab_size=9000, hidden_size=32, intermediate_size=64,
+        num_hidden_layers=num_layers,
+        num_attention_heads=2, num_key_value_heads=1, head_dim=16,
+        linear_num_key_heads=2, linear_num_value_heads=2,
+        linear_key_head_dim=8, linear_value_head_dim=8,
+        layer_types=[
+            "full_attention" if (i % 4 == 3 or i == num_layers - 1) else "linear_attention"
+            for i in range(num_layers)
+        ],
+        pad_token_id=0, eos_token_id=1,
+    )
+    raw = Qwen3_5ForCausalLM(config)
+    raw.eval()
+
+    class _Model:
+        def __init__(self) -> None:
+            self.layers = raw.model.layers
+            self.n_layers = num_layers
+            self.input_device = "cpu"
+            self._final_norm = raw.model.norm
+            self._lm_head = raw.lm_head
+
+        def forward(self, input_ids, attention_mask=None):
+            return raw(input_ids, attention_mask=attention_mask)
+
+    return _Model()
 
 
 class _CharTokenizer:
@@ -104,7 +138,7 @@ def _m6(*tickers):
 def test_cohort_is_deterministic_proportional_and_excludes_construction_and_m6(tmp_path):
     population_path = tmp_path / "population.csv"
     _write_population(population_path)
-    rows = load_population(population_path)
+    rows = _load_population_contract(population_path)
     m6 = _m6("M6-ABSENT", *[f"M6{i:02d}" for i in range(1, 12)])
     first = prepare_heldout_cohort(rows, m6_manifest=m6, population_path=population_path,
                                    selection_seed=123)
@@ -387,7 +421,6 @@ def _fake_e01_run(tmp_path):
 
 
 def test_heldout_fake_workflow_writes_compact_lifecycle_artifacts(tmp_path, monkeypatch):
-    from test_entity_to_dial_pipeline import _qwen_fake
 
     population_path = tmp_path / "population.csv"
     _write_population(population_path)
@@ -459,7 +492,6 @@ def test_public_runner_requires_model_and_population_arguments():
 
 
 def test_heldout_smoke_runs_one_pair_without_graphs_or_analysis(tmp_path, monkeypatch):
-    from test_entity_to_dial_pipeline import _qwen_fake
 
     population_path = tmp_path / "population.csv"
     _write_population(population_path)
@@ -547,7 +579,6 @@ def test_heldout_script_requires_run_id_and_forwards_smoke(tmp_path, monkeypatch
 
 
 def test_heldout_workflow_fails_closed_on_invalid_e01_and_malformed_graph(tmp_path, monkeypatch):
-    from test_entity_to_dial_pipeline import _qwen_fake
 
     population_path = tmp_path / "population.csv"
     _write_population(population_path)
@@ -587,7 +618,6 @@ def test_heldout_workflow_fails_closed_on_invalid_e01_and_malformed_graph(tmp_pa
 
 
 def test_heldout_workflow_fails_closed_on_noop_violation(tmp_path, monkeypatch):
-    from test_entity_to_dial_pipeline import _qwen_fake
 
     population_path = tmp_path / "population.csv"
     _write_population(population_path)

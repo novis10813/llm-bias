@@ -11,7 +11,6 @@ from llm_bias.core.artifact_paths import (
     dataset_artifact_root,
     dataset_slug,
     dataset_slug_from_input_path,
-    jacobian_lens_path,
     model_artifact_root,
     run_root,
     sha256_file,
@@ -26,9 +25,6 @@ def test_model_and_dataset_paths_are_deterministic(tmp_path):
     )
     assert dataset_slug("return-pairs/v1") == "return-pairs--v1"
     assert dataset_slug_from_input_path("/tmp/My Dataset.v1.csv") == "My-Dataset.v1"
-    assert jacobian_lens_path("Qwen/Qwen3.5-4B", artifact_root=tmp_path) == (
-        tmp_path / "Qwen--Qwen3.5-4B" / "jacobian-lens" / "jacobian_lens.pt"
-    )
     assert run_root("Qwen/Qwen3.5-4B", "dataset-a", "run-001", artifact_root=tmp_path) == (
         tmp_path / "Qwen--Qwen3.5-4B" / "dataset-a" / "runs" / "run-001"
     )
