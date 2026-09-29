@@ -171,4 +171,4 @@ def test_smoke_scans_generates_and_resumes(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="run id"):
         scan.main([*argv[:5], "rdo-cone-v2-test-smoke-01", *argv[6:]], model=model, tokenizer=tok)
     with pytest.raises(ValueError, match="held-out"):
-        scan.main([*argv[:9], "--smoke-tickers", "T000", *argv[11:]], model=model, tokenizer=tok)
+        scan.main([*argv[:11], "T000", *argv[13:]], model=model, tokenizer=tok)
