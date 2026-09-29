@@ -33,8 +33,8 @@ pool_builder = _load("build_evidence_pool")
 
 def _company_row(ticker: str, seed: int) -> dict[str, str]:
     """A synthetic baseline row: four price-increase and four price-decrease items, 30 random 2+2 combinations."""
-    up = [f"{ticker} signed a contract worth ${i}0 million, supporting a 5% stock price increase." for i in range(4)]
-    down = [f"{ticker} faces a cost overrun of ${i}0 million, leading to a 5% stock price decrease." for i in range(4)]
+    up = [f"{ticker} signed a contract worth ${i}0 million, supporting a 5% increase in the stock price." for i in range(4)]
+    down = [f"{ticker} faces a cost overrun of ${i}0 million, leading to a 5% decrease in the stock price." for i in range(4)]
     rng = random.Random(seed)
     row = {"ticker": ticker, "name": f"{ticker} Corp", "sector": "Utilities"}
     for k in range(30):
@@ -65,7 +65,6 @@ def test_pool_recovers_the_two_plus_two_polarity_and_rejects_ambiguous_sources()
 
 
 def test_render_reproduces_the_frozen_balanced_prompt():
-    ev = (R.MODEL_REGISTRY or {})  # noqa: F841 - registry import keeps the protocol module loaded
     items, polarity = scan.unit_evidence({}, scan.REF)
     assert polarity == "++--"
     for reverse in (False, True):
@@ -102,7 +101,7 @@ def test_helpers_shard_rate_and_regression_effects():
             y.append(offset + (2.0 if p[-1] == "+" else 0.0))
     effects = scan.position_effects(np.array(y), tickers, pols)
     assert effects["position_4"] == pytest.approx(2.0, abs=1e-6)
-    assert effects["position_1"] == pytest.approx(0.0, abs=1e-6)
+    assert effects["position_1"] < 0     # 2+2 prompts: a positive first item makes a positive last item less likely
     assert scan.r_squared(np.array(y), np.hstack([scan._dummies(tickers), scan._dummies([p[-1] for p in pols])])) \
         == pytest.approx(1.0)
 

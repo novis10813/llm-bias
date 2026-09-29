@@ -133,12 +133,18 @@ def r_squared(y: np.ndarray, design: np.ndarray) -> float:
 
 
 def position_effects(y: np.ndarray, tickers: Sequence[str], polarity: Sequence[str]) -> dict[str, float]:
-    """Mean margin change when the item at a position is positive, with a company fixed effect."""
-    cols = np.array([[1.0 if p[k] == "+" else 0.0 for k in range(4)] for p in polarity])
+    """Marginal margin change when the item at one position is positive, with a company fixed effect.
+
+    Each position is regressed on its own: with two positive items per prompt the four position indicators sum to a
+    constant, so a joint regression is not identified.
+    """
     d = _dummies(tickers)
-    design = np.hstack([d, cols])
-    coef, *_ = np.linalg.lstsq(design, y, rcond=None)
-    return {f"position_{k + 1}": float(coef[d.shape[1] + k]) for k in range(4)}
+    out = {}
+    for k in range(4):
+        column = np.array([[1.0 if p[k] == "+" else 0.0] for p in polarity])
+        coef, *_ = np.linalg.lstsq(np.hstack([d, column]), y, rcond=None)
+        out[f"position_{k + 1}"] = float(coef[-1])
+    return out
 
 
 # ------------------------------------------------------------------------------------ analysis
