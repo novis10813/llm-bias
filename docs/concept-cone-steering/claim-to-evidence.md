@@ -1,220 +1,54 @@
 # Claim-to-Evidence Ledger
 
-**用途：** 對照 `paper-draft.md` 的論文主張、現有實驗規格與可追溯證據，決定哪些內容可以寫成結果、哪些只能保留為探索觀察，以及下一輪需要補什麼實驗。
+**用途：** 對照 `paper-draft.md` 的主張與可追溯證據；分開記錄「實驗已執行」、「結果符合預先登記判準」和「論文可寫範圍」。
 
-**審核日期：** 2026-09-23
-**目前範圍：** Qwen3.5-4B、32 layers、hidden size 2560、`entity-to-dial-heldout-transfer-v1-01` 的 200-company cohort。
-**文件狀態：** working evidence audit；不是正式結果報告，也不會把 `note.md` 的探索紀錄自動升格成 confirmation result。
+**本次核對基礎：** 2026-09-29 已同步的本地 artifacts；四模型 `confirmation-v1-20260925-full-01`，另參照歷史 pilot、[C2 v2-427](c2-v2-427/status.md) 與 [crossmodel cone paper](crossmodel-cone-paper/status.md)。**本檔是證據審查，不是新的 GPU run，也不取代各版本凍結協議。**
 
-## 判定規則
+## 判定規則與可比較範圍
 
-- **Artifact-supported exploratory：** 有 compact artifact、run provenance 與可重現輸入，但研究仍屬 development 或 pilot；可以作為目前方向的證據，不能寫成跨模型或正式泛化結論。
-- **Record-only exploratory：** 主要數字只在 `note.md` 或命令輸出紀錄中，沒有對應的完整 compact result artifact；可作為待重跑線索。
-- **Incomplete：** 有相關資料，但證據的 estimand、prompt、split 或 control 與論文 claim 不一致。
-- **Blocked：** 現有設計無法支持該 claim，必須先改變 split、prompt 或 measurement protocol，再另立／凍結版本。
-- **Supported：** 只有在 claim 的 primary outcome、control、provenance 與必要 decision-level gate 都完成後才使用。現階段沒有把任何 cone claim 標成此狀態。
+- **已執行**只表示協議所列的 arm 有完整 artifact；不表示主張獲支持。**符合判準**還需檢查各 claim 的分母、parse／collapse、對照與預先登記的門檻；**不支持**和**沒有可檢驗分母**不能混用。
+- `confirmation-v1` 的 primary 決策解析是 **complete-object**（允許 fenced、thought、Harmony 等外殼），不是只接受整段裸 JSON 的 secondary strict `json.loads`。所有 flip 都是以相同公司及 condition 的 α0 貪婪生成為基準；ITT 分母為 α0 該類的公司，steered unparsed 計未翻。固定前綴 margin 不是生成決策；Gemma、GPT-OSS 的固定前綴 margin 另屬 off-path readout。
+- 2026-09-22 的 200-company pilot、2026-09-24 的 402/101 cone run、2026-09-25/26 的 confirmation run，**direction construction、prompt、layer、劑量或解析協議不同，數字不可合併**。confirmation 的 503 家母體按 seed `20260923` 固定 402 家 construction／101 家 evaluation；各模型分別排序、擬合方向。
+- 這些結論只限所測模型、prompt family、split 和劑量網格；`reason` 文字不能當成 faithfulness 或金融概念標籤。
 
-固定答案 token 的 continuation margin 只能表示固定讀出改變。只要 claim 使用「決策翻轉」「改變輸出類別」或其他 generated behavior，必須同時報告真實 greedy generation 的 decision-flip 結果與 parse rate。
+## 證據與完成度入口
 
-## 現有證據入口
-
-| 證據入口 | 已確認內容 | 論文用途 | 目前狀態 |
-|---|---|---|---|
-| [`entity-to-dial-heldout-transfer-v1-01`](../../artifacts/qwen3.5-4b/entity-to-dial-heldout-transfer/runs/entity-to-dial-heldout-transfer-v1-01/manifest.json) | 200 companies、800 prompts、8,274 forward records、200 selection records；提供 DIM 與 cone 的 construction ranking | construction source、company split provenance、clean margin | Artifact-supported exploratory；這是 direction source，不是 steering confirmation |
-| [`phase1-v2-stance-char16-01`](../../artifacts/qwen3.5-4b/entity-concept-layer-scan/runs/phase1-v2-stance-char16-01/analyze/summary.json) | candidate layers 8/12/15/19/20/23/26；L15 stance-direction vs margin `R²=0.605`；run 標為 `development` / `not_evaluated` | L15 是目前的 representation-localization clue | Artifact-supported exploratory；不是完整 span×layer residual-patching map |
-| [`03_dim_balanced3_frozen.json`](../../artifacts/qwen3.5-4b/concept-cone-steering/runs/20260922-p0/03_dim_balanced3_frozen.json) | frozen balanced prompt；MO、CNC、FOXA；DIM alpha 0–5；margin、greedy JSON、random control、anonymous prompt | DIM 的第一個 decision-level pilot | Artifact-supported exploratory；有結果，但缺 run metadata、multi-seed 與 full evaluation coverage |
-| [`smoke-vdim/provenance.json`](../../artifacts/qwen3.5-4b/concept-cone-steering/directions/smoke-vdim/provenance.json) | token-wise DIM shape `[100, 2560]`、L15、Top/Bottom 10、upstream run、git commit | direction construction provenance | Artifact-supported; smoke direction，不是完整 evaluation |
-| [`smoke-cone4d/provenance.json`](../../artifacts/qwen3.5-4b/concept-cone-steering/directions/smoke-cone4d/provenance.json) | sector-demeaned contrastive SVD、Top/Bottom 20、4D cone、L15 upstream；保存 stance cosine | 4D cone construction provenance | Artifact-supported; smoke direction，不是完整 cone behavior result |
-| [`dim_smoke.json`](../../artifacts/qwen3.5-4b/concept-cone-steering/runs/smoke-20260922/dim_smoke.json) | alpha 只有 0；沒有 steering dose-response | schema／execution smoke | 不能支持效果 claim |
-| [`cone_smoke.json`](../../artifacts/qwen3.5-4b/concept-cone-steering/runs/smoke-20260922/cone_smoke.json) | 4D cone；alpha 只有 0；保存 stance cosine 與 clean output | schema／execution smoke | 不能支持 cone steering claim |
-| [`note.md`](note.md) | DIM 情境、cone 曲線、5-company 結果、macro probe 的文字紀錄與命令 | 研究線索與待重跑清單 | Record-only exploratory；數字不能取代 compact result artifact |
-
-## Claim matrix
-
-### C1：Inference-time investment stance is controllable
-
-**論文 claim：** representation steering 可以在不改 prompt 或 model weights 的情況下改變 investment stance。
-
-**目前證據：** `03_dim_balanced3_frozen.json` 在 frozen balanced prompt 上，DIM 對 MO、CNC、FOXA 的 margin 隨 alpha 上升，並分別在 alpha 4、5、4 產生 greedy `buy`。這同時包含 margin 與 generated decision，因此比只報 fixed-token margin 更完整。
-
-**判定：** **Artifact-supported exploratory。**
-
-**可寫範圍：**「在 Qwen3.5-4B 的 frozen balanced pilot 中，DIM 能將三個極端 Sell target 的 margin 往 Buy 方向推動，且在有限 alpha sweep 中觀察到 greedy flips。」不要寫成一般 LLM 性質，也不要以三家公司代表穩健泛化。
-
-**需要補的證據：** 多個 construction-disjoint targets、至少多個 random seeds、完整 run metadata、固定的 prompt renderer 與正式 decision-flip summary。
-
-### C2：A useful steering site can be localized by layer and span
-
-**2026-09-24 版本核對：** C2 的 **427 家同公司條件翻轉**結果與缺項見 [C2 v2 狀態](c2-v2-427/status.md)；下方的 16 家／8 direction 峰值表及 L15 論述是[早期跨公司版本](c2-phase2b-16/status.md)的歷史紀錄，**不可當作 427 家結果**。兩版 direction、prompt 與 2A gate 不同。兩版 summary 都已有 `evidence` span；`final` 卻不是 answer-prefix，因此舊段落「未涵蓋 evidence」不再準確。舊段落第 5 模型 `Qwen3.8-27B` 與本地 registry `Qwen3.6-27B` 命名不一致，遠端狀態待查；以下原文留存，不把它視為已完成。
-
-**論文 claim：** entity-span transfer 在 layers 0--5 最大，instruction-span transfer 在 L15 達峰，因此 L15 是 practical steering site。
-
-**目前證據：** `phase1-v2-stance-char16-01` 顯示 L15 的 stance direction 對 16 家公司 final margin 有 `R²=0.605`，而候選層 profile 在 L15 最高。`docs/proposal/progress-after-investment-dial.md` 另記錄過 L15 instruction transfer peak，以及較早 entity handoff 的描述。
-
-**跨模型 `span × layer` residual patching 峰值**（balanced-evidence-gap Phase 2B sweep，16 家公司、8 個 transfer direction，frozen shared-evidence template；4/5 模型完成）
-
-| 模型 (n_layers) | entity peak 層 (rel depth, T) | instruction peak 層 (rel depth, T) | 2B run-id |
-|---|---|---|---|
-| Qwen3.5-4B (32) | L0 (0.00, 1.011) | L15 (0.48, 0.464) | `phase2b-gpu-bf16-01` |
-| Gemma-4-12B (48) | L9 (0.19, 1.418) | L25 (0.53, 0.401) | `phase2b-crossmodel-01` |
-| GLM-4-9B (40) | L13 (0.33, 0.978) | L19 (0.49, 0.782) | `phase2b-crossmodel-01` |
-| GPT-OSS-20B\* (24) | L4 (0.17, 0.849) | L12 (0.52, 0.819) | `phase2b-crossmodel-01` |
-
-- T 定義：$T=(M_{\text{patched}}-M_{\text{tgt}})/(M_{\text{src}}-M_{\text{tgt}})$；4B / Gemma 淺層 entity T>1 表示 patch 效果超過 source 自身 baseline margin 差（over-transfer）。
-- 4 個模型的 instruction peak 相對深度一致落在 0.48–0.53（±0.02），但絕對層不同（L15 / L25 / L19 / L12）；entity peak 在淺層（rel depth 0–0.33）。
-- \*GPT-OSS-20B 為 MoE（使用者要求的例外納入）；gpt-oss-20b 與 gemma4-12b-it 的 2A gate 失敗後以記錄在案的 `--gate-override` 繼續（開發階段描述性比較）。
-- 第 5 個模型 Qwen3.8-27B（FP8 checkpoint）在 idlab 上執行中，完成後回填本表。
-
-**判定：** **Incomplete。** `span × layer` residual patching map 現已涵蓋 entity 與 instruction spans 的完整 layer range（4 個模型，見上表）；4B 的 instruction peak 在 L15、entity peak 在最早層，與 claim 方向一致。仍未涵蓋 evidence／answer-prefix spans，被選層沒有 greedy decision check，layer selection rule 未事先固定，「0--5」邊界也未直接證實。
-
-**建議論文 wording：** 暫時改成「在既有 Qwen3.5-4B development characterization 中，L15 是 instruction-span stance readout 的候選高點；本文把 layer selection 視為 model-specific procedure。」等完整 map 後再恢復更精確的 layer claim。
-
-**必要實驗：**
-
-1. 凍結與 steering evaluation 相同的 prompt template、company split、margin scorer。
-2. 對完整 layer range 與固定 token spans 執行 residual patching，至少包含 entity、evidence、instruction、answer-prefix／final spans。
-3. 以 margin displacement 作 primary localization metric；對被選 layer 另做 greedy decision check。
-4. 事先固定 layer selection rule，不能看完 steering flip 後再挑 L15。
-
-### C3：DIM and multi-dimensional cone provide comparable operator families
-
-**論文 claim：** single-neuron scalar intervention、DIM 與 multi-dimensional cone 的 dose-response 可以被直接比較。
-
-**目前證據：** DIM direction 有 persisted `[100,2560]` artifact 與 frozen balanced result。4D cone 有 persisted direction provenance，但現有 cone JSON 只有 alpha 0；完整 4D 曲線目前只在 `note.md`。
-
-**判定：** **Incomplete。** 目前只能說三種 operator 已被定義，不能說三者已完成公平 comparison。
-
-**必要實驗：**
-
-- 同一 model、prompt、target set、intervention span、layer、alpha convention。
-- 對每個 operator 報告每-token intervention norm，或使用事先固定的 matched-norm dose；不能只用 raw alpha 比較不同 operator。
-- 保留 single-neuron dial 的 neuron identity、sign、layer 與 dose definition。
-- 每個 operator 同時輸出 margin、greedy decision、parse rate、decision flips 與 random control。
-- 把 DIM 與 cone 的 construction companies 和 evaluation companies 分開。
-
-### C4：Fixed-token margin movement can diverge from generated decision changes
-
-**論文 claim：** margin 變正不保證 greedy JSON decision 立即翻轉。
-
-**目前證據：** `03_dim_balanced3_frozen.json` 已直接支持：CNC 在 alpha 4 的 margin 是 `+1.035`，但 greedy decision 仍為 `sell`；MO 與 FOXA 在正 margin 後於 alpha 4 翻成 `buy`。
-
-**判定：** **Artifact-supported exploratory。**
-
-**可寫範圍：** 這是目前最清楚、最適合成為主結果之一的 distinction。結果應報告 exact margin、decision、alpha，而不是只報「margin threshold」。
-
-**必要補強：** 擴大 targets 與 alpha sweep，預先定義 decision-flip rate；若 prompt 可能生成 invalid JSON，需把 parse failure 分開列出，不能從分析中刪除。
-
-### C5：The learned direction is more effective than a matched-norm random direction
-
-**論文 claim：** learned DIM/cone operator 的 movement 不是任意 residual perturbation 都會產生。
-
-**目前證據：** `03_dim_balanced3_frozen.json` 有 MO、single random seed、alpha 0/2/4/6；DIM movement 明顯大於 random pilot，且 random 沒有 flip。
-
-**判定：** **Artifact-supported exploratory，single-seed。**
-
-**不可直接宣稱：** 「高度方向特異性」或「非隨機擾動所致」作為普遍結論。單一 random seed 只能是 pilot control。
-
-**必要實驗：** 至少固定多個 random seeds，對每個 seed 報告 matched-norm effect、decision flips、confidence interval 或 bootstrap summary；control 應與 learned operator 使用相同 prompt 與 alpha／norm grid。
-
-### C6：The operator is a global stance control rather than an entity identifier
-
-**論文 claim：** DIM 對 identity-stripped／anonymous prompt 也有效，因此它不是只編碼某家公司。
-
-**目前證據：** `03_dim_balanced3_frozen.json` 的 anonymous prompt 在 alpha 4 從 margin `-1.788` 變成 `+1.387`，greedy decision 從 `sell` 變成 `buy`。
-
-**判定：** **Artifact-supported exploratory，single anonymous prompt。**
-
-**可寫範圍：** 「該 pilot 與 global stance control 相容」；不能寫成已證明 operator 完全不含 entity information，也不能說已完成 entity debiasing。
-
-**必要實驗：** 多個 identity-stripped prompts、不同 evidence conditions、不同 targets 的 paired anonymous controls；另外保留 entity-present prompt 的同一 alpha／norm grid。
-
-### C7：Steering remains sensitive to financial evidence
-
-**論文 claim：** strong adverse evidence 可以延後或阻止 decision flip，margin movement 和 evidence-grounded generated decision 可能分離。
-
-**目前證據：** `note.md` 記錄 pure-positive、pure-negative、zero-evidence 與 rationale observations；但該紀錄明確指出 balanced pilot 使用 frozen renderer，而 scenario 數字來自後來改過首行的 custom renderer。`probe_dim_steering.py` 目前的 `custom` renderer 與 frozen template 不同，且 `--prompt-style frozen` 只覆蓋 balanced scenario。
-
-**判定：** **Blocked for paper-level evidence until rerun.**
-
-**必要實驗：**
-
-1. 凍結單一 prompt renderer；positive、negative、mixed、zero-evidence 全部使用同一 protocol version。
-2. 對同一 company、同一 operator、同一 alpha／norm grid，先記錄 clean margin／decision，再記錄 steered margin／decision。
-3. 至少使用多家公司與兩個 evidence polarity；report margin delta、decision-flip rate、parse rate。
-4. generated `reason` 只能作 qualitative example；不能把它當成 evidence faithfulness measurement。
-
-### C8：A multi-dimensional cone is smoother or less saturating than a 1D operator
-
-**論文 claim：** cone 比單一方向提供更平滑、較不易 saturation 的 control surface。
-
-**目前證據：** `smoke-cone4d/provenance.json` 證明 4D sector-demeaned SVD direction 已抽取；`note.md` 記錄 1D、4D、8D 曲線與反折觀察，但沒有對應的完整 evaluation JSON。note 同時混有舊 8D basis 與目前 4D construction，不能直接合併成一個結果。
-
-**判定：** **Record-only exploratory。**
-
-**必要實驗：**
-
-- 同一 frozen prompt、同一 target、同一 matched-norm budget。
-- 1D DIM、single-neuron、4D cone，以及 dimension ablation（例如 first-1/2/3/4 axes）同時掃描。
-- 事先定義 monotonicity、saturation／reversal 與 greedy-flip metrics；不能只挑一條漂亮曲線。
-- 將每條曲線保存到 compact result JSON，並保存 cone dimension、construction set、target split、alpha／norm convention。
-
-### C9：Different cone rays correspond to distinct financial concepts
-
-**論文 claim：** cone axes 或 rays 分別調控不同財務考量面向。
-
-**目前證據：** `note.md` 以 generated rationale 的語意差異作為主要依據；沒有獨立 concept labels、human audit、evidence attribution 或 quantitative ray-specific metric。
-
-**判定：** **Blocked。** 幾何正交、不同 margin 曲線或不同生成理由本身都不能證明 axes 是不同 financial concepts。
-
-**論文處理：** 目前應從 main contribution 和 Introduction 移除。若保留，最多寫成 qualitative observation，並明確標成不具 semantic identification 的 exploratory analysis。
-
-### C10：The same operator generalizes across companies and sectors
-
-**論文 claim：** 一套 4D cone 在多個跨產業極端 Sell 公司上都能翻轉 decision。
-
-**目前證據：** `note.md` 記錄 MO、CNC、FOXA、TSN、BAX 的 5/5 結果，但沒有對應的 persisted output JSON。更重要的是，這些 target 是否同時出現在 Top/Bottom 20 construction set 必須先逐一核對；依目前 200-company ranking 設計，至少部分 target 很可能參與了 cone construction。
-
-**判定：** **Blocked as generalization claim.** construction overlap 會使結果成為 in-construction transfer，不能稱為 held-out generalization。
-
-**必要實驗：** 先凍結 company-disjoint construction／evaluation split；若要宣稱 sector generalization，至少做 leave-one-sector-out 或 sector-disjoint evaluation，並保存 target exclusion provenance。報告 per-company flips，不只報 5/5 aggregate。
-
-### C11：The method supports financial explainability
-
-**論文 claim：** steering 後的 generated rationale 仍然反映金融證據，或提供可解釋的 recommendation。
-
-**目前證據：** 只有 generated reason 摘要與 evidence scenario observations，沒有 rationale faithfulness、evidence attribution、expert evaluation 或 counterfactual explanation test。
-
-**判定：** **Blocked as a primary claim。**
-
-**目前可保留的版本：** 把 financial evidence sensitivity 當作 decision-level boundary condition；把 generated reason 當 qualitative output，不稱為 explanation 或 faithful rationale。
-
-### C12：The protocol transfers across decoder LLMs
-
-**論文 claim：** layer-localized steering procedure 可適用於多個 decoder LLMs。
-
-**目前證據：** 所有現有 cone／DIM artifacts 都指向 Qwen3.5-4B；沒有第二個 model 的 run。
-
-**判定：** **Blocked as an empirical claim。** 可以在方法章說 protocol 以 model-specific layer selection 設計，不能在結果章寫 cross-model evidence。
-
-**必要實驗：** 每個 model 重新 fit direction、重新選 layer、重新報 model identity、hidden size、layer index、prompt tokenizer、construction／evaluation split。不能直接移植 L15 或 hidden-space direction。
-
-## 最小 confirmation package
-
-如果論文維持目前三項 contribution，最小可交付的 confirmation package 是：
-
-| Package | 目的 | 必須保存的結果 |
+| 版本／入口 | 可核對內容 | 用途與限制 |
 |---|---|---|
-| P0 protocol freeze | 消除 frozen／custom renderer 混用 | prompt hash、token spans、model／commit、construction／evaluation split、alpha 或 matched-norm grid |
-| P1 layer localization | 支持 model-specific steering site | 完整 span × layer map、primary margin metric、selected-layer rule、候選 layer greedy check |
-| P2 operator comparison | 真正比較 single-neuron、DIM、cone | 同一 target set 的 dose-response、matched-norm random controls、多 seed、parse rate |
-| P3 decision boundary | 把 fixed readout 和 behavior 分開 | 每個 condition 的 margin、greedy decision、flip status、parse status、flip rate |
-| P4 evidence sensitivity | 支持金融場景的 evidence consideration | frozen template 下的 positive／negative／mixed／zero-evidence paired results |
-| P5 generalization | 避免 construction leakage | company-disjoint targets；若宣稱 sector transfer，增加 sector-disjoint split |
+| [confirmation-v1 狀態](confirmation-v1/status.md)／`artifacts/<slug>/concept-cone-steering/runs/confirmation-v1-20260925-full-01/` | 四模型各適用 arm 的 `<arm>/result.json`、`cal/calibration.json`、`invocations.jsonl`；分別為 Qwen 17/17、Gemma 16/16、GLM 15/15、GPT-OSS 15/15 arm（數量含 CAL） | 本次主證據；每個模型的 `job_summary.json` 可能只包含最後一次 invocation，應以各 arm 結果為準；非 Qwen 不跑 `dim_layers`，GLM／GPT-OSS 不跑 `shuffle` 是預設範圍 |
+| [C2 v3](c2-v3-steering-prompt/status.md)／同一 confirmation run 的 `c2v3`、`c2v3_gen` | steering prompt 的全層、六 span patching；峰值 ±2 的 prefill patch-under-generation | margin 定位與生成檢查分開判讀；部分模型的生成檢查沒有相反 α0 決策分母 |
+| [operator comparison v2](operator-comparison-v2/status.md)／`dim`、`ops`、`random`、`jitter`、適用模型的 `shuffle` | matched-norm／projection dose、neuron、cone2／cone4、五個 random seed 等 | C3、C5、C8 的正式比較；與舊 4D sector-demeaned SVD smoke **不是同一種 cone construction** |
+| [evidence sensitivity v1](evidence-sensitivity-v1/status.md)／`evidence`、`anon` | pos／neg／mixed2／zero paired 結果、10 匿名身分 | C6、C7；blocked（仍可解析但不翻）與 collapsed（不可解析）分開 |
+| [generalization v1](generalization-v1/status.md)／`loso`、`loso_construction`、`split_seed` | DIM 的 company-disjoint evaluation、LOSO folds、兩個新 split seeds | C10 的 DIM 證據；不能自動延伸到 cone 的 sector-disjoint 效果 |
+| [crossmodel cone paper](crossmodel-cone-paper/status.md) | 四模型在 C2 v2 選層的 402/101 cone 評估 | 先前的 cone 行為資料；原始 strict JSON 下 Gemma／GPT-OSS 皆無合格 flip 分母，不可與 confirmation 的 complete-object 解析率混報 |
+| [2026-09-22 pilot](../../artifacts/qwen3.5-4b/concept-cone-steering/runs/20260922-p0/03_dim_balanced3_frozen.json)、[上游 ranking](../../artifacts/qwen3.5-4b/entity-to-dial-heldout-transfer/runs/entity-to-dial-heldout-transfer-v1-01/manifest.json)、[舊筆記](note.md) | 舊 200 家來源與三家公司 DIM pilot；筆記另記未完整持久化的曲線 | 歷史探索；不能取代 confirmation compact artifact 或拿舊目標當 held-out |
 
-若 P2 或 P5 尚未完成，論文仍可寫成 Qwen3.5-4B 的 inference-time steering pilot，但 contribution 需要縮小為 DIM／cone feasibility 與 decision-level boundary observation，不能寫成 multi-dimensional operator 的泛化優勢。
+## Claim matrix：已跑與可寫的不是同一件事
 
-## 目前最需要決定的三件事
+| Claim | 本次結果與判定 | 可以寫／不可寫 |
+|---|---|---|
+| **C1：推論時 stance 可控** | **已跑；指定條件支持 DIM 的 generated flips。**Qwen balanced α0 為 101 sell，α=+4 有 101/101 sell→buy（101/101 可解析）；GLM α0 為 101 buy，α=−4 有 101/101 buy→sell（101/101 可解析）。Gemma／GPT-OSS 亦有雙方向非零分母與 flips；高劑量須另報崩壞。 | 寫四模型各自擬合 DIM 的 prompt-／dose-specific 結果；Qwen balanced 沒有 buy→sell 的 α0 分母，GLM 沒有 sell→buy 分母，不能寫對稱控制已在每模型證實。 |
+| **C2：層與 span 可定位 steering site** | **v2 與 v3 patching、v3 generation 都已跑；原本統一的 L15／entity L0–5 敘述不成立。**v3 teacher-forced steer-suffix peak／band：Qwen L15／L14–17（含注入 L16）；Gemma L27／L26–29（含 L27）；GLM L20／L17–21（含 L19）；GPT-OSS L8／`[1,8]`（**不含注入 L14**）。v3 的 entity peak 亦非四模型都在 L0–5。Gemma 在 L27 steer-suffix 的 patch-under-generation 有 13/40 toward-source flips；GPT-OSS 在 L8 有 7/28；Qwen／GLM 的 R7 相反 α0 配對均為 0，不能寫「0% 翻轉」。 | 可描述模型特定 patching 與可檢驗的生成結果；**不得**宣稱四模型 v3 band 均驗證 v2 所選注入層，或以零分母當否定結果。舊 16 家、427 家與 v3 必須分版報告。27B 模型身分與本地完成 artifact 仍未確認；**因模型過大，現階段暫緩運行、不列待辦**，也不算完成。 |
+| **C3：neuron、DIM、cone 可比較** | **已跑，同一模型內有預定 target／renderer／span／layer、劑量表與生成結果。**`ops` 保存 neuron、cone2、cone4、等投影 cone4、DIM⊥random4；另有 DIM 與 random 控制。 | 可報 preregistered 設定下的 operator dose-response 比較，應同列 norm、有效投影、flip 與 parse；不是「相同 raw α 等效」，也不是舊 single-neuron activation dial 的重跑。 |
+| **C4：固定 margin 與生成決策可分離** | **已跑，現有生成列直接支持。**舊 pilot 的 CNC α=4 固定 margin +1.035、生成仍 sell；新 run 同時保存 fixed-prefix／realized-path margin、greedy decision、parse、finish。 | 以具體列及路徑說明，不能用正 margin 計算 flips；Gemma／GPT-OSS 的 fixed-prefix 更須註記 off-path。 |
+| **C5：DIM 勝過 matched-norm random** | **對照已跑，但非四模型全點通過。**五個 random seeds、三個 jitter seeds；Qwen 有分母的 +4／+32 random bootstrap 下界分別 1.0／0.9505（>0），GLM 有分母的負向點通過，GPT-OSS 四個登記點 random 比較下界 >0；Gemma −0.25 下界 −0.0258、−64 下界 0，未達預定 `>0`。 | 只按有分母的符號與劑量報 DIM 對照；完整 C5 判準還要逐點核對 jitter 與 DIM off-target。**不能**寫四模型全部通過或延伸為 cone 對 random 的勝利。 |
+| **C6：匿名身分仍可被 steering** | **已跑 10 個匿名身分 × 四 condition。**例如 Qwen balanced α0 為 10 sell，α=+4 有 10/10 翻轉。 | 「與非特定公司身分的 stance steering 相容」；不宣稱方向不含 entity information。若要比較 named 與 anonymous 的不確定性，另報 identity-level bootstrap（n=10）。 |
+| **C7：對財務證據敏感** | **paired conditions 與 flip-dose contrasts 已跑。**Qwen neg vs balanced 的可比 sell→buy 公司 101/101 需要更高 dose；GLM pos vs balanced 的可比 buy→sell 公司 101/101 亦較高。Gemma 的相應可比組主要為 blocked；GPT-OSS 的 adverse 組同時有 blocked 與 collapsed（例如 neg vs balanced：45 blocked、12 collapsed，n=57）。 | 可按模型、方向報 dose delay／可解析範圍內的 blocked；**不能把 collapsed 當成 evidence 阻擋翻轉**，也不能把 `reason` 當 evidence faithfulness。 |
+| **C8：cone 更平滑／不易飽和** | **曲線與預先登記的 C8 summary 已跑；四模型皆未同時滿足兩個符號的判準。**判準要求 cone4 在兩符號的 monotone-step fraction 嚴格勝 DIM⊥random4、不低於 DIM，且 reversals 不多於兩者。 | 這是**測試後不支持**，不是尚未實驗；不得再用舊筆記聲稱 cone 已勝 1D。可如實報 dose-response／collapse。 |
+| **C9：cone rays 對應不同金融概念** | **未做獨立語意識別。**幾何軸與 rationale 不等於金融概念標籤。 | 不作 main claim；須另有標籤／審核／ray-specific 量測才能升級。 |
+| **C10：跨公司／跨產業泛化** | **company-disjoint 402/101、LOSO（R9／R10）和兩個 split-seed 複製已跑（DIM）。**R9 的 `±α_50` 有分母方向 CI 上界：Qwen 0、Gemma 0／0.0909、GLM 0；GPT-OSS +4 為 0.0769，但 **−4 為 0.1875 > 0.10**。R10 所要求 sector 在四模型各有至少一個 on-target flip。 | 可以寫已測 split 的 **DIM company-disjoint** 結果；預定 sector-disjoint 判準在 Qwen／Gemma／GLM 的有分母方向符合，在 GPT-OSS 不符合。不要將 DIM 的 LOSO 判準轉嫁到 cone；也不要以舊 5-company construction-overlap 筆記作 held-out 證據。 |
+| **C11：金融可解釋性／faithful rationale** | **未做 faithfulness、證據歸因或專家／反事實解釋驗證。** | `reason` 只當質性示例；不作 primary explainability claim。 |
+| **C12：跨 decoder LLM 可執行** | **已跑四模型各自擬合的 DIM／cone protocol**，不能再說「沒有第二個模型的 run」。模型的選層、基線類別、解析外殼、崩壞與效果並不相同；C2 的 GPT-OSS v3 band 與注入層也不一致。 | 可以寫方法在這四個模型上已執行、附模型別 parse／flip；不能寫相同 hidden direction、L15 或 raw α 可直接跨模型移植，也不能聲稱四模型各 claim 均成立。 |
 
-1. **Cone 的主張要升級到哪裡：** 目前 artifact 支持 cone construction，不支持完整 cone behavior comparison；要先決定是否重跑 P2，或把 cone 降為方法比較中的 exploratory arm。
-2. **Evaluation split 是否 company-disjoint：** 若不另建 split，所有「跨公司泛化」措辭都應移除，並把 target 稱為 construction-cohort evaluation。
-3. **金融考量的強度：** 建議保留 evidence sensitivity 作為 decision-level boundary；除非增加 faithfulness measurement，否則不把 financial explainability 寫成 contribution。
+## 最小 confirmation package：執行與成立分開記
+
+| Package | 已執行的證據 | 尚須遵守的結論界線 |
+|---|---|---|
+| P0 protocol freeze | [confirmation-v1 freeze／狀態](confirmation-v1/status.md)：模型與 renderer、split、K、dose、SHA 與 CAL | 舊 pilot 和新方向不可混為同一 protocol |
+| P1 layer localization | [C2 v3](c2-v3-steering-prompt/status.md) 全層六 span、生成檢查 | GPT-OSS v3 band 不含 L14；Qwen／GLM R7 翻轉分母為零 |
+| P2 operator comparison | [operator comparison v2](operator-comparison-v2/status.md)：neuron／DIM／cone、random／jitter／部分 shuffle | C8 不成立；C5 只在符合門檻的模型／劑量可寫 |
+| P3 decision boundary | `dim`、`ops` 等逐列 margin、greedy decision、parse／collapse | 報 ITT 與 complete-object parse；strict JSON 不得混用 |
+| P4 evidence sensitivity | [evidence sensitivity v1](evidence-sensitivity-v1/status.md) 的 pos／neg／mixed2／zero 與匿名配對 | 無分母／blocked／collapsed 分開；不是 rationale faithfulness |
+| P5 generalization | [generalization v1](generalization-v1/status.md) 的 402/101、R9–R11 | sector-disjoint 的判準限 DIM；GPT-OSS 不達預定 R9 門檻 |
+
+**接下來的文件工作：**以各 claim 的原始分母、解析外殼與劑量製作論文結果表；更新 `paper-draft.md` 時刪除 C8 優勢、C9／C11 強主張，勿把 C2／C10 的條件式結果寫成四模型普遍成立。27B 本輪不運行。舊 pilot、v2 及 crossmodel cone 的版本狀態保留原文，不回填 confirmation 數字。

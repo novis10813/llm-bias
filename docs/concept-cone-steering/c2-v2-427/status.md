@@ -1,5 +1,7 @@
 # C2 427 家條件翻轉：四模型的指令區間峰值在中層，尚非決策層級驗證
 
+**後續決定（confirmation 審查後）：** 此頁的 v2 四模型歷史結果保持不變；[v3 steering-prompt 的全層 patching 與生成檢查已完成](../c2-v3-steering-prompt/status.md)，不能把 v3 數字回填為 v2 的 427 家結果。原規劃的第 5 個 Qwen 27B 因模型過大，使用者決定現階段**暫不運行、不列待辦**；下文「尚缺」僅記錄 v2 當時的證據界線，不代表 v3 尚未執行。
+
 **已核實（2026-09-24）：** [Phase 2 v2 協議](../../balanced-evidence-gap/details/proposal-phase2-v2.md)使用 `data/baseline/investment-dial/exploratory-v1.json` 的 **427 家**公司；每家以正／負兩句 shared evidence 組成兩個條件，正→負、負→正各一條 direction，合計 854 條。四個模型的 `phase2b-v2-427-01` 均完成全層 × `entity`／`evidence`／`instruction`／`final` 掃描；這是固定答案 margin 的 patching 指標，**不是生成買賣決策翻轉**。
 
 | 模型／層數 | instruction peak（相對深度，T） | entity span 的最大 T | 427 家 Phase 2B 原始結果 |

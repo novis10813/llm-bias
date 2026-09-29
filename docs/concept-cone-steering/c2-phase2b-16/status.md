@@ -1,5 +1,7 @@
 # C2 早期跨公司版本：16 家的指令層峰值不是 427 家版本的結果
 
+**後續決定：** 下文保留早期版本當時的缺項紀錄；[v3 steering-prompt 已另版完成 patching 與生成檢查](../c2-v3-steering-prompt/status.md)，不能回填早期 16 家表。原規劃的 Qwen 27B 因模型過大，現階段**暫不運行、不列待辦**；舊文「在 idlab 執行中」不是目前狀態。
+
 **狀態（2026-09-24）：** 這是 balanced-evidence-gap Phase 2B **早期跨公司**版本：四個模型各用 16 家公司、8 個 transfer direction，掃描完整逐層的 `entity`、`evidence`、`instruction`、`final` span。最新同公司 427 家條件翻轉另見 [C2 v2](../c2-v2-427/status.md)，兩版方向、prompt 與 gate 語義不同，不能混算峰值。這是固定答案 margin 的定位線索，不是 steering 或生成決策因果效果的確認。原始 C2 主張與既有判定見 [claim-to-evidence ledger](../claim-to-evidence.md)。
 
 | 模型／層數 | entity peak：層、相對深度、T | instruction peak：層、相對深度、T | Phase 2B 結果 |

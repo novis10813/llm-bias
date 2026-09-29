@@ -2,6 +2,8 @@
 
 **狀態：**四模型 full 全部完成（2026-09-26，run `confirmation-v1-20260925-full-01`：Qwen3.5-4B、GLM-4-9B、Gemma-4-12B、GPT-OSS-20B）。協議見 [proposal.md](proposal.md)。
 
+**後續證據審查：**「arm 完成」不等於每個 claim 均通過判準。逐 claim 的分母、C2 選層不一致、C5／C8／C10 條件式結論見[更新後的 claim-to-evidence ledger](../claim-to-evidence.md)；分項結果見 [C2 v3](../c2-v3-steering-prompt/status.md)、[operator comparison](../operator-comparison-v2/status.md)、[evidence sensitivity](../evidence-sensitivity-v1/status.md)、[generalization](../generalization-v1/status.md)。下文的「排程中」和「R0 未完成時」是當時執行紀錄，並非當前 full-run 狀態；各模型的 `job_summary.json` 可能只列最後一次 invocation，完整度以各 `<arm>/result.json` 為準。
+
 ## CPU 前置（commit `e5b4a96`）
 
 - freeze：`artifacts/<slug>/concept-cone-steering/runs/confirmation-v1-freeze-20260925/manifest.json`。四模型五個 family 的 K 等於登錄表（Qwen 100、Gemma 100、GLM 98、GPT-OSS 99），steer-suffix ids 相同；balanced hash 等於 V2 smoke-01／Qwen c2-guided-paper；匿名身分無撞名；GPT-OSS 日期固定成立；Gemma double-BOS。
