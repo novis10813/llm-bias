@@ -55,7 +55,7 @@ def gram_schmidt(rows: torch.Tensor) -> torch.Tensor:
         for u in out:
             v = v - (v @ u) * u
         norm = v.norm()
-        if not torch.isfinite(norm) or norm < 1e-8:
+        if not torch.isfinite(norm) or norm < 1e-5 * row.norm():
             raise ValueError("degenerate basis row in Gram-Schmidt")
         out.append(v / norm)
     return torch.stack(out)
@@ -253,11 +253,11 @@ def train_directions(ctx: Context, d: torch.Tensor, n: int, *, tag: str) -> tupl
                 kl = side_effect_kl(clean, steered, (fp.buy_id, fp.sell_id))
                 ((weight / len(chosen)) * (loss_add + args.lambda_ret * kl)).backward()
                 if index == 0:
-                    acc["loss_add"].append(float(loss_add))
-                    acc["margin"].append(float(margin))
-                    acc["kl"].append(float(kl))
+                    acc["loss_add"].append(float(loss_add.detach()))
+                    acc["margin"].append(float(margin.detach()))
+                    acc["kl"].append(float(kl.detach()))
                 else:
-                    acc["basis_margin"].append(float(margin))
+                    acc["basis_margin"].append(float(margin.detach()))
         optimizer.step()
         with torch.no_grad():
             basis.copy_(gram_schmidt(basis))
