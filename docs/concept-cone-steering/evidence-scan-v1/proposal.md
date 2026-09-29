@@ -13,7 +13,7 @@
 
 ## 只換證據，其他不動
 
-- 模型 Qwen3.5-4B、pinned chat template、prompt 骨架（指示、Stock Ticker／Name、`— Evidence —`、四個 bullet、JSON 輸出說明）、固定前綴 `{"decision": "`、complete-object 解析，全都與 [confirmation-v1](../confirmation-v1/proposal.md) 相同。
+- 模型 Qwen3.5-4B、pinned chat template、prompt 骨架（指示、Stock Ticker／Name、`— Evidence —`、四個 bullet、JSON 輸出說明）、complete-object 解析，全都與 [confirmation-v1](../confirmation-v1/proposal.md) 相同。
 - 唯一不同的是四個 bullet 的文字。
 
 ## 證據池
@@ -32,44 +32,50 @@
 
 每個單位做兩種選項順序：`"buy" or "sell"`（**canonical**，與先前實驗相同）與 `"sell" or "buy"`（reversed）。
 
+- **canonical：**真實 greedy 生成（最多 192 個新 token）、complete-object 解析，另記固定前綴 margin 與生成路徑上的 realized margin（決策 token 處的 `log p(buy) − log p(sell)`）。
+- **reversed：**只記固定前綴 margin（`M = log p(buy) − log p(sell)`，FP32 讀出），用來看選項順序的效果。
+- **為什麼 screen 也要生成：**smoke（`evidence-scan-v1-20260929-smoke-01`，3 家 × 7 單位）顯示 attribute prompt 的實際輸出多以 `{` 換行開頭（`brace_newline`），而 `ref` 是同一行開頭（`direct_json`）；固定前綴 `{"decision": "` 因此不在生成路徑上。18 個 attribute 格子中有 2 個 margin 符號與生成決策不一致（皆為 margin < 0 但生成 buy）。所以「回答 buy」一律以生成為準，margin 只是次要讀出。這個發現使本協議的 screen 由「只算 margin」改成「生成」；改動發生在 screen 開始之前。
+
 | phase | 公司 | 內容 | 列數 |
 |---|---|---|---|
-| `screen` | 建構組 338 家 | 每個單位 × 2 順序的固定前綴 margin（FP32 讀出，`M = log p(buy) − log p(sell)`） | 338 × 31 × 2 = 20,956 |
-| `confirm` | 評估組 89 家 | 同上，加 canonical 的 greedy 生成（最多 192 個新 token）與 complete-object 解析 | 89 × 31 × 2 = 5,518，其中 2,759 個有生成 |
+| `screen` | 建構組 338 家 | 31 單位 × canonical（生成）與 reversed（margin） | 10,478 個生成 + 10,478 個 margin |
+| `confirm` | 評估組 89 家 | 與 screen 完全相同的程序 | 2,759 個生成 + 2,759 個 margin |
 | `analyze` | — | CPU 彙整 | — |
 
-- **buy 的定義：**screen 中 `M > 0`（僅是讀出，不宣稱決策）；confirm 中生成解析出的 `decision == "buy"`。
+- **buy 的定義：**canonical 生成經 complete-object 解析為 `decision == "buy"`；未能解析的不算 buy 也不算 sell，計入 parse 率。
 - **不用評估組選擇任何東西。**screen 與 confirm 各自獨立彙整，confirm 用來檢查 screen 的規律在未參與的公司上是否成立。
 - **切 shard：**依公司順序 `i mod n`，各 shard 用不同 run id（`evidence-scan-v1-20260929-<phase>-NN`）。
 
 ## 預先登記的問題（僅描述，不做顯著性檢定）
 
-- **Q1（有沒有 buy）：**建構組 attribute 的 canonical buy 比例；每家公司 30 個 prompt 的 buy 比例分成全 sell／混合／全 buy 的公司數與分布；各 sector 的平均。
-- **Q2（誰決定答案）：**canonical margin 對「公司」、對「四個位置的正負排列（6 種）」、兩者相加的 R²；各位置為正時的邊際 margin 變化（公司固定效應）；第一項與最後一項的正負對 buy 比例的影響。
-- **Q3（選項順序）：**reversed 相對 canonical 的平均 margin 差與 buy 比例差。
-- **Q4（與舊結果銜接）：**`ref` 的 canonical／reversed buy 比例。先前 balanced 對全部公司都是 sell，這裡應複現（是檢查，不是假設檢定）。
-- **Q5（複現與讀出一致性，confirm）：**評估組的 attribute canonical buy 比例是否與建構組同量級；生成 parse 率；margin 符號與生成決策的一致率。
+以下都對 screen 與 confirm 各報一次。
+
+- **Q1（有沒有 buy）：**canonical 的 attribute 生成 buy 比例；每家公司 30 個 prompt 的 buy 比例分成全 sell／混合／全 buy 的公司數與分布；各 sector 的平均。
+- **Q2（誰決定答案）：**realized margin 與 buy 指標對「公司」、對「四個位置的正負排列（6 種）」、兩者相加的 R²；各位置為正時的邊際變化（公司固定效應）；第一項與最後一項的正負對 buy 比例的影響。
+- **Q3（選項順序）：**canonical 與 reversed 的固定前綴 margin 的平均差與 margin 為正的比例差。
+- **Q4（與舊結果銜接）：**`ref` 的 canonical 生成 buy 比例與 reversed 的 margin 為正比例。先前 balanced 對全部公司都是 sell，這裡應複現（是檢查，不是假設檢定）。
+- **Q5（讀出一致性）：**固定前綴 margin 的符號與生成決策的一致率；生成路徑類別（`direct_json`、`brace_newline` 等）的比例；parse 率。
 
 ## 預先登記的判讀規則（描述性門檻，不執行後續）
 
-以建構組 attribute 的 canonical buy 比例 `r` 與 confirm 的 parse 率為準：
+以建構組 attribute 的 canonical 生成 buy 比例 `r`（解析成功者中）與兩個 phase 的 parse 率為準：
 
 | 結果 | 判讀 |
 |---|---|
-| `0.1 ≤ r ≤ 0.9`，且混合公司佔一成以上，且 confirm parse 率 ≥ 0.95 | 這個證據族在 Qwen3.5-4B 上同時有 buy 與 sell 的 baseline，可作為兩個方向的訓練與評估材料；下一步另開新版本協議。 |
+| `0.1 ≤ r ≤ 0.9`，且混合公司佔一成以上，且 screen 與 confirm 的 parse 率都 ≥ 0.95 | 這個證據族在 Qwen3.5-4B 上同時有 buy 與 sell 的 baseline，可作為兩個方向的訓練與評估材料；下一步另開新版本協議。 |
 | `r < 0.1` | Qwen 對這個證據族仍幾乎都回 sell；需要換模型或換操作，才可能有 buy baseline。 |
 | `r > 0.9` | 對稱：幾乎都回 buy。 |
-| confirm parse 率 < 0.95 | 生成格式在這個證據族上不穩，fixed-prefix margin 不能當決策讀出，須先處理格式。 |
+| 任一 phase 的 parse 率 < 0.95 | 生成格式在這個證據族上不穩，先處理格式再談 buy／sell 比例。 |
 
 ## 解讀界線
 
 - 「balanced」在這裡只是結構上正負各二，不代表語意上平衡；證據的強度與措辭由外部產生器決定，且證據句含公司名，證據與公司身分不可分開解讀。
 - 只有 Qwen3.5-4B、只有 427 家公司子集、只有這一個外部證據族；不推論到其他證據型式。
-- fixed-prefix margin 只是讀出；「回答 buy」的宣稱以 confirm 的真實生成為準。
+- fixed-prefix margin 只是次要讀出；「回答 buy」的宣稱一律以真實生成為準。
 - 本版沒有 steering 或訓練，結果不改 claim ledger，也不改寫先前任何版本。
 
 ## 實作與執行
 
 - 腳本：`scripts/build_evidence_pool.py`（建池）、`scripts/probe_evidence_scan.py`（screen／confirm／analyze）；測試：`tests/test_probe_evidence_scan.py`。
 - 輸出：`artifacts/qwen3.5-4b/concept-cone-steering/runs/evidence-scan-v1-<date>-<phase>-NN/`（`result.json`、`scan.log`；analyze 另有 `summary.json`）。lab job 結束後把 job log 拉回同一目錄存成 `job_output.log`。
-- 成本：待 smoke 實測後補在 status（不在此估算）。
+- 成本：全部約 13,000 個生成（smoke 中每個生成 44–109 個新 token），依可用 GPU 數分 shard 分擔；實際耗時記在 status，不在此預估。
