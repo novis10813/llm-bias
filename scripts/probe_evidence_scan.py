@@ -3,11 +3,11 @@
 Protocol: docs/concept-cone-steering/evidence-scan-v1/proposal.md. The evidence comes from the per-company pool of
 eight items (four for a price increase, four for a decrease) built by ``scripts/build_evidence_pool.py``; the
 prompt skeleton is the frozen balanced prompt, unchanged. Every company is scanned with its 30 random two-plus-two
-combinations plus the frozen four-sentence reference, each with the answer options in both orders.
+combinations plus the frozen four-sentence reference. The canonical rendering (options "buy" or "sell") gets a real
+greedy generation with complete-object parsing; the reversed rendering gets the fixed-prefix margin only.
 
-``--phase screen`` measures the fixed-prefix margin log p(buy) - log p(sell) on the construction companies;
-``--phase confirm`` repeats it on the held-out evaluation companies and adds real greedy generation on the canonical
-rendering; ``--phase analyze`` (CPU only) summarizes. Only compact rows and provenance are written; no hidden states.
+``--phase screen`` runs the construction companies, ``--phase confirm`` the held-out evaluation companies (same
+procedure), ``--phase analyze`` (CPU only) summarizes. Only compact rows and provenance are written.
 """
 from __future__ import annotations
 
@@ -165,96 +165,87 @@ def load_runs(slug: str, run_ids: Sequence[str], pool_sha: str) -> dict[str, Any
     return rows
 
 
-def _collect(rows: dict[str, Any], pool: dict[str, Any], tickers: Sequence[str], reverse: bool
-             ) -> tuple[list[str], list[str], np.ndarray]:
-    """Attribute-unit cells of one rendering: (ticker per cell, polarity per cell, margin per cell)."""
-    names, pols, margins = [], [], []
+def _cells(rows: dict[str, Any], pool: dict[str, Any], tickers: Sequence[str]) -> list[dict[str, Any]]:
+    """Canonical-rendering attribute cells with their company, polarity pattern and generation record."""
+    return [{"ticker": t, "polarity": unit_evidence(pool[t], unit)[1], **rows[row_key(unit, t, CANON)]}
+            for t in tickers for unit in UNITS[1:]]
+
+
+def _is_parsed(cell: dict[str, Any]) -> bool:
+    return cell["decision"] in ("buy", "sell")
+
+
+def describe(cells: list[dict[str, Any]]) -> dict[str, Any]:
+    """Rates over one group of canonical cells; buy rates are over parsed generations."""
+    parsed = [c for c in cells if _is_parsed(c)]
+    paths: dict[str, int] = {}
+    for c in cells:
+        paths[c["path_class"]] = paths.get(c["path_class"], 0) + 1
+    return {"n": len(cells), "parse_rate": len(parsed) / len(cells),
+            "generated_buy_rate": fmean(c["decision"] == "buy" for c in parsed) if parsed else None,
+            "fixed_prefix_margin_buy_rate": buy_rate([c["margin"] for c in cells]),
+            "margin_sign_agrees_with_generation": (fmean((c["margin"] > 0) == (c["decision"] == "buy")
+                                                         for c in parsed) if parsed else None),
+            "mean_realized_margin": fmean(c["realized_margin"] for c in cells if c["realized_margin"] is not None)
+            if any(c["realized_margin"] is not None for c in cells) else None,
+            "path_class_share": {k: v / len(cells) for k, v in sorted(paths.items())}}
+
+
+def _by(cells: list[dict[str, Any]], key) -> dict[str, dict[str, Any]]:
+    groups = sorted({key(c) for c in cells})
+    return {g: describe([c for c in cells if key(c) == g]) for g in groups}
+
+
+def scan_summary(rows: dict[str, Any], pool: dict[str, Any], tickers: Sequence[str]) -> dict[str, Any]:
+    """Everything reported for one group of companies (construction for screen, evaluation for confirm)."""
+    cells = _cells(rows, pool, tickers)
+    parsed = [c for c in cells if _is_parsed(c)]
+    fractions: dict[str, float] = {}
     for t in tickers:
-        for unit in UNITS[1:]:
-            names.append(t)
-            pols.append(unit_evidence(pool[t], unit)[1])
-            margins.append(rows[row_key(unit, t, reverse)]["margin"])
-    return names, pols, np.array(margins)
-
-
-def _group_rate(values: np.ndarray, groups: Sequence[str]) -> dict[str, dict[str, float]]:
-    out = {}
-    for g in sorted(set(groups)):
-        v = values[[x == g for x in groups]]
-        out[g] = {"n": int(len(v)), "buy_rate": float((v > 0).mean()), "mean_margin": float(v.mean())}
-    return out
-
-
-def screen_summary(rows: dict[str, Any], pool: dict[str, Any], tickers: Sequence[str]) -> dict[str, Any]:
-    names, pols, canon = _collect(rows, pool, tickers, CANON)
-    _, _, rev = _collect(rows, pool, tickers, not CANON)
-    per_ticker = canon.reshape(len(tickers), N_COMBOS)
-    fractions = (per_ticker > 0).mean(axis=1)
-    order = np.argsort(-fractions, kind="stable")
-    listing = [{"ticker": tickers[j], "name": pool[tickers[j]]["name_hint"], "sector": pool[tickers[j]]["sector"],
-                "buy_fraction": float(fractions[j])} for j in order]
+        mine = [c for c in parsed if c["ticker"] == t]
+        if mine:
+            fractions[t] = fmean(c["decision"] == "buy" for c in mine)
+    listing = sorted(({"ticker": t, "name": pool[t]["name_hint"], "sector": pool[t]["sector"], "buy_fraction": f}
+                      for t, f in fractions.items()), key=lambda x: (-x["buy_fraction"], x["ticker"]))
+    values = np.array(list(fractions.values()))
     edges = [0.0, 1e-9, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0 - 1e-9, 1.0 + 1e-9]
-    hist = np.histogram(fractions, bins=edges)[0].tolist()
     sectors: dict[str, list[float]] = {}
-    for j, t in enumerate(tickers):
-        sectors.setdefault(pool[t]["sector"], []).append(float(fractions[j]))
-    ref_canon = [rows[row_key(REF, t, CANON)]["margin"] for t in tickers]
-    ref_rev = [rows[row_key(REF, t, not CANON)]["margin"] for t in tickers]
-    design_ticker = _dummies(names)
-    design_pattern = _dummies(pols)
+    for t, f in fractions.items():
+        sectors.setdefault(pool[t]["sector"], []).append(f)
+    buy = np.array([1.0 if c["decision"] == "buy" else 0.0 for c in parsed])
+    names = [c["ticker"] for c in parsed]
+    pols = [c["polarity"] for c in parsed]
+    with_margin = [c for c in parsed if c["realized_margin"] is not None]
+    y = np.array([c["realized_margin"] for c in with_margin])
+    m_names, m_pols = [c["ticker"] for c in with_margin], [c["polarity"] for c in with_margin]
+    fixed_c = np.array([rows[row_key(u, t, CANON)]["margin"] for t in tickers for u in UNITS[1:]])
+    fixed_r = np.array([rows[row_key(u, t, not CANON)]["margin"] for t in tickers for u in UNITS[1:]])
+    ref_cells = [{"ticker": t, "polarity": REF_POLARITY, **rows[row_key(REF, t, CANON)]} for t in tickers]
     return {
-        "n_companies": len(tickers), "n_cells": int(len(canon)),
-        "attribute_canonical": {"buy_rate": float((canon > 0).mean()), "mean_margin": float(canon.mean()),
-                                "median_margin": float(np.median(canon))},
-        "attribute_reversed_options": {"buy_rate": float((rev > 0).mean()), "mean_margin": float(rev.mean())},
-        "options_order_shift_mean_margin": float((canon - rev).mean()),
-        "by_pattern_canonical": _group_rate(canon, pols),
-        "by_first_polarity_canonical": _group_rate(canon, [p[0] for p in pols]),
-        "by_last_polarity_canonical": _group_rate(canon, [p[-1] for p in pols]),
-        "position_effects_canonical": position_effects(canon, names, pols),
-        "variance_explained_canonical": {"company": r_squared(canon, design_ticker),
-                                         "pattern": r_squared(canon, design_pattern),
-                                         "company_plus_pattern": r_squared(canon, np.hstack([design_ticker, design_pattern]))},
-        "company_buy_fraction": {"bins": edges[:-1], "histogram": hist,
-                                 "all_sell": int((fractions == 0).sum()), "all_buy": int((fractions == 1).sum()),
-                                 "mixed": int(((fractions > 0) & (fractions < 1)).sum()),
+        "n_companies": len(tickers), "attribute": describe(cells),
+        "by_pattern": _by(cells, lambda c: c["polarity"]),
+        "by_first_polarity": _by(cells, lambda c: c["polarity"][0]),
+        "by_last_polarity": _by(cells, lambda c: c["polarity"][-1]),
+        "options_order": {"fixed_prefix_margin_buy_rate_canonical": float((fixed_c > 0).mean()),
+                          "fixed_prefix_margin_buy_rate_reversed": float((fixed_r > 0).mean()),
+                          "mean_margin_shift_canonical_minus_reversed": float((fixed_c - fixed_r).mean())},
+        "variance_explained_realized_margin": {
+            "company": r_squared(y, _dummies(m_names)), "pattern": r_squared(y, _dummies(m_pols)),
+            "company_plus_pattern": r_squared(y, np.hstack([_dummies(m_names), _dummies(m_pols)]))},
+        "variance_explained_buy_indicator": {
+            "company": r_squared(buy, _dummies(names)), "pattern": r_squared(buy, _dummies(pols)),
+            "company_plus_pattern": r_squared(buy, np.hstack([_dummies(names), _dummies(pols)]))},
+        "position_effects_realized_margin": position_effects(y, m_names, m_pols),
+        "position_effects_buy_indicator": position_effects(buy, names, pols),
+        "company_buy_fraction": {"bins": edges[:-1], "histogram": np.histogram(values, bins=edges)[0].tolist(),
+                                 "all_sell": int((values == 0).sum()), "all_buy": int((values == 1).sum()),
+                                 "mixed": int(((values > 0) & (values < 1)).sum()),
                                  "most_buy": listing[:15], "least_buy": listing[-15:]},
         "sector_mean_buy_fraction": {s: fmean(v) for s, v in sorted(sectors.items())},
-        "reference_frozen": {"canonical_buy_rate": buy_rate(ref_canon), "reversed_buy_rate": buy_rate(ref_rev),
-                             "canonical_mean_margin": fmean(ref_canon)},
+        "reference_frozen": describe(ref_cells),
+        "reference_frozen_reversed_fixed_prefix_margin_buy_rate": buy_rate(
+            [rows[row_key(REF, t, not CANON)]["margin"] for t in tickers]),
     }
-
-
-def confirm_summary(rows: dict[str, Any], pool: dict[str, Any], tickers: Sequence[str],
-                    screen: dict[str, Any] | None) -> dict[str, Any]:
-    cells = []
-    for t in tickers:
-        for unit in UNITS:
-            row = rows[row_key(unit, t, CANON)]
-            polarity = unit_evidence(pool[t], unit)[1]
-            cells.append({"unit": unit, "polarity": polarity, **row})
-
-    def stats(subset: list[dict[str, Any]]) -> dict[str, Any]:
-        parsed = [c for c in subset if c["decision"] in ("buy", "sell")]
-        return {"n": len(subset), "parse_rate": len(parsed) / len(subset),
-                "generated_buy_rate": fmean(c["decision"] == "buy" for c in parsed) if parsed else None,
-                "margin_buy_rate": buy_rate([c["margin"] for c in subset]),
-                "margin_sign_agrees_with_generation": (fmean((c["margin"] > 0) == (c["decision"] == "buy")
-                                                             for c in parsed) if parsed else None)}
-
-    attribute = [c for c in cells if c["unit"] != REF]
-    out = {"n_companies": len(tickers), "attribute": stats(attribute),
-           "by_pattern": {p: stats([c for c in attribute if c["polarity"] == p]) for p in PATTERNS},
-           "reference_frozen": stats([c for c in cells if c["unit"] == REF])}
-    reversed_rate = buy_rate([rows[row_key(u, t, not CANON)]["margin"] for t in tickers for u in UNITS[1:]])
-    out["attribute_reversed_options_margin_buy_rate"] = reversed_rate
-    fractions = {t: fmean(rows[row_key(u, t, CANON)]["decision"] == "buy" for u in UNITS[1:]) for t in tickers}
-    out["company_generated_buy_fraction"] = {"all_sell": sum(v == 0 for v in fractions.values()),
-                                             "all_buy": sum(v == 1 for v in fractions.values()),
-                                             "mixed": sum(0 < v < 1 for v in fractions.values())}
-    if screen:
-        out["construction_attribute_canonical_buy_rate"] = screen["attribute_canonical"]["buy_rate"]
-    return out
 
 
 # ------------------------------------------------------------------------------------ model-bound scan
@@ -285,13 +276,12 @@ class Scan:
         if smoke:
             if not set(args.smoke_tickers) <= set(self.evaluation) & set(self.pool):
                 raise ValueError("smoke tickers must be held-out evaluation companies with an evidence pool")
-            self.tickers, self.generate = list(args.smoke_tickers), True
+            self.tickers = list(args.smoke_tickers)
             self.units = UNITS[:1 + args.smoke_units]
         else:
             source = self.construction if self.phase == "screen" else self.evaluation
             pooled = [t for t in source if t in self.pool]
             self.tickers = shard_items(pooled, parse_shard(args.shard))
-            self.generate = self.phase == "confirm"
         self.log = v2.Log(self.root / "scan.log")
         if model is None:
             model, tokenizer, _ = load_model(str(self.model_dir), dtype="native" if self.spec.dtype == "native" else None)
@@ -307,7 +297,7 @@ class Scan:
             "schema": SCHEMA, "phase": self.phase, "run_id": args.run_id, **R.checkpoint_identity(self.model_dir),
             **R.template_provenance(tokenizer), "split_seed": R.SPLIT_SEED, "split_sha256": self.split_sha,
             "pool_sha256": self.pool_sha, "shard": args.shard, "tickers": self.tickers, "units": list(self.units),
-            "renderings": [rkey(r) for r in RENDERINGS], "generate_canonical": self.generate,
+            "renderings": [rkey(r) for r in RENDERINGS], "generate_canonical": True,
             "code_sha256": R.file_sha256({name: REPO / name for name in CODE_FILES}),
             "decision_prefix": R.DECISION_PREFIX, "primary_parse": "complete_object",
             "git_commit": self.git["git_commit"],
@@ -342,10 +332,11 @@ class Scan:
                     if key in rows:
                         continue
                     fp = self.fp(unit, ticker, reverse)
-                    if self.generate and reverse == CANON:
+                    if reverse == CANON:
                         row = self.evaluator.row(fp, 0.0, None, label=key)
                         rows[key] = {k: row[k] for k in ("margin", "generated_text", "decision", "format", "finish",
-                                                         "n_new_tokens")}
+                                                         "n_new_tokens", "path_class", "realized_margin",
+                                                         "realized_status")}
                     else:
                         rows[key] = {"margin": self.evaluator.fixed_prefix_margin(fp)}
                     fresh += 1
@@ -385,23 +376,20 @@ def analyze(args: argparse.Namespace) -> None:
     summary: dict[str, Any] = {"schema": SCHEMA, "run_id": args.run_id, "pool_sha256": pool_sha,
                                "screen_runs": args.screen_runs, "confirm_runs": args.confirm_runs,
                                "git_commit": R.git_provenance(REPO)["git_commit"]}
-    screen = None
-    if args.screen_runs:
-        tickers = [t for t in construction if t in pool]
-        screen = screen_summary(load_runs(slug, args.screen_runs, pool_sha), pool, tickers)
-        summary["screen"] = screen
-        log(f"screen: {screen['n_companies']} companies, canonical buy rate {screen['attribute_canonical']['buy_rate']:.3f}, "
-            f"reversed {screen['attribute_reversed_options']['buy_rate']:.3f}, ref {screen['reference_frozen']}")
-        log(f"company buy fractions {screen['company_buy_fraction']['all_sell']} all-sell / "
-            f"{screen['company_buy_fraction']['mixed']} mixed / {screen['company_buy_fraction']['all_buy']} all-buy; "
-            f"variance explained {screen['variance_explained_canonical']}; positions {screen['position_effects_canonical']}")
-        for pattern, v in screen["by_pattern_canonical"].items():
-            log(f"  pattern {pattern}: buy_rate={v['buy_rate']:.3f} mean M={v['mean_margin']:+.2f} n={v['n']}")
-    if args.confirm_runs:
-        tickers = [t for t in evaluation if t in pool]
-        summary["confirm"] = confirm_summary(load_runs(slug, args.confirm_runs, pool_sha), pool, tickers, screen)
-        c = summary["confirm"]
-        log(f"confirm: {c['n_companies']} companies; attribute {c['attribute']}; ref {c['reference_frozen']}")
+    for name, run_ids, source in (("screen", args.screen_runs, construction), ("confirm", args.confirm_runs, evaluation)):
+        if not run_ids:
+            continue
+        tickers = [t for t in source if t in pool]
+        summary[name] = scan_summary(load_runs(slug, run_ids, pool_sha), pool, tickers)
+        s = summary[name]
+        log(f"{name}: {s['n_companies']} companies; attribute {s['attribute']}")
+        log(f"  company buy fractions: {s['company_buy_fraction']['all_sell']} all-sell / "
+            f"{s['company_buy_fraction']['mixed']} mixed / {s['company_buy_fraction']['all_buy']} all-buy")
+        log(f"  variance explained (realized margin) {s['variance_explained_realized_margin']}; "
+            f"positions {s['position_effects_realized_margin']}")
+        log(f"  options order {s['options_order']}; ref {s['reference_frozen']}")
+        for pattern, v in s["by_pattern"].items():
+            log(f"  pattern {pattern}: buy_rate={v['generated_buy_rate']:.3f} n={v['n']} parse={v['parse_rate']:.3f}")
     base.atomic_write(root / "summary.json", summary)
 
 

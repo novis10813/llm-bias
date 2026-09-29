@@ -106,7 +106,7 @@ def test_helpers_shard_rate_and_regression_effects():
         == pytest.approx(1.0)
 
 
-def _synthetic_rows(pool: dict, tickers: list[str], generate: bool) -> dict:
+def _synthetic_rows(pool: dict, tickers: list[str]) -> dict:
     rng = random.Random(1)
     rows = {}
     for t in tickers:
@@ -116,33 +116,41 @@ def _synthetic_rows(pool: dict, tickers: list[str], generate: bool) -> dict:
             for reverse in scan.RENDERINGS:
                 margin = offset + (1.5 if pol[-1] == "+" else -1.5) + rng.gauss(0, 0.3) + (0.5 if reverse else 0.0)
                 row = {"margin": margin}
-                if generate and reverse == scan.CANON:
+                if reverse == scan.CANON:
                     row.update({"generated_text": "{}", "decision": "buy" if margin > 0 else "sell",
-                                "format": "complete_object", "finish": "eos", "n_new_tokens": 5})
+                                "format": "complete_object", "finish": "eos", "n_new_tokens": 5,
+                                "path_class": "brace_newline", "realized_margin": margin + 0.2,
+                                "realized_status": "ok"})
                 rows[scan.row_key(unit, t, reverse)] = row
     return rows
 
 
-def test_summaries_report_rates_patterns_and_generation_agreement(tmp_path):
+def test_summary_reports_rates_patterns_and_generation_agreement(tmp_path):
     tickers = ["T001", "T002", "T003", "T004"]
     path = tmp_path / "pool.json"
     _write_pool(path, tickers)
     pool = scan.load_pool(path)[0]["companies"]
     for t in tickers:
         pool[t]["name_hint"] = t
-    rows = _synthetic_rows(pool, tickers, generate=True)
-    screen = scan.screen_summary(rows, pool, tickers)
-    assert screen["n_cells"] == 4 * 30
-    assert set(screen["by_pattern_canonical"]) <= set(scan.PATTERNS)
-    assert screen["by_last_polarity_canonical"]["+"]["buy_rate"] > screen["by_last_polarity_canonical"]["-"]["buy_rate"]
-    assert screen["position_effects_canonical"]["position_4"] > 2.0
-    assert screen["variance_explained_canonical"]["company_plus_pattern"] > 0.95
-    assert screen["options_order_shift_mean_margin"] == pytest.approx(-0.5, abs=0.2)
-    fractions = screen["company_buy_fraction"]
+    rows = _synthetic_rows(pool, tickers)
+    out = scan.scan_summary(rows, pool, tickers)
+    assert out["attribute"]["n"] == 4 * 30 and out["attribute"]["parse_rate"] == 1.0
+    assert out["attribute"]["margin_sign_agrees_with_generation"] == 1.0
+    assert out["attribute"]["path_class_share"] == {"brace_newline": 1.0}
+    assert set(out["by_pattern"]) <= set(scan.PATTERNS)
+    assert out["by_last_polarity"]["+"]["generated_buy_rate"] > out["by_last_polarity"]["-"]["generated_buy_rate"]
+    assert out["position_effects_realized_margin"]["position_4"] > 2.0
+    assert out["variance_explained_realized_margin"]["company_plus_pattern"] > 0.95
+    assert out["options_order"]["mean_margin_shift_canonical_minus_reversed"] == pytest.approx(-0.5, abs=0.2)
+    fractions = out["company_buy_fraction"]
     assert fractions["all_sell"] + fractions["mixed"] + fractions["all_buy"] == 4
-    confirm = scan.confirm_summary(rows, pool, tickers, screen)
-    assert confirm["attribute"]["parse_rate"] == 1.0 and confirm["attribute"]["margin_sign_agrees_with_generation"] == 1.0
-    assert set(confirm["by_pattern"]) == set(scan.PATTERNS) and confirm["reference_frozen"]["n"] == 4
+    assert out["reference_frozen"]["n"] == 4
+    # an unparsed generation is excluded from buy rates and lowers the parse rate
+    rows[scan.row_key("a00", "T001", False)]["decision"] = "unparsed"
+    rows[scan.row_key("a00", "T001", False)]["realized_margin"] = None
+    rows[scan.row_key("a00", "T001", False)]["realized_status"] = "no_decision"
+    again = scan.scan_summary(rows, pool, tickers)
+    assert again["attribute"]["parse_rate"] == pytest.approx(119 / 120)
 
 
 def test_smoke_scans_generates_and_resumes(tmp_path, monkeypatch):
