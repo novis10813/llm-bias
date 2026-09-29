@@ -4,12 +4,36 @@
 
 **本次核對基礎：** 2026-09-29 已同步的本地 artifacts；四模型 `confirmation-v1-20260925-full-01`，另參照歷史 pilot、[C2 v2-427](c2-v2-427/status.md) 與 [crossmodel cone paper](crossmodel-cone-paper/status.md)。**本檔是證據審查，不是新的 GPU run，也不取代各版本凍結協議。**
 
+## 先看這裡：一頁結論
+
+四個模型（Qwen、Gemma、GLM、GPT-OSS）的完整實驗都跑完了。跑完不等於每個主張都成立，各主張目前的狀態如下（細節見後面的 Claim matrix）：
+
+| 狀態 | 主張 |
+|---|---|
+| 成立（限指定條件） | C1 推論時可用 DIM 方向改變 buy/sell 判定；C3 neuron、DIM、cone 三種操作已在同一設定下比較；C4 固定 margin 與真實生成的決策會不一致；C6 匿名身分也能被 steering；C12 方法在四個模型上都跑得動 |
+| 部分成立 | C2 層與位置的定位（各模型結果不同）；C5 DIM 勝過隨機方向（只在部分模型與劑量）；C7 對財務證據有反應；C10 跨公司泛化（GPT-OSS 未達門檻） |
+| 測試後不成立 | C8 cone 比單一方向更平滑、更不易飽和 |
+| 沒做 | C9 cone 各方向對應不同金融概念；C11 rationale 是否忠實 |
+
+## 名詞對照
+
+- **DIM**：用公司好惡的差值算出的單一方向，注入模型內部狀態後觀察判定是否改變。**cone**：由多個方向組成的版本（cone2 兩個、cone4 四個）。
+- **α（劑量）**：注入方向的強度，正負代表兩個相反方向。**α0**：不注入的基線。
+- **flip（翻轉）**：注入後 buy／sell 判定和 α0 相反。**margin**：模型對 buy 與 sell 的偏好差（log p(buy) − log p(sell)），只代表傾向，不等於真實生成的判定。
+- **parse／unparsed／collapse／blocked**：輸出能否被解析成決策。unparsed 是解析不出；collapse 是輸出先崩壞、來不及翻；blocked 是可以解析但沒有翻。
+- **ITT**：分母固定為 α0 時屬於該類的全部公司，注入後解析不出的算「沒翻」。
+- **complete-object／strict**：兩種解析方式。complete-object 允許決策外面包著 code fence、思考文字等外殼；strict 只接受整段就是乾淨 JSON。
+- **patching、peak／band**：把某一層某個位置的狀態換掉，看決策受多大影響。peak 是影響最大的層，band 是影響明顯的一段層。
+- **arm**：實驗中的一組條件。**CAL**：校準用的 arm。
+- **LOSO**：留一產業測試，訓練時排除某個產業的公司，再測該產業。**company-disjoint**：測試公司不出現在建構方向的公司中。
+- **R7、R9、R10**：預先登記的檢查編號，內容分別是生成中 patching（R7）、company-disjoint／LOSO（R9）、sector-disjoint 建構（R10）。
+
 ## 判定規則與可比較範圍
 
-- **已執行**只表示協議所列的 arm 有完整 artifact；不表示主張獲支持。**符合判準**還需檢查各 claim 的分母、parse／collapse、對照與預先登記的門檻；**不支持**和**沒有可檢驗分母**不能混用。
-- `confirmation-v1` 的 primary 決策解析是 **complete-object**（允許 fenced、thought、Harmony 等外殼），不是只接受整段裸 JSON 的 secondary strict `json.loads`。所有 flip 都是以相同公司及 condition 的 α0 貪婪生成為基準；ITT 分母為 α0 該類的公司，steered unparsed 計未翻。固定前綴 margin 不是生成決策；Gemma、GPT-OSS 的固定前綴 margin 另屬 off-path readout。
-- 2026-09-22 的 200-company pilot、2026-09-24 的 402/101 cone run、2026-09-25/26 的 confirmation run，**direction construction、prompt、layer、劑量或解析協議不同，數字不可合併**。confirmation 的 503 家母體按 seed `20260923` 固定 402 家 construction／101 家 evaluation；各模型分別排序、擬合方向。
-- 這些結論只限所測模型、prompt family、split 和劑量網格；`reason` 文字不能當成 faithfulness 或金融概念標籤。
+- **已執行**只表示協議列出的每組實驗都有完整的輸出檔，不表示主張成立。**符合判準**還要確認各主張的分母、解析與崩壞情況、對照組和預先登記的門檻。**不支持**（測了但沒過）和**沒有可檢驗分母**（根本沒有可比較的樣本）是兩回事，不能混用。
+- `confirmation-v1` 的主要決策解析用 complete-object；只接受乾淨 JSON 的 strict 解析（`json.loads`）是次要的對照。所有 flip 都以同一家公司、同一條件下 α0 的貪婪生成為基準（ITT 分母，見名詞對照）。固定前綴 margin 不是生成出來的決策；Gemma 與 GPT-OSS 的固定前綴 margin 還偏離模型實際生成的路徑（off-path）。
+- 2026-09-22 的 200 家 pilot、2026-09-24 的 402/101 cone run、2026-09-25/26 的 confirmation run，在方向的建構方式、prompt、層、劑量或解析方式上都不同，**數字不可合併**。confirmation 的 503 家公司依 seed `20260923` 固定分成 402 家建構方向、101 家評估；每個模型各自排序、各自擬合方向。
+- 結論只適用於所測的模型、prompt 類型、資料切分與劑量範圍。`reason`（模型給的理由文字）不能當成「理由忠實」的證據，也不是金融概念標籤。
 
 ## 證據與完成度入口
 

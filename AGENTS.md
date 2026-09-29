@@ -2,12 +2,11 @@
 
 本 repo 只做一條研究線：**concept-cone steering**。它在 decoder LLM 的 residual stream
 注入由公司好惡差值建構的方向（DIM 或多維 cone），觀察投資 buy/sell 判定是否翻轉。
-研究內容、結論與狀態都在 [`docs/concept-cone-steering/`](docs/concept-cone-steering/)；
-先讀 `claim-to-evidence.md`，再依需要讀各版本資料夾的 `status.md`／`proposal.md`。
+研究內容、結論與狀態都在 [`docs/concept-cone-steering/`](docs/concept-cone-steering/)。
+任務涉及研究主張或實驗結果時，先讀 `claim-to-evidence.md`；只改 code、測試或環境時
+不必讀。各版本的 `status.md`／`proposal.md` 只在該版本相關時才讀。
 
-2026-09-25 以前的其他研究線（Jacobian-lens readout、J-space intervention、entity cell、
-investment dial 等）已從工作樹刪除，完整狀態保存在 git tag `pre-cleanup`。除非使用者
-要求，不要從該 tag 取回舊 code 或舊文件。
+其他舊研究線已移出工作樹，保存在 git tag `pre-cleanup`；除非使用者要求，不從該 tag 取回。
 
 ## Layout
 
@@ -43,6 +42,8 @@ investment dial 等）已從工作樹刪除，完整狀態保存在 git tag `pre
 - 只改任務範圍內的東西；開始前看 `git status`。
 - 新共用邏輯放 `llm_bias/core/`；一次性實驗邏輯留在 script 裡即可，不要預先抽象化。
 - 文件裡的命令、path 與狀態必須對得上 code 與 artifact；不確定就標 proposed。
+- 寫文件前先想讀者要用它做什麼決定：`status.md` 只放目前結論、關鍵數字與 artifact
+  路徑，協議細節連到 `proposal.md`，不重述。回覆使用者也一樣，先給結論，再給必要的證據。
 - 用 `uv sync` 建環境、`uv add` 加套件。
 
 ## Verification
