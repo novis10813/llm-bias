@@ -23,3 +23,18 @@ artifacts/*
 # Local research inputs and exports
 *.csv
 graphify-out/
+
+# Paper build files (unpublished draft; keep local)
+docs/concept-cone-steering/paper-draft.pdf
+docs/concept-cone-steering/acl.sty
+docs/concept-cone-steering/acl_natbib.bst
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+docs/concept-cone-steering/paper-draft.tex
+docs/concept-cone-steering/paper-draft.md
+docs/concept-cone-steering/custom.bib
+docs/concept-cone-steering/paper-figures/
