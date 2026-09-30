@@ -90,6 +90,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--arms", nargs="+", default=["tier1"], help="arm names, 'tier1', 'tier2' or 'all'")
     parser.add_argument("--smoke-tickers", nargs="+", default=["ABNB", "AEP"])
     parser.add_argument("--max-rows", type=int, default=None, help="stop after N generated rows (resume test)")
+    parser.add_argument("--layers", nargs="+", type=int, default=None,
+                        help="dim_layers arm: layers to sweep (default: the Qwen R2 set, Qwen only)")
     parser.add_argument("--population-csv", default=R.POPULATION_CSV)
     parser.add_argument("--allow-dirty", action="store_true", help="smoke only: permit uncommitted code")
     return parser.parse_args(argv)
@@ -648,20 +650,27 @@ def r0_agreement(job: Job, arm: GridArm) -> dict[str, Any] | None:
 
 
 def arm_dim_layers(job: Job) -> dict[str, Any]:
-    """Qwen R2: V2-convention layer sweep (raw difference, calibrated grid); L31 diagnostic only."""
-    if job.slug != "qwen3.5-4b":
-        raise ValueError("dim_layers is the Qwen R2 arm")
-    arm = GridArm(job, "dim_layers")
+    """DIM layer sweep (raw difference, calibrated grid). Default: Qwen R2 with an L31 diagnostic;
+    otherwise the layers given by --layers on any model."""
+    layers = getattr(job.args, "layers", None)
+    if layers is None:
+        if job.slug != "qwen3.5-4b":
+            raise ValueError("dim_layers needs --layers except for the Qwen R2 default")
+        layers = QWEN_R2_LAYERS
+    elif len(set(layers)) != len(layers) or not all(0 <= layer < job.spec.n_layers for layer in layers):
+        raise ValueError(f"--layers must be distinct layers in [0, {job.spec.n_layers})")
+    arm = GridArm(job, "dim_layers", {"layers": list(layers)} if job.args.layers else None)
     summary = {}
-    for layer in QWEN_R2_LAYERS:
+    for layer in layers:
         d, stats = job.dim(layer)
         arm.operator(f"dim_L{layer}", layer=layer, base=d, grid=job.grid("full"), condition="balanced",
                      keys=job.targets, extra={"direction": stats})
         summary[f"dim_L{layer}"] = operator_summary(job, arm, f"dim_L{layer}")
-    d, _ = job.dim()
-    hi = job.alpha_hi()
-    arm.operator("dim_L31_diagnostic", layer=31, base=d, grid=[-hi, hi], condition="balanced",
-                 keys=job.targets[:DIAG_COMPANIES], extra={"structural_zero": True})
+    if job.args.layers is None:
+        d, _ = job.dim()
+        hi = job.alpha_hi()
+        arm.operator("dim_L31_diagnostic", layer=31, base=d, grid=[-hi, hi], condition="balanced",
+                     keys=job.targets[:DIAG_COMPANIES], extra={"structural_zero": True})
     arm.finish(summary)
     return {k: v["baseline"] for k, v in summary.items()}
 
