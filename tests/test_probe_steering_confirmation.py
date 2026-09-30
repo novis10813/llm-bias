@@ -162,3 +162,18 @@ def test_full_phase_refuses_dirty_code_and_bad_run_ids(tmp_path, monkeypatch):
     assert runner.resolve_arms(SLUG, ["tier1"])[0] == "gates"
     with pytest.raises(ValueError, match="unknown arm"):
         runner.resolve_arms(SLUG, ["depth"])
+
+
+def test_dim_layers_arm_takes_explicit_layers_on_any_model(tmp_path, monkeypatch):
+    population, model_dir, tok = _setup(tmp_path, monkeypatch)
+    _, _, evaluation = R.split_population(population, R.SPLIT_SEED)
+    argv = _argv(population, model_dir, "confirmation-v1-test-smoke-02", ["gates", "ranking", "alpha0", "cal", "dim_layers"],
+                 evaluation, extra=["--layers", "0", "2"])
+    assert runner.main(argv, model=FakeJlens(3, full_attention_only=True), tokenizer=tok) == 0
+    result = json.loads((tmp_path / "artifacts" / SLUG
+                         / "concept-cone-steering/runs/confirmation-v1-test-smoke-02/dim_layers/result.json").read_text())
+    assert result["complete"] is True and result["metadata"]["layers"] == [0, 2]
+    assert set(result["operators"]) == {"dim_L0", "dim_L2"}
+    bad = _argv(population, model_dir, "confirmation-v1-test-smoke-03", ["dim_layers"], evaluation, extra=["--layers", "9"])
+    with pytest.raises(ValueError, match="distinct layers"):
+        runner.main(bad, model=FakeJlens(3, full_attention_only=True), tokenizer=tok)
