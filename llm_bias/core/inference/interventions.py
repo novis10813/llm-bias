@@ -45,20 +45,20 @@ def residual_interventions(
         raise TypeError("model does not expose decoder layers")
     handles = []
 
-    for raw_layer, transform in sorted(transforms.items()):
-        layer = int(raw_layer)
-        if layer < 0 or layer >= len(layers):
-            raise ValueError(f"intervention layer {layer} is out of range")
-
-        def hook(_module: Any, _inputs: Any, output: Any, *, fn=transform) -> Any:
-            tensor = output if torch.is_tensor(output) else output[0]
-            replacement = fn(tensor)
-            if not torch.is_tensor(replacement) or replacement.shape != tensor.shape:
-                raise ValueError("residual transform must preserve tensor shape")
-            return _replace_first(output, replacement)
-
-        handles.append(layers[layer].register_forward_hook(hook))
     try:
+        for raw_layer, transform in sorted(transforms.items()):
+            layer = int(raw_layer)
+            if layer < 0 or layer >= len(layers):
+                raise ValueError(f"intervention layer {layer} is out of range")
+
+            def hook(_module: Any, _inputs: Any, output: Any, *, fn=transform) -> Any:
+                tensor = output if torch.is_tensor(output) else output[0]
+                replacement = fn(tensor)
+                if not torch.is_tensor(replacement) or replacement.shape != tensor.shape:
+                    raise ValueError("residual transform must preserve tensor shape")
+                return _replace_first(output, replacement)
+
+            handles.append(layers[layer].register_forward_hook(hook))
         yield
     finally:
         for handle in handles:
@@ -149,29 +149,29 @@ def mid_residual_interventions(
         raise TypeError("model does not expose decoder layers")
     handles = []
 
-    for raw_layer in sorted(transforms):
-        layer = int(raw_layer)
-        transform = transforms[raw_layer]
-        if layer < 0 or layer >= len(layers):
-            raise ValueError(f"intervention layer {layer} is out of range")
-        norm = _post_attention_norm(model, layer)
-
-        def hook(_module: Any, args: tuple[Any, ...], kwargs: Any | None = None, *, fn=transform) -> Any:
-            kwargs = kwargs or {}
-            hidden = args[0] if args else kwargs.get("hidden_states")
-            if not torch.is_tensor(hidden):
-                raise ValueError("post_attention_layernorm input is not a tensor")
-            replacement = fn(hidden)
-            if not torch.is_tensor(replacement) or replacement.shape != hidden.shape:
-                raise ValueError("residual transform must preserve tensor shape")
-            if replacement is hidden:
-                return None
-            if args:
-                return ((replacement, *args[1:]), kwargs)
-            return (args, {**kwargs, "hidden_states": replacement})
-
-        handles.append(norm.register_forward_pre_hook(hook, with_kwargs=True))
     try:
+        for raw_layer in sorted(transforms):
+            layer = int(raw_layer)
+            transform = transforms[raw_layer]
+            if layer < 0 or layer >= len(layers):
+                raise ValueError(f"intervention layer {layer} is out of range")
+            norm = _post_attention_norm(model, layer)
+
+            def hook(_module: Any, args: tuple[Any, ...], kwargs: Any | None = None, *, fn=transform) -> Any:
+                kwargs = kwargs or {}
+                hidden = args[0] if args else kwargs.get("hidden_states")
+                if not torch.is_tensor(hidden):
+                    raise ValueError("post_attention_layernorm input is not a tensor")
+                replacement = fn(hidden)
+                if not torch.is_tensor(replacement) or replacement.shape != hidden.shape:
+                    raise ValueError("residual transform must preserve tensor shape")
+                if replacement is hidden:
+                    return None
+                if args:
+                    return ((replacement, *args[1:]), kwargs)
+                return (args, {**kwargs, "hidden_states": replacement})
+
+            handles.append(norm.register_forward_pre_hook(hook, with_kwargs=True))
         yield
     finally:
         for handle in handles:
