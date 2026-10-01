@@ -12,6 +12,7 @@ from functools import lru_cache
 from importlib.metadata import version
 import json
 import math
+import re
 from pathlib import Path
 import time
 from typing import Any, Literal
@@ -222,6 +223,7 @@ class CompiledDecisionGrammar:
     tokenizer_info_sha256: str
     backend_version: str
     grammar_sha256: str
+    byte_policy: str
 
     def new_processor(self, *, prompt_length: int, deadline: float | None) -> DecisionGrammarProcessor:
         return DecisionGrammarProcessor(self, prompt_length=prompt_length, deadline=deadline)
@@ -260,9 +262,9 @@ def compile_decision_grammar(
 
     The positive head size must cover every tokenizer ID. Stop IDs must be a
     nonempty unique sequence of known special/EOS vocab IDs, not padded IDs.
-    Byte support is restricted to HF fast BPE tokenizers with a plain ByteLevel
-    decoder, xgrammar BYTE_LEVEL and no prefix-space adjustment. Other decoder
-    types (including ByteFallback/RAW) fail explicitly.
+    Byte support is restricted to HF fast BPE with plain ByteLevel or exactly
+    Replace(String("▁"), " ")/ByteFallback/Fuse, matching xgrammar vocabulary
+    type and no prefix adjustment. All byte disagreements are blocked.
     """
     if type(head_vocab_size) is not int or head_vocab_size <= 0:
         raise ValueError('head_vocab_size must be a positive integer')
@@ -275,51 +277,123 @@ def compile_decision_grammar(
     if (not stops or any(type(i) is not int or not 0 <= i < head_vocab_size for i in stops)
             or len(set(stops)) != len(stops)):
         raise ValueError('stop_token_ids must be unique integers inside the head range')
-    if any(i not in vocab_ids or i not in tokenizer.all_special_ids for i in stops):
+    backend = _fast_backend(tokenizer)
+    byte_policy = _decoder_byte_policy(backend)
+    added, declared_specials = _declared_tokens(tokenizer, backend, head_vocab_size)
+    if any(i not in vocab_ids or i not in declared_specials for i in stops):
         raise ValueError('stop IDs must be known special/EOS vocabulary tokens, never ordinary or padded')
     backend_version = version('xgrammar')
     if backend_version != '0.2.8':
         raise ValueError('this capability requires xgrammar==0.2.8')
     _, bytes_hash, schema_hash = _schema_record(CANONICAL_SCHEMA_PATH.resolve())
-    info = xgr.TokenizerInfo.from_huggingface(
-        tokenizer, vocab_size=head_vocab_size, stop_token_ids=list(stops),
-    )
-    decoded_vocab, mismatched = _lossless_vocab(tokenizer, info)
+    try:
+        info = xgr.TokenizerInfo.from_huggingface(
+            tokenizer, vocab_size=head_vocab_size, stop_token_ids=list(stops),
+        )
+    except Exception as exc:
+        raise UnsupportedTokenizerError('backend tokenizer bytes could not be established') from exc
+    decoded_vocab, mismatched = _lossless_vocab(tokenizer, info, added, byte_policy)
+    if set(stops) & mismatched:
+        raise UnsupportedTokenizerError('stop token bytes disagree with the backend tokenizer')
     compiler = xgr.GrammarCompiler(info)
     compiled = compiler.compile_json_schema(load_decision_schema(), **_COMPILER_POLICY)
     compiled = _correct_reason_string_rule(compiler, compiled)
-    specials = set(info.special_token_ids) | set(tokenizer.all_special_ids)
+    specials = set(info.special_token_ids) | declared_specials
     # Full-head coverage, including tokenizer gaps/padded IDs. Explicitly mask
-    # HF special tokens as well as backend-detected control/reserved tokens.
-    if set(stops) & mismatched:
-        raise UnsupportedTokenizerError('stop token bytes disagree with the backend tokenizer')
+    # declared special tokens as well as backend-detected control/reserved tokens.
     blocked = (specials | mismatched | (set(range(head_vocab_size)) - set(vocab_ids))) - set(stops)
     capability = CompiledDecisionGrammar(
         compiled, head_vocab_size, stops, tuple(sorted(blocked)), tuple(sorted(specials)),
         schema_hash, bytes_hash, _tokenizer_identity(tokenizer),
         sha256_json(json.loads(info.serialize_json())), backend_version,
-        sha256_bytes(str(compiled.grammar).encode('utf-8')),
+        sha256_bytes(str(compiled.grammar).encode('utf-8')), byte_policy,
     )
     _FACTORY_CAPABILITIES[capability] = (_capability_metadata(capability), compiled, decoded_vocab)
     return capability
 
 
-def _lossless_vocab(tokenizer: Any, info: xgr.TokenizerInfo) -> tuple[tuple[bytes, ...], set[int]]:
-    """Reconstruct ByteLevel bytes, not replacement-decoded token strings.
-
-    ByteLevel maps the GPT-2 byte alphabet back to bytes and encodes other
-    characters literally as UTF8. The native backend truncates some NUL-bearing
-    added tokens; mask *all* vocab-byte disagreements rather than trusting them.
-    Runtime HF decode must additionally equal the strict concatenated bytes.
-    """
+def _fast_backend(tokenizer: Any) -> dict[str, Any]:
     if not isinstance(tokenizer, PreTrainedTokenizerFast):
-        raise UnsupportedTokenizerError('lossless bytes require a tested HF fast BPE/ByteLevel tokenizer')
-    backend = json.loads(tokenizer.backend_tokenizer.to_str())
-    if ((backend.get('decoder') or {}).get('type') != 'ByteLevel'
-            or (backend.get('model') or {}).get('type') != 'BPE'
-            or info.vocab_type != xgr.VocabType.BYTE_LEVEL or info.add_prefix_space
+        raise UnsupportedTokenizerError('lossless bytes require a tested HF fast BPE tokenizer')
+    try:
+        backend = _strict_json(tokenizer.backend_tokenizer.to_str())
+    except (ValueError, TypeError) as exc:
+        raise UnsupportedTokenizerError('malformed tokenizer backend descriptor') from exc
+    if not isinstance(backend, dict):
+        raise UnsupportedTokenizerError('malformed tokenizer backend descriptor')
+    return backend
+
+
+def _decoder_byte_policy(backend: dict[str, Any]) -> str:
+    """Admit native descriptors, not decoder substrings or generic pipelines."""
+    decoder = backend.get('decoder')
+    model = backend.get('model')
+    bytelevel = (
+        isinstance(decoder, dict)
+        and set(decoder) == {'type', 'add_prefix_space', 'trim_offsets', 'use_regex'}
+        and decoder['type'] == 'ByteLevel'
+        and all(type(decoder[key]) is bool for key in ('add_prefix_space', 'trim_offsets', 'use_regex'))
+    )
+    bytefallback = decoder == {
+        'type': 'Sequence', 'decoders': [
+            {'type': 'Replace', 'pattern': {'String': '▁'}, 'content': ' '},
+            {'type': 'ByteFallback'}, {'type': 'Fuse'},
+        ],
+    }
+    if (not isinstance(model, dict) or model.get('type') != 'BPE'
+            or not (bytelevel or bytefallback)
             or 'add_prefix_space":true' in json.dumps(backend.get('pre_tokenizer'), separators=(',', ':'))):
-        raise UnsupportedTokenizerError('unsupported lossless decoder: require BPE/ByteLevel without prefix adjustment')
+        raise UnsupportedTokenizerError(
+            'unsupported lossless decoder: require tested BPE/ByteLevel or '
+            'Replace/ByteFallback/Fuse without prefix adjustment')
+    return ('hf-fast-bpe-bytelevel-strict-utf8-v1' if bytelevel
+            else 'hf-fast-bpe-bytefallback-strict-utf8-v1')
+
+
+def _declared_tokens(tokenizer: Any, backend: dict[str, Any],
+                     head_vocab_size: int) -> tuple[dict[int, str], set[int]]:
+    """Validate backend added records before using their literal bytes/special IDs."""
+    vocab = tokenizer.get_vocab()
+    vocab_ids = set(vocab.values())
+    records = backend.get('added_tokens', [])
+    if not isinstance(records, list):
+        raise UnsupportedTokenizerError('malformed backend added-token declarations')
+    added: dict[int, str] = {}
+    contents: set[str] = set()
+    specials = set()
+    for record in records:
+        if not isinstance(record, dict):
+            raise UnsupportedTokenizerError('malformed backend added-token declaration')
+        token_id, content, special = record.get('id'), record.get('content'), record.get('special')
+        if (type(token_id) is not int or not 0 <= token_id < head_vocab_size
+                or not isinstance(content, str) or type(special) is not bool
+                or vocab.get(content) != token_id or token_id in added or content in contents):
+            raise UnsupportedTokenizerError('malformed or conflicting backend added-token declaration')
+        added[token_id] = content
+        contents.add(content)
+        if special:
+            specials.add(token_id)
+    for token_id in tokenizer.all_special_ids:
+        if type(token_id) is not int or not 0 <= token_id < head_vocab_size or token_id not in vocab_ids:
+            raise UnsupportedTokenizerError('malformed named HF special-token declaration')
+        specials.add(token_id)
+    return added, specials
+
+
+def _lossless_vocab(tokenizer: Any, info: xgr.TokenizerInfo,
+                    added: dict[int, str], byte_policy: str) -> tuple[tuple[bytes, ...], set[int]]:
+    """Compare independent native bytes to xgrammar; never repair unsafe bytes.
+
+    Native ByteFallback accepts two hex digits (either case) and a plus sign
+    followed by one hex digit. Added tokens are scrutinized as literal content,
+    even when the native decoder interprets their spelling as ordinary tokens.
+    NUL truncation and all other backend disagreements remain blocked. Runtime
+    strict UTF8 and full-sequence HF equality are additional mandatory gates.
+    """
+    bytelevel = byte_policy == 'hf-fast-bpe-bytelevel-strict-utf8-v1'
+    expected_type = xgr.VocabType.BYTE_LEVEL if bytelevel else xgr.VocabType.BYTE_FALLBACK
+    if info.vocab_type != expected_type or info.add_prefix_space:
+        raise UnsupportedTokenizerError('unsupported lossless decoder: vocabulary type mismatch or prefix adjustment')
     byte_values = list(range(33, 127)) + list(range(161, 173)) + list(range(174, 256))
     characters = list(byte_values)
     missing_bytes = [byte for byte in range(256) if byte not in byte_values]
@@ -330,8 +404,22 @@ def _lossless_vocab(tokenizer: Any, info: xgr.TokenizerInfo) -> tuple[tuple[byte
     decoded = info.decoded_vocab
     mismatched = set()
     for token, token_id in tokenizer.get_vocab().items():
-        exact = b''.join(byte_map[char] if char in byte_map else char.encode('utf-8') for char in token)
-        if exact != decoded[token_id]:
+        try:
+            if token_id in added:
+                exact = added[token_id].encode('utf-8')
+                native = tokenizer.decode([token_id], skip_special_tokens=False,
+                                          clean_up_tokenization_spaces=False)
+                if native != added[token_id]:
+                    mismatched.add(token_id)
+            elif bytelevel:
+                exact = b''.join(byte_map[char] if char in byte_map else char.encode('utf-8') for char in token)
+            elif re.fullmatch(r'<0x(?:[0-9A-Fa-f]{2}|\+[0-9A-Fa-f])>', token):
+                exact = bytes([int(token[3:-1], 16)])
+            else:
+                exact = token.replace('▁', ' ').encode('utf-8')
+            if exact != decoded[token_id]:
+                mismatched.add(token_id)
+        except (UnicodeError, ValueError):
             mismatched.add(token_id)
     return tuple(decoded), mismatched
 
@@ -477,6 +565,8 @@ class DecisionGrammarProcessor(LogitsProcessor):
                 raise _UnsupportedChannelError('non-stop special token in continuation')
             if token in self.capability.stop_token_ids and not self.matcher.is_completed():
                 raise _UnsupportedChannelError('interior or premature stop token in continuation')
+            if token in self.capability.blocked_token_ids:
+                raise ValueError(f'generated blocked token {token} in continuation')
             if not self.matcher.accept_token(token):
                 raise ValueError(f'generated token {token} rejected by decision grammar')
             self.accepted_count += 1
@@ -607,7 +697,7 @@ def generate_structured(
     provenance = {
         'backend': 'xgrammar', 'backend_version': capability.backend_version,
         'model_binding': binding,
-        'byte_policy': 'hf-fast-bpe-bytelevel-strict-utf8-v1',
+        'byte_policy': capability.byte_policy,
         'schema_sha256': capability.schema_sha256,
         'schema_bytes_sha256': capability.schema_bytes_sha256,
         'tokenizer_sha256': capability.tokenizer_sha256,
