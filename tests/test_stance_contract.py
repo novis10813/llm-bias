@@ -287,6 +287,7 @@ FAILURES = (
     ("invalid_schema", "schema_complete", False, False),
     ("invalid_reason", "schema_complete", True, False),
     ("unsupported_channel", "unsupported", False, False),
+    ("unsupported_tokenizer", "unsupported", True, True),
 )
 
 
@@ -697,3 +698,145 @@ def test_claimed_progress_import_rejects_bad_json(plan):
     for payload in ('{"complete":true,"complete":false}', '{"complete":NaN}', '[]', 'null'):
         with pytest.raises(ValueError):
             C.load_progress(plan, [], {}, payload)
+
+
+@pytest.mark.parametrize("decision_complete", [False, True])
+@pytest.mark.parametrize("schema_complete", [False, True])
+@pytest.mark.parametrize("reason_valid", [False, True])
+def test_unsupported_tokenizer_import_retains_all_legal_diagnostic_flags(
+    plan, decision_complete, schema_complete, reason_valid,
+):
+    payload = _outcome(plan.keys[0]).to_dict() | {
+        "decision": None, "failure_type": "unsupported_tokenizer", "finish_reason": "unsupported",
+        "decision_complete": decision_complete, "schema_complete": schema_complete,
+        "reason_valid": reason_valid,
+    }
+    legal = (not schema_complete or decision_complete) and (not reason_valid or schema_complete)
+    if not legal:
+        with pytest.raises(ValueError):
+            C.GenerationOutcome.from_json(_json(payload))
+        return
+    outcome = C.GenerationOutcome.from_json(_json(payload))
+    assert outcome.to_json() == _json(payload)
+    assert outcome.decision is None and not outcome.primary_valid
+    assert C.validate_outcome(outcome) == outcome
+    row = C.ExecutionRow(plan.keys[0], outcome)
+    assert C.ExecutionRow.from_json(row.to_json()) == row
+    rows = (row, *_rows(plan)[1:])
+    shards = tuple(C.ExecutionShard.from_json(shard.to_json(), plan=plan)
+                   for shard in _shards(plan, rows=rows))
+    merged, state = C.merge_shards(plan, shards)
+    assert merged == rows
+    assert (state["planned"], state["executed"], state["missing"]) == (8, 8, 0)
+    assert state["complete"] and state["eligible"]
+    assert C.load_progress(plan, merged, state["gates"], _json(state)) == state
+
+
+@pytest.mark.parametrize("finish", [
+    "eos", "schema_complete", "exception", "timeout", "token_budget", "no_legal_token",
+])
+def test_unsupported_tokenizer_rejects_every_other_finish(plan, finish):
+    payload = _outcome(plan.keys[0]).to_dict() | {
+        "decision": None, "failure_type": "unsupported_tokenizer", "finish_reason": finish,
+    }
+    with pytest.raises(ValueError, match="finish_reason"):
+        C.GenerationOutcome.from_json(_json(payload))
+
+
+@pytest.mark.parametrize("decision", ["buy", "sell"])
+def test_unsupported_tokenizer_nonnull_decisions_rejected_on_import_and_revalidation(plan, decision):
+    outcome = _outcome(plan.keys[0], decision=None, failure_type="unsupported_tokenizer",
+                       finish_reason="unsupported")
+    with pytest.raises(ValueError, match="decision"):
+        C.GenerationOutcome.from_json(_json(outcome.to_dict() | {"decision": decision}))
+    row = C.ExecutionRow(plan.keys[0], outcome)
+    shard = C.ExecutionShard(plan.plan_hash, 0, 1, (row,), {name: True for name in GATES})
+    object.__setattr__(outcome, "decision", decision)
+    object.__setattr__(row.outcome, "decision", decision)
+    object.__setattr__(shard.rows[0].outcome, "decision", decision)
+    for validate in (
+        lambda: C.validate_outcome(outcome),
+        lambda: C.ExecutionRow(plan.keys[0], outcome),
+        lambda: C.validate_rows(plan, (row,)),
+        lambda: C.progress(plan, (row,)),
+        lambda: C.validate_shard(plan, shard),
+        lambda: C.merge_shards(plan, (shard,), require_complete=False),
+    ):
+        with pytest.raises(ValueError, match="decision"):
+            validate()
+
+
+# Canonical byte digests captured before the additive nine-type extension.
+OLD_FAILURE_DIGESTS = {
+    "truncated": (
+        "3783c3ce8afc87201ab3725149a99e00a9ad74d6df87e46fdfc07c9f4e2f19e0",
+        "2894078ae841136a5f85d02013b00a24a364ad001acf61046ed66a8f883c45c9",
+        "e5f8b02cb8b7b9a906ee828db1ebb3719dfeffe3ded68785d01229881b37bfbf",
+    ),
+    "timeout": (
+        "eabe927bcf53301d362a15d01fba17c9a9ca2a0d423586039bfd38c80ff9caa0",
+        "829f1606d5ac78dd80081637fab2881bde9bc27d8b849d76167aa47142aca252",
+        "65d9ad2be18ad8fe9f900411fe8eb77d56b7d26d05024975d89de42cea5e9b82",
+    ),
+    "exception": (
+        "5e2f11ce3213165b5792e4963108161991d8970df6c6e7ddc8ab2da507c71102",
+        "56f483d89f00a3e528ed9e2d0a9f3b7f933de83e7b478ebeb4955d504d67c627",
+        "07ee648f67ed596fd044ad58f4062996e1d9188e21d4459367f6bb56b08366da",
+    ),
+    "no_legal_token": (
+        "1edbd0f0630918abe82d9093d12c1477b43308d71c798a47019c2491d599da2f",
+        "db99476fe079987cd7a9eced7f4e41d1a95989bc0eefdb27e752cb0352a462c9",
+        "33198ae6ea1cbdfc40db72bdd8e8e00e960c87c908152cc3121a56277a23f7c7",
+    ),
+    "invalid_json": (
+        "db088049ab0f8b6632859f4af04b7ed3e8b4cf68bf2f8b61aef4fd5112897a94",
+        "0006930cb1b83a6766dcb259945a4a8c6db1c5d2a50eab3b06e954bff80db96c",
+        "e36d0de876ecf2d455bb9fe9be2d8a6026587475b6a762ee5562c789ec7cb5cd",
+    ),
+    "invalid_schema": (
+        "1bb1824fb1b82cb67ac7d55ebe7ea07fdbb60c2b1ae6426404a44d3854015022",
+        "4c7a678625b3b9b2b34fe0df003899b7463d9aa703bc418e258fd1fdcafa4ebf",
+        "c728edca08f3a71fba227ea75c5e7ff99dfaba0e4fb5271ac3e36f0196e19f24",
+    ),
+    "invalid_reason": (
+        "8728b5925adc5fb48c8e46f4693cb4ac980f41ced1fd2e7caa5f6a087d5ef4d6",
+        "6931d8b5075029b10b94464348e7657dd6fc4d7aecb5c232f7b7e6a8f8fbb2ea",
+        "65ab5ae560f0c54c95d83dcc6ba2cf3ebb83a8063b61bc03818da20992c4eac2",
+    ),
+    "unsupported_channel": (
+        "387c70767d78c07c81caf1335b803619ba0d70fcf368e3a6e959ddda4eed71d3",
+        "1887e4027b0c215e07d02d72817d1e67a5139958049a8ffefa7b8fe50463acb4",
+        "1115370f180305db55168d7c429171f3edad7dae72f3737e0ff84a4b7e71d8ed",
+    ),
+}
+
+
+@pytest.mark.parametrize("failure", OLD_FAILURE_DIGESTS)
+def test_old_eight_type_outcome_row_plan_shard_canonical_bytes_unchanged(plan, failure):
+    _, finish, schema, reason = next(record for record in FAILURES if record[0] == failure)
+    outcome = _outcome(plan.keys[0], decision=None, failure_type=failure, finish_reason=finish,
+                       schema_complete=schema, reason_valid=reason)
+    row = C.ExecutionRow(plan.keys[0], outcome)
+    shard = C.ExecutionShard(plan.plan_hash, 0, 1, (row,), {name: True for name in GATES})
+    for record, expected_digest in zip((outcome, row, shard), OLD_FAILURE_DIGESTS[failure], strict=True):
+        text = record.to_json()
+        assert hashlib.sha256(text.encode("utf-8")).hexdigest() == expected_digest
+        kwargs = {"plan": plan} if record is shard else {}
+        assert type(record).from_json(text, **kwargs).to_json().encode("utf-8") == text.encode("utf-8")
+    assert plan.plan_hash == "94762abecb5865fcef04c1445c3e768ab72df38e4be965085fdc704813f6a1d5"
+    assert hashlib.sha256(plan.to_json().encode("utf-8")).hexdigest() == (
+        "d4da826aef43f93c5c5ef3da3ec36e1c0533dc058716832d4a1b96c60495b387"
+    )
+    assert C.ExperimentPlan.from_json(plan.to_json()).to_json() == plan.to_json()
+
+
+def test_successful_outcome_row_shard_canonical_bytes_unchanged(plan):
+    row = _rows(plan)[0]
+    shard = _shards(plan, 1)[0]
+    expected = (
+        "051ff10ac18227e675cf739978748bd413abe4a17ad0a38e88efa80254bc9e31",
+        "1cba9cf02092e070c1c6acdb77e194ba2fd0e97e30df8193a61061b6afc0a4c9",
+        "358144ca2e44893f1cbad314870c562ae19102b679f80407f8ce629904d301fb",
+    )
+    for record, digest in zip((row.outcome, row, shard), expected, strict=True):
+        assert hashlib.sha256(record.to_json().encode("utf-8")).hexdigest() == digest

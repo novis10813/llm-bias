@@ -14,9 +14,11 @@ from llm_bias.core.artifact_paths import canonical_json_bytes, sha256_bytes, sha
 
 GATE_NAME = "no_op"
 _HASH = re.compile(r"[0-9a-f]{64}")
+# Public GenerationOutcome failure vocabulary; no inference-module dependency.
 _FAILURES = (
     "exception", "invalid_json", "invalid_reason", "invalid_schema",
     "no_legal_token", "timeout", "truncated", "unsupported_channel",
+    "unsupported_tokenizer",
 )
 _PREFIXES = ("baseline", "repeat", "zero", "self")
 _CHECK_KEYS = frozenset((

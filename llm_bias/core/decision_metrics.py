@@ -25,6 +25,7 @@ from llm_bias.core.experiment_contract import (
 _FAILURE_TYPES = (
     "exception", "invalid_json", "invalid_reason", "invalid_schema",
     "no_legal_token", "timeout", "truncated", "unsupported_channel",
+    "unsupported_tokenizer",
 )
 _DIRECTIONS = {"buy_to_sell": ("buy", "sell"), "sell_to_buy": ("sell", "buy")}
 

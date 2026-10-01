@@ -25,6 +25,7 @@ DIAGNOSTIC_KEYS = {
 FAILURES = (
     "exception", "invalid_json", "invalid_reason", "invalid_schema",
     "no_legal_token", "timeout", "truncated", "unsupported_channel",
+    "unsupported_tokenizer",
 )
 
 
@@ -272,16 +273,20 @@ def test_result_and_all_exports_are_immutable_or_defensive():
 
 
 @pytest.mark.parametrize("stage", ["baseline", "localization", "method", "comparison"])
-def test_false_noop_blocks_existing_progress_and_full_merge_at_every_stage(stage):
+@pytest.mark.parametrize("failure", [None, "unsupported_tokenizer"])
+def test_false_noop_blocks_existing_progress_and_full_merge_at_every_stage(stage, failure):
     identity = C.PlanIdentity(**{field.name: CONFIG_HASH for field in fields(C.PlanIdentity)})
     key = C.RowKey(stage, "ACME", "++", "trial-1", "baseline", "0")
     plan = C.ExperimentPlan(identity, (key,), (GATE_NAME,))
     outcome = C.GenerationOutcome(
-        "ACME", "issuer-1", "++", "trial-1", "buy", True, True, True, "eos", None,
+        "ACME", "issuer-1", "++", "trial-1", "buy" if failure is None else None,
+        True, True, True, "eos" if failure is None else "unsupported", failure,
     )
     row = C.ExecutionRow(key, outcome)
     good = generation()
-    gate = evaluate(good, generation(token_ids=(11, 22, 99)), good, good)
+    control = (generation(token_ids=(11, 22, 99)) if failure is None
+               else generation(decision=None, failure_type=failure))
+    gate = evaluate(good, control, good, good)
     state = C.progress(plan, (row,), gate.as_gate_dict())
     assert state["complete"] is True
     assert state["eligible"] is False
@@ -289,8 +294,45 @@ def test_false_noop_blocks_existing_progress_and_full_merge_at_every_stage(stage
     shard = C.ExecutionShard(plan.plan_hash, 0, 1, (row,), gate.as_gate_dict())
     merged_rows, full_state = C.merge_shards(plan, (shard,), require_complete=True)
     assert merged_rows == (row,)
+    assert (full_state["planned"], full_state["executed"], full_state["missing"]) == (1, 1, 0)
+    assert merged_rows[0].outcome.failure_type == failure
+    assert set(gate.checks) == CHECK_KEYS and set(gate.diagnostics) == DIAGNOSTIC_KEYS
+    assert gate.diagnostics["repeat_failure_type"] == failure
     assert full_state == state
     with pytest.raises(ValueError, match="contradicts"):
         C.load_progress(plan, (row,), gate.as_gate_dict(), json.dumps(state | {"eligible": True}))
     passing_gate = evaluate(good, good, good, good)
     assert C.progress(plan, (row,), passing_gate.as_gate_dict())["eligible"] is True
+
+
+@pytest.mark.parametrize("failed_arm", range(4))
+def test_one_unsupported_tokenizer_arm_with_identical_complete_diagnostics_fails(failed_arm):
+    arms = [generation() for _ in PREFIXES]
+    arms[failed_arm] = generation(failure_type="unsupported_tokenizer")
+    result = evaluate(*arms)
+    assert result.passed is False
+    assert set(result.checks) == CHECK_KEYS and len(result.checks) == 10
+    assert result.checks["all_primary_valid"] is False
+    assert result.checks["baseline_primary_valid"] is (failed_arm != 0)
+    assert all(result.checks[key] for key in CHECK_KEYS - {"all_primary_valid", "baseline_primary_valid"})
+    assert set(result.diagnostics) == DIAGNOSTIC_KEYS and len(result.diagnostics) == 20
+    for prefix in PREFIXES:
+        assert result.diagnostics[f"{prefix}_failure_type"] == (
+            "unsupported_tokenizer" if prefix == PREFIXES[failed_arm] else None
+        )
+        assert result.diagnostics[f"{prefix}_decision"] == "buy"
+        assert result.diagnostics[f"{prefix}_token_count"] == 3
+        assert result.diagnostics[f"{prefix}_token_sha256"] == result.diagnostics["baseline_token_sha256"]
+        assert result.diagnostics[f"{prefix}_text_sha256"] == result.diagnostics["baseline_text_sha256"]
+    copied = NoOpGateResult(**json.loads(result.to_json()))
+    assert copied.to_json() == result.to_json()
+    assert copied.as_gate_dict() == {"no_op": False}
+
+
+@pytest.mark.parametrize("changes", [
+    {"token_ids": (True,)}, {"token_ids": (2**63,)}, {"text": "\ud800"},
+    {"schema_complete": 1}, {"reason_valid": None}, {"decision_complete": "true"},
+])
+def test_unsupported_tokenizer_does_not_bypass_caller_validation(changes):
+    with pytest.raises(ValueError):
+        generation(failure_type="unsupported_tokenizer", **changes)

@@ -21,6 +21,7 @@ from llm_bias.core.decision_metrics import (
 FAILURES = (
     "exception", "invalid_json", "invalid_reason", "invalid_schema",
     "no_legal_token", "timeout", "truncated", "unsupported_channel",
+    "unsupported_tokenizer",
 )
 ISSUERS = {"A1": "A", "A2": "A", "B": "B", "C": "C"}
 GATES = {"no_op": True, "schema_supported": True}
@@ -38,7 +39,8 @@ def _identity():
 
 def _outcome(key, decision="buy", *, issuer=None, failure=None):
     finish = {"truncated": "token_budget", "timeout": "timeout", "exception": "exception",
-              "no_legal_token": "no_legal_token", "unsupported_channel": "unsupported"}
+              "no_legal_token": "no_legal_token", "unsupported_channel": "unsupported",
+              "unsupported_tokenizer": "unsupported"}
     return C.GenerationOutcome(
         key.ticker, ISSUERS.get(key.ticker, key.ticker) if issuer is None else issuer,
         key.condition, key.trial_id, decision if failure is None else None,
@@ -556,3 +558,74 @@ def test_group_doses_sort_as_canonical_strings(cohort):
         ('+-', 'steering', '10'), ('+-', 'steering', '2'),
         ('-+', 'steering', '10'), ('-+', 'steering', '2'),
     ]
+
+
+@pytest.mark.parametrize("failed_arm", ["baseline", "left"])
+def test_unsupported_tokenizer_hand_denominator_and_executed_row(failed_arm):
+    cohort, mapping = _tiny()
+    plan, rows = cohort
+    # Two buy baselines, two left sell interventions. Fail A2 in just one arm.
+    rows = [C.ExecutionRow(row.key, _outcome(
+        row.key, issuer=mapping[row.key.ticker], failure="unsupported_tokenizer",
+    )) if row.key.ticker == "A2" and row.key.arm == failed_arm else row for row in rows]
+    result = _summary((plan, rows), issuer_by_ticker=mapping)
+    assert result["schema_version"] == 1
+    assert result["planned_rows"] == result["executed_rows"] == 6
+    group = _group(result)
+    assert group["planned_units"] == 2
+    assert group["observed_flips"] == 1
+    assert group["observed_flips_over_planned"] == 1 / 2
+    counts = dict.fromkeys(FAILURES, 0) | {"unsupported_tokenizer": 1}
+    assert group["baseline_failures"] == (counts if failed_arm == "baseline" else dict.fromkeys(FAILURES, 0))
+    assert group["intervention_failures"] == (counts if failed_arm == "left" else dict.fromkeys(FAILURES, 0))
+    for record in result["groups"]:
+        assert list(record["baseline_failures"]) == list(record["intervention_failures"]) == list(FAILURES)
+    direction = group["directions"]["buy_to_sell"]
+    assert direction["flips"] == 1 and direction["retentions"] == 0
+    if failed_arm == "left":
+        # Failure stays in ITT: (A1 1/1 + A2 0/1)/2 = 1/2, micro = 1/2.
+        assert group["baseline_buy"] == 2 and group["baseline_unknown"] == 0
+        assert direction["source_units"] == 2 and direction["invalid_interventions"] == 1
+        assert direction["company_first_rate"] == direction["micro_rate"] == float(Fraction(1, 2))
+        assert direction["tickers"][1]["rate"] == 0.0
+    else:
+        # Failed A2 baseline is unknown: only A1 supplies a source, rate = 1/1.
+        assert group["baseline_buy"] == group["baseline_unknown"] == 1
+        assert direction["source_units"] == 1 and direction["invalid_interventions"] == 0
+        assert direction["company_first_rate"] == direction["micro_rate"] == 1.0
+        assert direction["source_free_tickers"] == 1
+        assert direction["tickers"][1]["rate"] is None
+    source_free = group["directions"]["sell_to_buy"]
+    assert source_free["source_units"] == 0
+    assert source_free["company_first_rate"] is source_free["micro_rate"] is None
+    state = metrics_progress(plan, rows, gates=GATES)
+    assert (state["planned"], state["executed"], state["missing"]) == (6, 6, 0)
+    assert state["generation_failures"] == counts
+    assert list(state["generation_failures"]) == list(FAILURES)
+    assert set(state) == {"schema_version", "plan_hash", "planned", "executed", "missing",
+                          "complete", "eligible", "gates", "generation_failures"}
+    missing = [row for row in rows if row.outcome.failure_type is None]
+    assert metrics_progress(plan, missing, gates=GATES)["missing"] == 1
+    with pytest.raises(ValueError, match="incomplete|missing"):
+        _summary((plan, missing), issuer_by_ticker=mapping)
+    with pytest.raises(ValueError, match="incomplete|missing"):
+        _bootstrap((plan, missing), issuer_by_ticker=mapping)
+
+
+@pytest.mark.parametrize("failure", FAILURES)
+def test_all_failed_baselines_unknown_not_source_or_zero(failure):
+    cohort, mapping = _tiny()
+    plan, rows = cohort
+    rows = [C.ExecutionRow(row.key, _outcome(row.key, issuer=mapping[row.key.ticker], failure=failure))
+            if row.key.arm == "baseline" else row for row in rows]
+    result = _summary((plan, rows), issuer_by_ticker=mapping)
+    for group in result["groups"]:
+        assert group["baseline_unknown"] == 2
+        assert group["baseline_buy"] == group["baseline_sell"] == group["observed_flips"] == 0
+        assert group["baseline_failures"] == dict.fromkeys(FAILURES, 0) | {failure: 2}
+        for direction in group["directions"].values():
+            assert direction["source_units"] == direction["flips"] == direction["retentions"] == 0
+            assert direction["company_first_rate"] is direction["micro_rate"] is None
+    boot = _bootstrap((plan, rows), issuer_by_ticker=mapping, samples=5)
+    assert boot["undefined_draws"] == 5 and boot["finite_draws"] == 0
+    assert boot["left"] == boot["right"] == boot["difference"] == {"estimate": None, "interval": None}

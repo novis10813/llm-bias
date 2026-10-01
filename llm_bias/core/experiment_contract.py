@@ -27,6 +27,7 @@ _FINISHES = ("eos", "schema_complete", "token_budget", "timeout", "exception",
 _FAILURE_FINISH = {
     "truncated": "token_budget", "timeout": "timeout", "exception": "exception",
     "no_legal_token": "no_legal_token", "unsupported_channel": "unsupported",
+    "unsupported_tokenizer": "unsupported",
 }
 _FAILURES = (*_FAILURE_FINISH, "invalid_json", "invalid_schema", "invalid_reason")
 _PROHIBITED = {
