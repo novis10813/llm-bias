@@ -1,4 +1,5 @@
 """All-position dense MLP additions and transient summed derivatives."""
+from collections.abc import Sequence
 from contextlib import contextmanager
 import math
 
@@ -7,21 +8,53 @@ import torch
 from llm_bias.core.inference.mlp import dense_down_projection
 
 
+def _selection_mask(selection, values):
+    """Validate a local position selector without coercing coordinates."""
+    length = values.shape[1]
+    if torch.is_tensor(selection):
+        if selection.dtype != torch.bool or selection.ndim != 1 or selection.numel() != length:
+            raise ValueError("selector must return a sequence-length 1D bool tensor")
+        return selection.to(device=values.device)
+    if not isinstance(selection, Sequence) or isinstance(selection, (str, bytes)):
+        raise ValueError("selector must return integer indices or a bool tensor")
+    indices = list(selection)
+    if any(type(index) is not int or not 0 <= index < length for index in indices):
+        raise ValueError("invalid selector index")
+    if len(set(indices)) != len(indices):
+        raise ValueError("duplicate selector indices")
+    mask = torch.zeros(length, dtype=torch.bool, device=values.device)
+    if indices:
+        mask[indices] = True
+    return mask
+
+
 @contextmanager
-def mlp_addition(model, layer: int, neuron: int, delta: float):
-    """Add a native-unit scalar at every position, including cached decoding."""
-    if not 0 <= layer < len(model.layers) or neuron < 0 or not math.isfinite(delta):
+def mlp_addition(model, layer: int, neuron: int, delta: float, *, selector=None):
+    """Add a native-unit scalar before the dense down projection.
+
+    The legacy default edits all positions, including cached decoding. An
+    optional selector supplies validated local indices or a boolean mask.
+    """
+    if (type(layer) is not int or type(neuron) is not int
+            or not 0 <= layer < len(model.layers) or neuron < 0
+            or isinstance(delta, bool) or not math.isfinite(delta)):
         raise ValueError("invalid coordinate or delta")
+    if selector is not None and not callable(selector):
+        raise ValueError("selector must be callable")
     module = dense_down_projection(model.layers[layer])
 
     def hook(_module, args):
         values = args[0]
         if values.ndim != 3 or neuron >= values.shape[-1]:
             raise ValueError("invalid MLP shape or neuron")
-        if delta == 0:
+        mask = None if selector is None else _selection_mask(selector(values), values)
+        if delta == 0 or (mask is not None and not mask.any()):
             return None
         result = values.clone()
-        result[..., neuron] += delta
+        if mask is None:
+            result[..., neuron] += delta
+        else:
+            result[:, mask, neuron] += delta
         return (result, *args[1:])
 
     handle = module.register_forward_pre_hook(hook)
