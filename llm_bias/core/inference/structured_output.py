@@ -127,7 +127,7 @@ class StructuredGenerationPolicy:
     use_cache: bool
     pad_token_id: int
     timeout_seconds: float
-    channel_policy: Literal['plain_json', 'unsupported']
+    channel_policy: Literal['plain_json', 'unsupported', 'harmony_no_tools']
 
 
 @dataclass(frozen=True)
@@ -622,8 +622,8 @@ def _validate_policy(policy: StructuredGenerationPolicy, head_vocab_size: int) -
     if (isinstance(policy.timeout_seconds, bool) or not isinstance(policy.timeout_seconds, (int, float))
             or not math.isfinite(policy.timeout_seconds) or policy.timeout_seconds <= 0):
         raise ValueError('timeout_seconds must be positive and finite')
-    if policy.channel_policy not in ('plain_json', 'unsupported'):
-        raise ValueError('channel_policy must explicitly be plain_json or unsupported')
+    if policy.channel_policy not in ('plain_json', 'unsupported', 'harmony_no_tools'):
+        raise ValueError('channel_policy must explicitly be plain_json, unsupported or harmony_no_tools')
 
 
 def _hf_controls(policy: StructuredGenerationPolicy, stops: tuple[int, ...]) -> dict[str, Any]:
@@ -674,6 +674,8 @@ def generate_structured(
     """
     decoded_vocab = _check_capability(capability)
     _validate_policy(policy, capability.head_vocab_size)
+    if policy.channel_policy == 'harmony_no_tools':
+        raise ValueError('plain generate_structured does not accept harmony_no_tools policy')
     if (not isinstance(prompt_ids, torch.Tensor) or prompt_ids.ndim != 2
             or prompt_ids.shape[0] != 1 or prompt_ids.shape[1] == 0):
         raise ValueError('structured generation requires a nonempty batch-one prompt')
