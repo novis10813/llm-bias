@@ -1,6 +1,18 @@
 # Rebuild-v1 has not produced a research result
 
-**State:** implementation in progress; no new model/research experiment has been submitted. Infrastructure-only placement jobs succeeded on the requested GPUs. Unit tests and placement checks do not establish experimental effects or checkpoint compatibility.
+**State:** implementation and real-checkpoint diagnostic execution in progress; no complete rebuild-v1 research result. Qwen3.5-4B and GLM4-9B completed actual four-arm no-op smoke on idlab physicalGPU1. Each artifact remains research_eligible=false; these checks do not establish steering effects or full-population/configuration coverage.
+
+## Real checkpoint smoke passed for bounded Qwen and GLM configurations
+
+`scripts/smoke_stance_checkpoint.py` validates the full503-ticker/500-issuer/2012-pair manifest before selecting lexical first row A/++/factset-20241115-a. Job `stance-rb260930-5` (da6508c) loaded Qwen weights but halted at baseline because native4-plane position_ids were unsupported; controls remained unexecuted and its failure artifact is preserved.
+
+Fix31826c4 accepts identical integer3/4-plane text positions only, without altering forwarded metadata; divergent multimodal coordinates remain unsupported. Main298 focused tests and independent325 tests/50 rejection probes passed. Main full regression passed2575 tests/1 skipped/18 warnings in735.53s, lock/diff passed (`.pi/tasks/t8b684.log`).
+
+All following jobs used31826c4 through lab on idlab physicalGPU1, BF16, layer0, prompt_only, cache=true, total budget512 and per-arm timeout180s. Qwen `stance-rb260930-6` passed pre-site; `stance-rb260930-7` passed mid and post separately. Each four-arm set generated the same complete92-token schema-valid buy output and identical text. Zero/self each observed268 prompt-token opportunities with changed_token_count=0 and delta_l2_sum=0. Artifacts: `artifacts/qwen3.5-4b/concept-cone-steering/runs/diagnostic-smoke-stance-rb260930-6/result.json` and `diagnostic-smoke-stance-rb260930-7/{mid,post}.json`.
+
+GLM `stance-rb260930-8` passed pre-site. Four arms generated identical complete59-token schema-valid buy outputs and text; zero/self each observed240 opportunities with changed_token_count=0 and delta_l2_sum=0. Artifact: `artifacts/glm4-9b-0414/concept-cone-steering/runs/diagnostic-smoke-stance-rb260930-8/result.json`.
+
+All ten no-op checks passed in each completed invocation. These results certify execution only for the recorded smoke row/configuration. Other rows/layers/cache policies, remaining model smoke, full baseline and formal protocol remain pending. No other process was stopped.
 
 ## P0 population code passed tests and independent review
 
