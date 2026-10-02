@@ -117,6 +117,19 @@ def test_prompt_and_capability_binding():
     with pytest.raises(ValueError):r.check_capability(cap,ref)
 
 
+def test_relocated_tokenizer_binding_is_explicit_and_guarded():
+    parent={'resolved_path':'/old/model','metadata_file_sha256':{'tokenizer.json':'a'}}
+    actual={'resolved_path':'/new/model','metadata_file_sha256':{'tokenizer.json':'a'}}
+    tokenizer=NS(name_or_path='/new/model')
+    proof=r.bind_relocated_tokenizer(tokenizer,actual,parent)
+    assert tokenizer.name_or_path=='/old/model'
+    assert proof['actual_loaded_name_or_path']=='/new/model'
+    assert proof['logical_parent_name_or_path']=='/old/model'
+    with pytest.raises(ValueError):r.bind_relocated_tokenizer(NS(name_or_path='/other'),actual,parent)
+    with pytest.raises(ValueError):r.bind_relocated_tokenizer(NS(name_or_path='/new/model'),
+        actual | {'metadata_file_sha256':{}},parent)
+
+
 def test_cli_no_cohort_override():
     args=r.parser().parse_args(['--inputs','i','--parent','p','--model','m','--output-dir','o'])
     assert args.max_new_tokens==4096 and args.timeout_seconds==1200

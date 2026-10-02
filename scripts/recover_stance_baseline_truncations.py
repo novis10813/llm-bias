@@ -89,6 +89,24 @@ def check_prompt(prompt, bindings):
         raise ValueError('recovery prompt wrapper/template differs from parent')
 
 
+def bind_relocated_tokenizer(tokenizer, model_record, parent_model_record):
+    """Preserve the parent logical tokenizer name only for byte-verified relocation.
+
+    The actual checkpoint path remains in model/runtime metadata. The accepted
+    tokenizer identity includes name_or_path, so a moved identical checkpoint
+    needs this explicitly recorded logical-name binding, not a skipped hash.
+    """
+    if model_record['metadata_file_sha256'] != parent_model_record['metadata_file_sha256']:
+        raise ValueError('relocated tokenizer metadata differs')
+    actual = getattr(tokenizer, 'name_or_path', None)
+    logical = parent_model_record['resolved_path']
+    if actual != model_record['resolved_path']:
+        raise ValueError('loaded tokenizer does not name the actual checkpoint')
+    tokenizer.name_or_path = logical
+    return dict(actual_loaded_name_or_path=actual, logical_parent_name_or_path=logical,
+                relocation_metadata_sha256_verified=True)
+
+
 def check_capability(capability, reference):
     nested = getattr(capability, 'json_capability', capability)
     for name in ('schema_sha256', 'schema_bytes_sha256', 'tokenizer_sha256',
@@ -205,6 +223,8 @@ def run(args):
         loaded, _, device = load_model(str(checkpoint), device_map=None,
             dtype='native' if bindings['backend']['requested_dtype'] == 'native' else torch.bfloat16)
         model = generation_adapter(loaded); model.hf_model.eval(); tokenizer = model.tokenizer
+        metadata['tokenizer_relocation'] = bind_relocated_tokenizer(
+            tokenizer, metadata['model'], bindings['model'])
         head = model.hf_model.get_output_embeddings().weight
         if head.device.type != 'cuda':
             raise ValueError('actual recovery model must be on CUDA')
