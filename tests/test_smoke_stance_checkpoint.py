@@ -19,6 +19,50 @@ def arguments(tmp_path):
             '--stop-token-id', '7', '--stop-token-id', '9']
 
 
+def harmony_tokenizer():
+    # Reuse the native fast-tokenizer fixture without importing tests as a package.
+    fixture_spec = importlib.util.spec_from_file_location('smoke_harmony_fixture', ROOT / 'tests/test_harmony_generation.py')
+    module = importlib.util.module_from_spec(fixture_spec)
+    fixture_spec.loader.exec_module(module)
+    return module.make_tokenizer()
+
+
+def test_compile_native_harmony_contract():
+    tokenizer = harmony_tokenizer()
+    stop = tokenizer.convert_tokens_to_ids('<|return|>')
+    cap = smoke.compile_smoke_grammar(tokenizer, len(tokenizer) + 7, [stop], 'harmony_no_tools')
+    contract = cap.contract
+    assert contract.prompt_suffix_ids == tuple(tokenizer.encode('<|start|>assistant', add_special_tokens=False))
+    assert contract.initial_analysis_header_ids == tuple(tokenizer.encode('<|channel|>analysis<|message|>', add_special_tokens=False))
+    assert contract.initial_final_header_ids == tuple(tokenizer.encode('<|channel|>final<|message|>', add_special_tokens=False))
+    assert contract.assistant_restart_ids == contract.prompt_suffix_ids
+    assert contract.message_end_id == tokenizer.convert_tokens_to_ids('<|end|>')
+    assert contract.final_stop_id == stop
+    assert tokenizer.convert_tokens_to_ids('<|tool|>') in contract.forbidden_control_ids
+    assert cap.json_capability.stop_token_ids == (stop,)
+
+
+@pytest.mark.parametrize('stops', [[], [7], [7, 9]])
+def test_harmony_rejects_stop_override(stops):
+    tokenizer = harmony_tokenizer()
+    with pytest.raises(ValueError, match='singleton'):
+        smoke.compile_smoke_grammar(tokenizer, len(tokenizer), stops, 'harmony_no_tools')
+
+
+def test_harmony_rejects_missing_declared_control():
+    tokenizer = harmony_tokenizer()
+    convert = tokenizer.convert_tokens_to_ids
+    tokenizer.convert_tokens_to_ids = lambda text: tokenizer.unk_token_id if text == '<|start|>' else convert(text)
+    with pytest.raises(ValueError, match='exact declared special'):
+        smoke.compile_smoke_grammar(tokenizer, len(tokenizer), [tokenizer.eos_token_id], 'harmony_no_tools')
+
+
+def test_plain_compile_unchanged():
+    tokenizer = harmony_tokenizer()
+    cap = smoke.compile_smoke_grammar(tokenizer, len(tokenizer), [tokenizer.eos_token_id], 'plain_json')
+    assert cap.stop_token_ids == (tokenizer.eos_token_id,)
+
+
 def test_jlens_generation_adapter():
     from types import SimpleNamespace
     hf, tokenizer, layers = object(), object(), []
@@ -37,6 +81,10 @@ def test_parser_defaults(tmp_path):
     assert args.timeout_seconds == 180
     assert args.layer == 0
     assert args.hook_site == 'pre'
+    assert args.channel_policy == 'plain_json'
+    assert args.dtype == 'bfloat16'
+    native = smoke.parser().parse_args(arguments(tmp_path) + ['--dtype', 'native', '--channel-policy', 'harmony_no_tools'])
+    assert native.dtype == 'native' and native.channel_policy == 'harmony_no_tools'
     with pytest.raises(SystemExit):
         smoke.parser().parse_args(arguments(tmp_path)[:-4])
 

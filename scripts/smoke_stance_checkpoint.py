@@ -22,7 +22,11 @@ from llm_bias.core.artifact_paths import canonical_json_bytes, sha256_bytes, sha
 from llm_bias.core.model import load_model
 from llm_bias.core.stance_baseline_inputs import load_baseline_inputs
 from llm_bias.core.prompt_input.decision_prompt import WrapperPolicy, render_decision_prompt
-from llm_bias.core.inference.structured_output import StructuredGenerationPolicy, compile_decision_grammar
+from llm_bias.core.inference.structured_output import (
+    StructuredGenerationPolicy, compile_decision_grammar, _declared_tokens, _fast_backend,
+)
+from llm_bias.core.inference.harmony_channels import HarmonyTokenContract
+from llm_bias.core.inference.harmony_generation import compile_harmony_decision_grammar
 from llm_bias.core.inference.stance_noop_execution import execute_prompt_noop
 
 
@@ -32,6 +36,8 @@ def parser():
     result.add_argument('--inputs', required=True, type=Path)
     result.add_argument('--output', required=True, type=Path)
     result.add_argument('--stop-token-id', required=True, action='append', type=int)
+    result.add_argument('--channel-policy', choices=('plain_json', 'harmony_no_tools'), default='plain_json')
+    result.add_argument('--dtype', choices=('bfloat16', 'native'), default='bfloat16')
     result.add_argument('--max-new-tokens', type=int, default=512)
     result.add_argument('--timeout-seconds', type=float, default=180)
     result.add_argument('--layer', type=int, default=0)
@@ -57,6 +63,29 @@ def generation_adapter(model):
     if hf_model is None:
         raise ValueError('loaded wrapper has no underlying HF model')
     return SimpleNamespace(hf_model=hf_model, layers=model.layers, tokenizer=model.tokenizer)
+
+
+def compile_smoke_grammar(tokenizer, head_vocab_size, stop_ids, channel_policy):
+    if channel_policy == 'plain_json':
+        return compile_decision_grammar(tokenizer, head_vocab_size, stop_ids)
+    _, specials = _declared_tokens(tokenizer, _fast_backend(tokenizer), head_vocab_size)
+    controls = {}
+    for literal in ('<|start|>', '<|channel|>', '<|message|>', '<|end|>', '<|return|>'):
+        token_id = tokenizer.convert_tokens_to_ids(literal)
+        if token_id not in specials or tokenizer.encode(literal, add_special_tokens=False) != [token_id]:
+            raise ValueError(f'Harmony control is not an exact declared special: {literal}')
+        controls[literal] = token_id
+    if list(stop_ids) != [controls['<|return|>']]:
+        raise ValueError('Harmony stop IDs must be exactly the singleton <|return|> ID')
+    encode = lambda text: tuple(tokenizer.encode(text, add_special_tokens=False))
+    restart = encode('<|start|>assistant')
+    analysis = encode('<|channel|>analysis<|message|>')
+    final = encode('<|channel|>final<|message|>')
+    admitted = set(restart + analysis + final) | set(controls.values())
+    contract = HarmonyTokenContract(
+        restart, analysis, final, controls['<|end|>'], restart, controls['<|return|>'],
+        tuple(sorted(specials - admitted)))
+    return compile_harmony_decision_grammar(tokenizer, head_vocab_size, contract)
 
 
 def run_smoke(args, record):
@@ -90,7 +119,7 @@ def run_smoke(args, record):
     record['phase'] = 'load_model'
     if not torch.cuda.is_available():
         raise RuntimeError('this diagnostic requires CUDA; CPU fallback is forbidden')
-    model, returned_tokenizer, device = load_model(str(checkpoint), device_map=None, dtype=torch.bfloat16)
+    model, returned_tokenizer, device = load_model(str(checkpoint), device_map=None, dtype='native' if args.dtype == 'native' else torch.bfloat16)
     if torch.device(device).type != 'cuda':
         raise RuntimeError('loader returned a non-CUDA device')
     # jlens exposes _hf_model; generation contracts use a public hf_model.
@@ -113,25 +142,31 @@ def run_smoke(args, record):
     if width is None:
         width = weight.shape[1]
     record['phase'] = 'compile_and_render'
-    capability = compile_decision_grammar(tokenizer, weight.shape[0], args.stop_token_id)
-    wrapper = WrapperPolicy(use_chat_template=True, add_special_tokens=False, enable_thinking=False)
+    capability = compile_smoke_grammar(tokenizer, weight.shape[0], args.stop_token_id, args.channel_policy)
+    wrapper = WrapperPolicy(use_chat_template=True, add_special_tokens=False,
+                            enable_thinking=args.channel_policy == 'harmony_no_tools')
     prompt = render_decision_prompt(tokenizer, member, pair, wrapper_policy=wrapper)
     pad = tokenizer.pad_token_id
     if pad is None:
         pad = args.stop_token_id[0]
     policy = StructuredGenerationPolicy(max_new_tokens=args.max_new_tokens, use_cache=True,
                                        pad_token_id=pad, timeout_seconds=args.timeout_seconds,
-                                       channel_policy='plain_json')
+                                       channel_policy=args.channel_policy)
+    embedding = model.hf_model.get_input_embeddings().weight
+    if not embedding.dtype.is_floating_point or not weight.dtype.is_floating_point:
+        raise ValueError('smoke requires floating embedding and head weights')
+    vector_dtype = embedding.dtype
     operands = dict(layer=args.layer, hook_site=args.hook_site, scope='prompt_only',
                     hidden_width=width, direction='ones', zero_dose=0.0, replacement_dose=1,
                     head_vocab_size=weight.shape[0], stop_token_ids=args.stop_token_id,
-                    dtype='bfloat16', device=str(device), device_map=None,
+                    dtype=args.dtype, vector_dtype=str(vector_dtype), head_weight_dtype=str(weight.dtype),
+                    embedding_weight_dtype=str(embedding.dtype), device=str(device), device_map=None,
                     prompt_sha256=prompt.prompt_sha256, wrapper_policy=prompt.wrapper_policy,
                     policy=asdict(policy), model_path=str(checkpoint),
                     checkpoint_file_sha256=files, provenance=record['provenance'])
     record.update(operands=operands, config_hash=sha256_json(operands))
     prompt_ids = torch.tensor([prompt.inference_token_ids], dtype=torch.long, device=device)
-    vector = torch.ones(width, dtype=torch.bfloat16, device=device)
+    vector = torch.ones(width, dtype=vector_dtype, device=device)
     record['phase'] = 'execute_prompt_noop'
     execution = execute_prompt_noop(model, tokenizer, prompt_ids, capability, policy=policy,
                                    layer=args.layer, hook_site=args.hook_site, zero_vector=vector,
