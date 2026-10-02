@@ -60,9 +60,20 @@ def _prompt_selection(prompt_length, scope, prompt_positions):
 
 
 def _explicit_positions(value, *, length, name):
+    """Read text coordinates; only all-equal 3/4-plane position_ids collapse.
+
+    Divergent multimodal coordinates are unsupported. The model's original
+    position tensor is never changed; collapsing is local to this tracker.
+    """
     integer_dtypes = (torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64,
                       torch.uint16, torch.uint32, torch.uint64)
     shape = (length,) if name == 'cache_position' else (1, length)
+    if (name == 'position_ids' and torch.is_tensor(value)
+            and value.dtype in integer_dtypes
+            and tuple(value.shape) in ((3, 1, length), (4, 1, length))):
+        if any(not torch.equal(plane, value[0]) for plane in value[1:]):
+            raise UnsupportedPositionMetadata('position_ids planes must be identical text coordinates')
+        value = value[0]
     if not torch.is_tensor(value) or value.dtype not in integer_dtypes or tuple(value.shape) != shape:
         raise UnsupportedPositionMetadata(f'{name} must be an integer tensor of shape {shape}')
     positions = tuple(value.detach().reshape(-1).tolist())

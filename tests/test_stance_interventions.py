@@ -88,6 +88,54 @@ def run_selected(calls, *, use_cache, scope, prompt_positions=None):
     return root.positions, masks, diagnostics.to_dict()
 
 
+@pytest.mark.parametrize('planes', [3, 4])
+@pytest.mark.parametrize('use_cache', [True, False])
+@pytest.mark.parametrize('scope', ['prompt_only', 'decode_only', 'prompt_and_decode'])
+def test_identical_multiplane_text_positions(planes, use_cache, scope):
+    coordinates = [(0, 1, 2), (3,), (4, 5)] if use_cache else [
+        (0, 1, 2), (0, 1, 2, 3), (0, 1, 2, 3, 4)]
+    calls = [(len(row), {'position_ids': torch.tensor(row).reshape(1, -1).repeat(planes, 1, 1),
+                         'cache_position': torch.tensor(row)}) for row in coordinates]
+    positions, masks, diagnostics = run_selected(
+        calls, use_cache=use_cache, scope=scope,
+        prompt_positions=None if scope == 'decode_only' else [1])
+    assert positions == coordinates
+    assert masks == [[float((scope != 'decode_only' and position == 1)
+                            or (scope != 'prompt_only' and position >= 3))
+                      for position in row] for row in coordinates]
+    assert diagnostics['selected_token_opportunities'] == sum(map(sum, masks))
+
+
+@pytest.mark.parametrize('planes', [3, 4])
+@pytest.mark.parametrize('invalid', [
+    'divergent', 'plane_count', 'batch', 'length', 'float', 'bool',
+    'duplicate', 'negative', 'conflict', 'cache_multiplane',
+])
+def test_invalid_multiplane_positions_fail_closed(planes, invalid):
+    value = torch.arange(3).reshape(1, 1, 3).repeat(planes, 1, 1)
+    kwargs = {}
+    if invalid == 'divergent':
+        value[-1, 0, -1] += 1
+    elif invalid == 'plane_count':
+        value = value[:2] if planes == 3 else value.repeat(2, 1, 1)
+    elif invalid == 'batch':
+        value = value.repeat(1, 2, 1)
+    elif invalid == 'length':
+        value = value[..., :2]
+    elif invalid == 'float':
+        value = value.float()
+    elif invalid == 'bool':
+        value = value.bool()
+    elif invalid == 'duplicate':
+        value[..., 1] = 0
+    elif invalid == 'negative':
+        value[..., 0] = -1
+    elif invalid == 'conflict':
+        kwargs['cache_position'] = torch.tensor([0, 1, 3])
+    kwargs['cache_position' if invalid == 'cache_multiplane' else 'position_ids'] = value
+    test_unsupported_metadata_fails_before_edits(3, kwargs)
+
+
 @pytest.mark.parametrize('scope,expected', [
     ('prompt_only', [[0., 1., 0.], [0.], [0., 0.]]),
     ('decode_only', [[0., 0., 0.], [1.], [1., 1.]]),
@@ -348,7 +396,8 @@ def test_projection_ablation_not_coordinate_zeroing():
 
 
 @pytest.mark.parametrize('operation', ['addition', 'replacement'])
-def test_zero_and_copied_self_return_original_tensor(operation):
+@pytest.mark.parametrize('planes', [None, 3, 4])
+def test_zero_and_copied_self_return_original_tensor(operation, planes):
     root = Root()
     x = torch.tensor([[[2., 3.], [4., 5.], [6., 7.]]], dtype=torch.float64)
     tracker = GenerationPositionTracker(3, True)
@@ -358,14 +407,30 @@ def test_zero_and_copied_self_return_original_tensor(operation):
         root, tracker=tracker, layer=0, hook_site='pre', scope='prompt_only', operation=operation,
         prompt_positions=[0, 2], **args
     ) as diagnostics:
-        root(inputs_embeds=x)
+        kwargs = {} if planes is None else {
+            'position_ids': torch.arange(3).reshape(1, 1, 3).repeat(planes, 1, 1)}
+        original = kwargs.get('position_ids')
+        received = []
+        handle = root.register_forward_pre_hook(
+            lambda module, args, forwarded: received.append(forwarded.get('position_ids')),
+            with_kwargs=True)
+        try:
+            root(inputs_embeds=x, **kwargs)
+        finally:
+            handle.remove()
+        assert received == [original]
+        if original is not None:
+            assert received[0] is original
+            assert torch.equal(original, torch.arange(3).reshape(1, 1, 3).repeat(planes, 1, 1))
         assert root.layers[0].pre_inputs[-1] is x
+        assert tracker.active_positions is None
     assert diagnostics.to_dict()['changed_token_count'] == 0
     assert diagnostics.to_dict()['delta_l2_sum'] == 0
     clean(root)
 
 
-def test_replacement_chunks_use_exact_absolute_mapping():
+@pytest.mark.parametrize('planes', [None, 3, 4])
+def test_replacement_chunks_use_exact_absolute_mapping(planes):
     root = Root()
     tracker = GenerationPositionTracker(3, True)
     with tracker.track(root), scoped_residual_intervention(
@@ -373,9 +438,11 @@ def test_replacement_chunks_use_exact_absolute_mapping():
         prompt_positions=[0, 2], source_positions=[2, 0],
         source=torch.tensor([[[20., 21.], [10., 11.]]], dtype=torch.float64)
     ):
-        root(inputs_embeds=torch.zeros(1, 1, 2, dtype=torch.float64), cache_position=torch.tensor([0]))
+        kwargs = {} if planes is None else {'position_ids': torch.tensor([[[0]]]).repeat(planes, 1, 1)}
+        root(inputs_embeds=torch.zeros(1, 1, 2, dtype=torch.float64), cache_position=torch.tensor([0]), **kwargs)
         assert root.layers[0].pre_inputs[-1].tolist() == [[[10., 11.]]]
-        root(inputs_embeds=torch.zeros(1, 2, 2, dtype=torch.float64), cache_position=torch.tensor([1, 2]))
+        kwargs = {} if planes is None else {'position_ids': torch.tensor([[[1, 2]]]).repeat(planes, 1, 1)}
+        root(inputs_embeds=torch.zeros(1, 2, 2, dtype=torch.float64), cache_position=torch.tensor([1, 2]), **kwargs)
         assert root.layers[0].pre_inputs[-1].tolist() == [[[0., 0.], [20., 21.]]]
     clean(root)
 
