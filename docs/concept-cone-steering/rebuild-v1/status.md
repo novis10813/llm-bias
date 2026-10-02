@@ -26,6 +26,20 @@ Completion retrieval now uses `scripts/watch_stance_baseline_job.py`, replacing 
 
 The user expanded idlab authorization to physical GPUs0–3 after the 2026-10-02 reboot. All four are RTX PRO6000 Blackwell Server Edition (97,887MiB, driver580.173.02). Before submission, each original worktree was clean at its original commit; all registered source and checkpoint metadata hashes matched, store counts remained688/443/1041 and no staging files were present. Current Python3.13.14, torch2.9.1+cu128, transformers5.14.1 and cuDNN91002 matched recorded versions. New lab jobs `stance-rb260930-16` (Qwen/GPU0), `-17` (Gemma/GPU1) and `-18` (GLM/GPU2) launch the original worktrees and environments rather than changing the original code identity. They preserve original run/store locations and policies; runner identity mismatches remain blocking. Each new session records its actual GPU UUID/driver, environment, executed original commit and hashes of every previously committed row in remote `.lab/jobs/<new-job>/resumption_session.json`, copied locally to `artifacts/maintenance-snapshots/resumption-sessions/`. The original runner identity did not bind UUID or driver; this supplemental record documents placement rather than retroactively strengthening the original identity. All old row hashes were rechecked unchanged after launch; actual CUDA processes loaded separately on physical0/1/2. GPU3 remains available for future work. Existing services were not stopped; GPT job12 on idlab1 remains separate and running. Completion retrieval uses new local directories `diagnostic-baseline-resumed-stance-rb260930-{16,17,18}` without overwriting the stopped local snapshots.
 
+## GLM full baseline completed and passed output validation
+
+Resumed GLM job `stance-rb260930-18` exited0 and its complete output was retrieved to `artifacts/glm4-9b-0414/concept-cone-steering/runs/diagnostic-baseline-resumed-stance-rb260930-18/`. Independent acceptance and main recomputation verified exact2012-key coverage (503 tickers/500 issuers), canonical records and token hashes, issuer-bound outcomes, strict payload parsing, summary equality and registered source hashes. All1041 pre-maintenance records remained byte-identical;971 new records completed the plan. Independent real-store validation on a temporary copy found2012 recorded/0 pending;743 focused contract/input/plan/adapter/store tests passed. Model/backend records are self-consistent, not independently authenticated full checkpoint/runtime contents. Fresh audit with per-file hashes: `artifacts/glm4-9b-0414/concept-cone-steering/audits/diagnostic-baseline-resumed-stance-rb260930-18.validation.json`.
+
+| Condition | Buy | Sell | Strict parse / planned |
+|---|---:|---:|---:|
+| ++ |503|0|503/503|
+| +- |259|244|503/503|
+| -+ |497|6|503/503|
+| -- |0|503|503/503|
+| All |1259|753|2012/2012|
+
+All rows ended at EOS with no recorded failure, timeout or truncation. These are raw diagnostic counts, not company-weighted causal estimates or steering effects; the mixed-condition order asymmetry is descriptive only. Formal gates remain false and `research_eligible=false`. Completion of GLM baseline does not complete the four-model baseline milestone or authorize efficacy claims.
+
 ## P0 population code passed tests and independent review
 
 `llm_bias/core/population.py` enforces the frozen 2024 CSV digest, 503 ticker coverage, explicit issuer metadata and issuer-disjoint fit/validation/calibration/evaluation roles. Focused tests: 88 passed. Implementation full regression: 347 passed, 1 skipped, one existing tensor-to-scalar warning. Independent code/spec review passed, including 4,096 adversarial role configurations and permutation/hash checks. User approved fit/validation/calibration/evaluation issuer counts300/75/25/100 at seed20260930; preliminary ticker counts302/75/26/100. Compiler/source/assignment manifest is complete and independently accepted; formal protocol freeze remains pending.
