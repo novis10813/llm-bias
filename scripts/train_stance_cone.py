@@ -201,7 +201,7 @@ def optimize(directory, model, records, prompts, roles, config, *, step=stance_c
                     torch.cuda.synchronize(device)
                 record['status'] = 'optimizer_step_completed'
                 del result, batches
-            except Exception as exc:
+            except (Exception, KeyboardInterrupt) as exc:
                 record.update(status='failed', **failure(exc), **resources(device, step_started))
                 publish(directory / 'records', f'{index:03d}-{ticker}.json', record)
                 raise
@@ -221,7 +221,7 @@ def optimize(directory, model, records, prompts, roles, config, *, step=stance_c
                 training_completed=True, accepted_operator=False, research_eligible=False))
         report.update(status='training_completed' if full else 'diagnostic_capability_success',
                       training_completed=full, capability_success=True)
-    except Exception as exc:
+    except (Exception, KeyboardInterrupt) as exc:
         report.update(status='failed', capability_success=False, **failure(exc))
     report.update(attempted_steps=attempted, completed_steps=completed, **resources(device, started))
     publish(directory, 'summary.json', report)
@@ -250,6 +250,20 @@ def run(args):
             if metadata['backend'][name] != bindings['backend'][name]:
                 raise ValueError('parent backend differs: ' + name)
         metadata['code']['source_sha256']['scripts/train_stance_cone.py'] = sha256_bytes(Path(__file__).read_bytes())
+        # Bind available inputs/runtime BEFORE checkpoint allocation. Loading OOM
+        # and controlled interruptions remain attributable failed attempts.
+        publish(args.output_dir, 'preflight_config.json', dict(
+            kind='stance_cone_training_preflight_v1', dimension=args.dimension, seed=args.seed,
+            declared_grid=dict(dimensions=list(CONE_DIMENSIONS), seeds=list(INITIALIZATION_SEEDS)),
+            diagnostic_one_step=args.diagnostic_one_step, layer=19,
+            scope='original_instruction_post_block', dose=32., planned_steps=302,
+            objective_weights=[1., 1., 1.], optimizer=dict(name='Adam', lr=.01),
+            inputs_manifest_sha256=inputs.manifest_sha256, roles_sha256=inputs.roles_sha256,
+            parent_sha256=parent.parent_sha256, plan_hash=parent.plan.plan_hash,
+            full_plan_identity=parent.plan.identity.to_dict(), runtime=metadata,
+            teacher_manifest_sha256=sha256_bytes(read_raw(args.teachers / 'manifest.json')),
+            teacher_authentication='pending_checkpoint_tokenizer_validation',
+            training_completed=False, accepted_operator=False, research_eligible=False))
         if not torch.cuda.is_available():
             raise RuntimeError('actual checkpoint training requires CUDA')
         device = torch.device('cuda:0')
@@ -296,18 +310,21 @@ def run(args):
         publish(args.output_dir, 'config.json', config)
         report = optimize(args.output_dir, model, records, prompts, inputs.roles['assignments'], config)
         return 0 if report['capability_success'] else 1
-    except Exception as exc:
+    except (Exception, KeyboardInterrupt) as exc:
         if not (args.output_dir / 'summary.json').exists():
             publish(args.output_dir, 'summary.json', dict(status='preflight_failure', training_completed=False,
                 accepted_operator=False, research_eligible=False, diagnostic_one_step=args.diagnostic_one_step,
-                attempted_steps=0, completed_steps=0, **failure(exc), **resources(device, started)))
+                attempted_steps=0, completed_steps=0,
+                preflight_config_sha256=(sha256_bytes(read_raw(args.output_dir / 'preflight_config.json'))
+                    if (args.output_dir / 'preflight_config.json').exists() else None),
+                **failure(exc), **resources(device, started)))
         return 1
 
 
 def main(argv=None):
     try:
         return run(parser().parse_args(argv))
-    except Exception as exc:
+    except (Exception, KeyboardInterrupt) as exc:
         print(canonical_json_bytes(failure(exc)).decode(), file=sys.stderr)
         return 1
 

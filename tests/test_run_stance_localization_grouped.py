@@ -208,8 +208,7 @@ def test_postpublish_crash_no_retry_and_staging_rejected(tmp_path, primary, monk
 
 def bindings():
     return dict(template={}, generation_policy={}, grammar={}, runtime=dict(model={}, backend={},
-                code=dict(source_sha256={'scripts/run_stance_localization.py':
-                    sha256_bytes(Path(old.__file__).read_bytes())})))
+                code=dict(source_sha256=dict(runner.approved_lc4_sources()))))
 
 
 def make_prior(root, g, *, partial=False, failed=False):
@@ -253,7 +252,7 @@ def test_prior_readonly_provenance_full_and_partial(tmp_path, primary, partial):
 
 
 @pytest.mark.parametrize('kind', ['active', 'mapping', 'logical', 'policy', 'backend',
-                                 'staging', 'missing_gate', 'halt', 'registration'])
+                                 'staging', 'missing_gate', 'halt', 'registration', 'missing_source'])
 def test_prior_rejections(tmp_path, primary, kind):
     g = primary
     root = tmp_path / 'prior'
@@ -262,9 +261,12 @@ def test_prior_rejections(tmp_path, primary, kind):
     if kind == 'active':
         fd = os.open(root / 'store.lock', os.O_RDWR)
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    elif kind in ('logical', 'policy', 'backend', 'registration'):
+    elif kind in ('logical', 'policy', 'backend', 'registration', 'missing_source'):
         path = root / 'registration.json'; item = read_file(path)
-        if kind == 'logical':
+        if kind == 'missing_source':
+            item['descriptor']['bindings']['runtime']['code']['source_sha256'].pop(
+                'llm_bias/core/inference/stance_localization_execution.py')
+        elif kind == 'logical':
             item['descriptor']['layers'] = [1]
         elif kind == 'policy':
             item['descriptor']['bindings']['generation_policy'] = {'different': True}

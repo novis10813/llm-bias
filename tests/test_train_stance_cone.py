@@ -2,6 +2,10 @@
 from dataclasses import replace
 import json
 from types import SimpleNamespace
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 import torch
@@ -178,6 +182,57 @@ def test_failed_attempt_retains_partial_steps_resources_and_cleanup(tmp_path):
     assert all(r['elapsed_seconds'] >= 0 for r in rows)
     assert not model.layers[0]._forward_hooks
     assert 'SECRET' not in (out / 'summary.json').read_text()
+
+
+def test_keyboard_interrupt_records_failed_step_and_summary(tmp_path):
+    out, model, records, prompts, roles = loop_case(tmp_path)
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt('tensor SECRET')
+    report = optimize(out, model, records, prompts, roles, config(False), step=interrupted)
+    assert report['status'] == 'failed' and report['error_type'] == 'KeyboardInterrupt'
+    assert report['attempted_steps'] == 1 and report['completed_steps'] == 0
+    assert not report['training_completed'] and not (out / 'operator.json').exists()
+    row = json.loads(next((out / 'records').iterdir()).read_bytes())
+    assert row['status'] == 'failed' and row['error_type'] == 'KeyboardInterrupt'
+    assert 'SECRET' not in (out / 'summary.json').read_text()
+    assert not model.layers[0]._forward_hooks
+
+
+def test_checkpoint_load_failure_preserves_preflight_hashes(tmp_path, monkeypatch):
+    from scripts import train_stance_cone as module
+    checkpoint = tmp_path / 'glm4-9b-0414'; checkpoint.mkdir()
+    teachers = tmp_path / 'teachers'; teachers.mkdir()
+    (teachers / 'manifest.json').write_bytes(b'{"synthetic":true}\n')
+    backend = dict.fromkeys(('torch', 'transformers', 'xgrammar', 'jlens', 'cuda',
+        'kernel_policy', 'cudnn', 'deterministic_algorithms'), 'same')
+    model_record = {'resolved_path': str(checkpoint), 'metadata_file_sha256': {'config.json': 'a' * 64}}
+    inputs = SimpleNamespace(manifest_sha256='a' * 64, roles_sha256='b' * 64)
+    parent = SimpleNamespace(parent_sha256='c' * 64,
+        plan=SimpleNamespace(plan_hash='d' * 64, identity=SimpleNamespace(to_dict=lambda: {'synthetic': True})),
+        metadata={'bindings': {'model': model_record, 'backend': backend}})
+    monkeypatch.setattr(module, 'load_baseline_inputs', lambda path: inputs)
+    monkeypatch.setattr(module, 'load_completed_baseline', lambda *a, **k: parent)
+    monkeypatch.setattr(module, 'runtime_metadata', lambda path: {
+        'model': model_record, 'backend': backend, 'code': {'source_sha256': {}}})
+    monkeypatch.setattr(module.torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(module.torch.cuda, 'reset_peak_memory_stats', lambda d: None)
+    monkeypatch.setattr(module.torch.cuda, 'max_memory_allocated', lambda d: 123)
+    monkeypatch.setattr(module.torch.cuda, 'max_memory_reserved', lambda d: 456)
+    def failure(*a, **k): raise torch.cuda.OutOfMemoryError('tensor SECRET')
+    monkeypatch.setattr(module, 'load_model', failure)
+    args = parser().parse_args(['--inputs', 'i', '--parent', 'p', '--teachers', str(teachers),
+        '--model', str(checkpoint), '--output-dir', str(tmp_path / 'failed-load'),
+        '--dimension', '2', '--seed', '20261003', '--diagnostic-one-step'])
+    assert run(args) == 1
+    raw = (args.output_dir / 'preflight_config.json').read_bytes()
+    preflight = json.loads(raw)
+    assert preflight['parent_sha256'] == parent.parent_sha256
+    assert preflight['inputs_manifest_sha256'] == inputs.manifest_sha256
+    assert preflight['runtime']['model'] == model_record
+    summary = json.loads((args.output_dir / 'summary.json').read_bytes())
+    assert summary['preflight_config_sha256'] == sha256_bytes(raw) and summary['oom']
+    assert summary['peak_allocated_bytes'] == 123
+    assert not (args.output_dir / 'config.json').exists()
 
 
 def test_batches_exact_full_masks_instruction_only(tmp_path):

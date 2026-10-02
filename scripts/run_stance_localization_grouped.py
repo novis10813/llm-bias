@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict
+from functools import lru_cache
 import os
 from pathlib import Path
 import subprocess
@@ -48,6 +49,32 @@ import fcntl
 import stat
 
 EXECUTION_VERSION = 'grouped_pair_v1'
+APPROVED_LC4_COMMIT = '6c553c6c635f88a40b68a9bdcec3a090a7870c1f'
+
+
+@lru_cache(maxsize=1)
+def approved_lc4_sources():
+    """Exact original inventory and bytes from the immutable approved Git tree.
+
+    New independent core modules are not retroactively required in old records.
+    Every module that did exist in LC4 remains mandatory, never intersection-only.
+    """
+    names = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only',
+        APPROVED_LC4_COMMIT, '--', 'llm_bias/core'], cwd=ROOT, text=True).splitlines()
+    names = [n for n in names if n.endswith('.py')]
+    names += ['scripts/run_stance_baseline.py', 'scripts/smoke_stance_checkpoint.py',
+              'scripts/run_stance_localization.py', 'scripts/recover_stance_baseline_truncations.py',
+              'uv.lock']
+    result = {n: sha256_bytes(subprocess.check_output(
+        ['git', 'show', APPROVED_LC4_COMMIT + ':' + n], cwd=ROOT)) for n in names}
+    jlens = ROOT / 'third_party/jacobian-lens'
+    jlens_head = '581d398613e5602a5af361e1c34d3a92ea82ba8e'
+    for n in subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', jlens_head],
+                                      cwd=jlens, text=True).splitlines():
+        if n.endswith('.py'):
+            result['third_party/jacobian-lens/' + n] = sha256_bytes(subprocess.check_output(
+                ['git', 'show', jlens_head + ':' + n], cwd=jlens))
+    return result
 
 
 def parser():
@@ -227,9 +254,11 @@ def prior_snapshot(root, table, desc, prompts, parent):
         _equal(old_sources.get('scripts/run_stance_localization.py'),
                sha256_bytes((ROOT / 'scripts/run_stance_localization.py').read_bytes()),
                'unapproved original runner code')
-        for name, digest in desc['bindings']['runtime']['code']['source_sha256'].items():
-            if name in old_sources:
-                _equal(old_sources[name], digest, 'prior shared code differs: ' + name)
+        current_sources = desc['bindings']['runtime']['code']['source_sha256']
+        approved = approved_lc4_sources()
+        _equal(old_sources, approved, 'prior shared code inventory or approved hashes differ')
+        for name, digest in approved.items():
+            _equal(current_sources.get(name), digest, 'prior shared code differs: ' + name)
         plan, gate_key, gates = _plan(table, desc)
         saved, passed = {}, {}
         hashes = {'registration.json': sha256_bytes((root / 'registration.json').read_bytes())}
