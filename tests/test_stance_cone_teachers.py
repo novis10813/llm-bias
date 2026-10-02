@@ -258,3 +258,16 @@ def test_effective_policy_interface_binds_per_row(case):
     row = next(row for row in pack['sources']['selected_records'] if row['key'] == key.to_dict())
     assert row['policy']['policy']['max_new_tokens'] == 1024
     assert row['source']['source'] == 'synthetic_effective'
+
+
+def test_actual_merged_metadata_shape_reports_harmony_unsupported(case):
+    inputs, parent, tok = case
+    metadata = parent.metadata
+    metadata['bindings']['generation_policy']['policy']['channel_policy'] = 'harmony_no_tools'
+    effective = replace(parent, _metadata_bytes=canonical_json_bytes({
+        'kind': 'effective_merged_baseline_v1', 'original_metadata': metadata,
+        'recovery_registration': {}}) + b'\n')
+    pack = compile_cone_teachers(inputs, effective, None)
+    assert pack['manifest']['status'] == 'unsupported_harmony_full_channel_teacher_policy'
+    assert pack['manifest']['unavailable_count'] == 906
+    assert pack['teachers'] == []

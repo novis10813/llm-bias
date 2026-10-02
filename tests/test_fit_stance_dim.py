@@ -1,6 +1,10 @@
 """Fit capture execution on real CPU fake hooks, not a checkpoint."""
 from dataclasses import replace
 from types import SimpleNamespace
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 import torch
@@ -173,6 +177,34 @@ def test_partial_drift_discards_previously_pooled_vectors(tmp_path, case):
     assert all(c['direction'] is None and c['coverage']['contributing_rows'] == 0
         for e in json.loads((directory / 'operators.json').read_text())['extractions']
         for c in e['candidates'])
+
+
+def test_public_merged_metadata_reaches_model_loading(tmp_path, monkeypatch):
+    """Exercise public --recovery wiring, not an original-shaped fake metadata dict."""
+    backend = {name: 'same' for name in ('torch', 'transformers', 'xgrammar', 'jlens',
+        'cuda', 'kernel_policy', 'cudnn', 'deterministic_algorithms')}
+    backend['requested_dtype'] = 'native'
+    checkpoint = tmp_path / 'checkpoint'; checkpoint.mkdir()
+    original = {'bindings': {'model': {'resolved_path': '/original/checkpoint',
+        'metadata_file_sha256': {'tokenizer.json': 'a' * 64}}, 'backend': backend}}
+    parent = SimpleNamespace(metadata={'kind': 'effective_merged_baseline_v1',
+        'original_metadata': original, 'recovery_registration': {}})
+    monkeypatch.setattr(runner, 'load_baseline_inputs', lambda path: object())
+    monkeypatch.setattr(runner, 'load_merged_baseline', lambda *a, **k: parent)
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda path: {
+        'model': {'resolved_path': str(checkpoint),
+                  'metadata_file_sha256': original['bindings']['model']['metadata_file_sha256']},
+        'backend': backend.copy(), 'code': {'source_sha256': {}}})
+    monkeypatch.setattr(runner.torch.cuda, 'is_available', lambda: True)
+    calls = []
+    def load(*a, **k):
+        calls.append(k['dtype']); raise RuntimeError('model-loading boundary reached')
+    monkeypatch.setattr(runner, 'load_model', load)
+    args = runner.parser().parse_args(['--inputs', 'i', '--parent', 'p', '--recovery', 'r',
+        '--model', str(checkpoint), '--output-dir', str(tmp_path / 'merged-fit')])
+    with pytest.raises(RuntimeError, match='model-loading boundary reached'):
+        runner.run(args)
+    assert calls == ['native']
 
 
 def test_public_preflight_failure_is_immutable_and_redacted(tmp_path, monkeypatch):

@@ -9,7 +9,7 @@ No checkpoint run or steering-effect claim is included.
 --model ORIGINAL_CHECKPOINT --output-dir FRESH_RUN` consumes the approved full503
 input pack and completed2012 baseline. Optional `--recovery RECOVERY` consumes the
 accepted merged effective view, retaining each fit row's source and generation
-policy. There are no ticker, condition, layer, dose or budget overrides.
+policy. Merged snapshots read original runtime bindings from metadata.original_metadata.bindings, while every generated row uses its own effective source/policy. Verified merged-checkpoint relocation may retain exact metadata hashes at a new physical path, record actual/logical tokenizer names and bind the logical name through the accepted relocation guard before compiling; full tokenizer/grammar hashes remain mandatory. There are no ticker, condition, layer, dose or budget overrides.
 
 Verify original checkpoint path and metadata bytes, backend versions/kernel policy,
 actual CUDA placement, embedding/head dtypes, attention policy, rendered wrapper,

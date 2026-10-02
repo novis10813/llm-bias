@@ -19,7 +19,9 @@ if str(ROOT) not in sys.path:
 import torch
 from scripts.run_stance_baseline import runtime_metadata
 from scripts.smoke_stance_checkpoint import generation_adapter, compile_smoke_grammar
-from scripts.recover_stance_baseline_truncations import publish, check_prompt, check_capability
+from scripts.recover_stance_baseline_truncations import (
+    publish, check_prompt, check_capability, bind_relocated_tokenizer,
+)
 from scripts.run_stance_localization import _equal, _provenance
 from llm_bias.core.artifact_paths import sha256_json, sha256_bytes, canonical_json_bytes
 from llm_bias.core.model import load_model
@@ -184,10 +186,15 @@ def run(args):
         inputs = load_baseline_inputs(args.inputs)
         parent = (load_completed_baseline(args.parent, inputs=inputs) if args.recovery is None
                   else load_merged_baseline(args.parent, args.recovery, inputs=inputs))
-        bindings = parent.metadata['bindings']
+        parent_metadata = parent.metadata
+        bindings = parent_metadata.get('original_metadata', parent_metadata)['bindings']
         checkpoint = args.model.resolve(strict=True)
         metadata = runtime_metadata(checkpoint)
-        _equal(metadata['model'], bindings['model'], 'original checkpoint path/metadata differs')
+        if args.recovery is None:
+            _equal(metadata['model'], bindings['model'], 'original checkpoint path/metadata differs')
+        else:
+            _equal(metadata['model']['metadata_file_sha256'],
+                   bindings['model']['metadata_file_sha256'], 'effective checkpoint metadata differs')
         for name in ('torch', 'transformers', 'xgrammar', 'jlens', 'cuda', 'kernel_policy',
                      'cudnn', 'deterministic_algorithms'):
             _equal(metadata['backend'][name], bindings['backend'][name], 'parent backend differs')
@@ -199,6 +206,9 @@ def run(args):
         model = generation_adapter(loaded)
         model.hf_model.eval()
         tokenizer = model.tokenizer
+        if args.recovery is not None:
+            metadata['tokenizer_relocation'] = bind_relocated_tokenizer(
+                tokenizer, metadata['model'], bindings['model'])
         head = model.hf_model.get_output_embeddings().weight
         embedding = model.hf_model.get_input_embeddings().weight
         if any(torch.device(d).type != 'cuda' for d in (device, head.device, embedding.device)):

@@ -30,8 +30,8 @@ def parser():
 def verify_checkpoint_metadata(checkpoint, expected):
     """Verify the same local metadata selection as the accepted baseline runner."""
     checkpoint = checkpoint.resolve(strict=True)
-    if not checkpoint.is_dir() or str(checkpoint) != expected['resolved_path']:
-        raise ValueError('require exact parent local checkpoint path')
+    if not checkpoint.is_dir():
+        raise ValueError('require local tokenizer/config directory')
     files = {p.name: sha256_bytes(p.read_bytes()) for p in checkpoint.iterdir()
              if p.is_file() and (p.name in ('config.json', 'generation_config.json',
                 'special_tokens_map.json', 'added_tokens.json', 'vocab.json', 'merges.txt',
@@ -49,15 +49,22 @@ def run(args):
               if args.recovery is not None else load_completed_baseline(args.parent, inputs=inputs))
     # A named unsupported report needs no speculative channel tokenizer policy.
     tokenizer = None
-    if parent.metadata['bindings']['generation_policy']['policy']['channel_policy'] == 'plain_json':
-        checkpoint = verify_checkpoint_metadata(args.model, parent.metadata['bindings']['model'])
+    parent_metadata = parent.metadata
+    bindings = parent_metadata.get('original_metadata', parent_metadata)['bindings']
+    if bindings['generation_policy']['policy']['channel_policy'] == 'plain_json':
+        checkpoint = verify_checkpoint_metadata(args.model, bindings['model'])
         tokenizer = AutoTokenizer.from_pretrained(str(checkpoint), local_files_only=True,
                                                   trust_remote_code=False, use_fast=True)
+        # Exact file hashes above authorize metadata-only relocation. Preserve
+        # the parent logical tokenizer name while recording the actual directory.
+        tokenizer.name_or_path = bindings['model']['resolved_path']
     pack = compile_cone_teachers(inputs, parent, tokenizer)
     files = [Path(__file__), ROOT / 'uv.lock', *sorted((ROOT / 'llm_bias/core').rglob('*.py'))]
     config = dict(kind='stance_cone_teacher_compiler_config_v1',
         inputs_manifest_sha256=inputs.manifest_sha256, parent_sha256=parent.parent_sha256,
-        model=parent.metadata['bindings']['model'],
+        model=bindings['model'],
+        actual_metadata_directory=(str(checkpoint) if tokenizer is not None else None),
+        logical_tokenizer_name=bindings['model']['resolved_path'],
         execution='CPU_tokenizer_and_grammar_only_no_checkpoint_weights',
         backend=dict(python=platform.python_version(), transformers=version('transformers'),
                      tokenizers=version('tokenizers'), xgrammar=version('xgrammar')),

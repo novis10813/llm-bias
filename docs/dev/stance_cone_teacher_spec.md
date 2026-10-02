@@ -13,7 +13,7 @@ plan equality and 2012 rows. Direct Python construction of these capabilities is
 trusted caller input, as documented by `CompletedBaseline`; the CLI always uses
 the loaders. It accepts original `--parent` plus optional `--recovery`, never a
 caller-authored teacher or ticker subset. Merged rows retain per-row source and
-policy. Harmony produces `unsupported_harmony_full_channel_teacher_policy`.
+policy. Original bindings of a merged view are read through metadata.original_metadata.bindings (not a nonexistent top-level bindings field). Harmony produces `unsupported_harmony_full_channel_teacher_policy`.
 
 ## REQ-2. Fixed pairing and coverage
 
@@ -33,8 +33,7 @@ Verified APIs: `compile_decision_grammar`, `render_decision_prompt`,
 recorded head vocabulary and declared stop IDs. Compare tokenizer, schema,
 grammar, byte policy, compiler settings and generation policy provenance. Render
 source and input prompts with the recorded wrapper and verify body/wrapper/schema
-hashes. The CLI loads only `AutoTokenizer` from the exact recorded local checkpoint
-and verifies its metadata files against the parent's model binding. No weights,
+hashes. The CLI loads only `AutoTokenizer` from a local metadata-only copy and verifies its complete metadata-file dictionary against the parent's model binding. A verified relocation preserves the parent logical tokenizer name while recording the actual metadata directory; full tokenizer/grammar identities must still match. No unverified filename/path substitution relaxes byte checks. No weights,
 GPU, raw tensors or model forward pass.
 
 Require HF decoded bytes to equal backend token bytes for the whole continuation

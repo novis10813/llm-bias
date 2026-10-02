@@ -110,7 +110,8 @@ def compile_cone_teachers(inputs: BaselineInputs, parent: CompletedBaseline, tok
     fit = sorted(t for t, role in roles.items() if role == 'fit')
     if len(fit) != 302:
         raise ValueError('expected 302 authoritative fit tickers')
-    bindings = parent.metadata['bindings']
+    parent_metadata = parent.metadata
+    bindings = parent_metadata.get('original_metadata', parent_metadata)['bindings']
     gp = bindings['generation_policy']
     manifest = dict(kind='stance_cone_teacher_pack_v1', adaptation=ADAPTATION,
         parent_sha256=parent.parent_sha256, inputs_manifest_sha256=inputs.manifest_sha256,
