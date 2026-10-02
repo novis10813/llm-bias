@@ -1,6 +1,6 @@
 # Rebuild-v1 has not produced a research result
 
-**State:** all four complete2012-row diagnostic baselines have passed output validation (8048 executed rows total); localization implementation is in progress, with no localization GPU run or steering research result yet. All parent formal gates remain false and research_eligible=false; baseline completion does not certify intervention efficacy or broader no-op coverage.
+**State:** all four complete2012-row diagnostic baselines passed output validation (8048 executed rows); GPT effective merged2012 data is materialized. GLM localization primary now runs on idlab GPUs0–3 as four complete-layer shards, with real initial gates and committed intervention cells on the first three shards. No full localization or steering research result is complete. Parent formal gates remain false; stage outputs preserve incomplete/research-ineligible status until their declared coverage and later controls are verified.
 
 ## Real checkpoint smoke passed for bounded Qwen and GLM configurations
 
@@ -70,6 +70,16 @@ Gemma resumed job17 exited0, and all2012 rows were retrieved to `artifacts/gemma
 | GPT-OSS-20B |2012/2012|1981|514|1467|31|31 token-budget truncations|
 
 This closes baseline execution/retrieval/output validation only. Failure rows remain executed, no parser repair or truncation rerun changes the frozen parent. Parent gates remain false; localization supplies its own explicit gate evidence rather than rewriting baseline eligibility. No R1–R9 research effect is inferred from these raw counts.
+
+## Parallel worktrees delivered five reviewed slices; real localization has started
+
+Workflow `rebuild_parallel_experiment_slices` completed15 agent calls across five owned worktrees. All implementation commits passed code-reviewer and spec-reviewer; main integrated them as4106d6d (localization runner), ecc052c (GPT merge), b0f95d1 (neuron panel), ce70d20 (DIM extraction),6c553c6 (cone sequence objectives). Main reproduced148 focused tests/20 intentional route skips with pinned inputs restored, lock/diff passed; integrated full regression is running (`.pi/tasks/tc0fa8.log`). Neuron/DIM/cone commits provide independent mathematical/candidate slices, not completed GPU experiments or trained operators.
+
+GPT effective data is now `artifacts/gpt-oss-20b/concept-cone-steering/runs/effective-baseline-original12-recovery20-v1/`, containing all2012 usable rows (518 buy/1494 sell), row source/policy lookups and content hash `56a0fdcd7fcd00f7160bdf0fa5f8ce19bd2de022a41c29cdc78715b674d5e3b0`. Main verified all2017 payload digests in its manifest after successful materialization. An earlier timed-out partial export is preserved at the sibling `-partial-20261003T0102`; original/recovery sources are unchanged. This merged data is authoritative for subsequent experiments as requested; mixed-policy provenance is recorded, not a reason to block its use or request another full GPT baseline.
+
+GLM primary jobs21/22/23/25 run on idlab physicalGPU0/1/2/3, respectively, commit6c553c6. Full input/parent hashes were verified before loading. Each shard assigns10 of40 layers by layer modulo4 and plans120640 development pair/span interventions (482560 total), plus40 bounded layer/span gates. First observations: jobs21/22/23 passed their initial real no-op/parent gate and committed6/2/1 cells; job25 was performing its first gate. Job24 was cancelled while queued because its32GiB request exceeded available GPU3 VRAM; fresh job25 requested24GiB and started. Existing unrelated services/processes were not stopped. Actual cell/gate checks and incomplete status remain authoritative; these startup counts are not effect estimates or proof all gates passed. Artifacts are each job's `artifacts/glm4-9b-0414/concept-cone-steering/runs/localization-primary-<job>/`. Completion watchers are `.pi/tasks/{t5bb13,td8cea,t56f1c,t0536e}.log`.
+
+Next independent runner/teacher slices are in [`../../dev/stance_parallel_runner_wave2_spec.md`](../../dev/stance_parallel_runner_wave2_spec.md); global merging/inference/selected-sites, secondary position/alignment controls and held-out evaluation remain unfinished.
 
 ## P0 population code passed tests and independent review
 
