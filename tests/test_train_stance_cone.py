@@ -198,7 +198,8 @@ def test_keyboard_interrupt_records_failed_step_and_summary(tmp_path):
     assert not model.layers[0]._forward_hooks
 
 
-def test_checkpoint_load_failure_preserves_preflight_hashes(tmp_path, monkeypatch):
+@pytest.mark.parametrize('failure_stage', ['init', 'set_device', 'reset', 'load'])
+def test_cuda_initialization_and_load_failure_preserves_preflight_hashes(tmp_path, monkeypatch, failure_stage):
     from scripts import train_stance_cone as module
     checkpoint = tmp_path / 'glm4-9b-0414'; checkpoint.mkdir()
     teachers = tmp_path / 'teachers'; teachers.mkdir()
@@ -214,12 +215,39 @@ def test_checkpoint_load_failure_preserves_preflight_hashes(tmp_path, monkeypatc
     monkeypatch.setattr(module, 'load_completed_baseline', lambda *a, **k: parent)
     monkeypatch.setattr(module, 'runtime_metadata', lambda path: {
         'model': model_record, 'backend': backend, 'code': {'source_sha256': {}}})
+    events = []
+    state = dict(initialized=False, selected=False, reset=False)
+    def stage(name):
+        assert (args.output_dir / 'preflight_config.json').exists()
+        events.append(name)
+        if failure_stage == name:
+            if name == 'load':
+                raise torch.cuda.OutOfMemoryError('tensor SECRET')
+            raise RuntimeError('tensor SECRET')
+    def init():
+        stage('init')
+        state['initialized'] = True
+    def set_device(device):
+        assert state['initialized'] and device == torch.device('cuda:0')
+        stage('set_device')
+        state['selected'] = True
+    def reset(device):
+        assert state['initialized'] and state['selected'] and device == torch.device('cuda:0')
+        stage('reset')
+        state['reset'] = True
+    def peak(device, value):
+        assert state['reset'] and device == torch.device('cuda:0')
+        return value
+    def load(*a, **k):
+        assert state['reset']
+        stage('load')
     monkeypatch.setattr(module.torch.cuda, 'is_available', lambda: True)
-    monkeypatch.setattr(module.torch.cuda, 'reset_peak_memory_stats', lambda d: None)
-    monkeypatch.setattr(module.torch.cuda, 'max_memory_allocated', lambda d: 123)
-    monkeypatch.setattr(module.torch.cuda, 'max_memory_reserved', lambda d: 456)
-    def failure(*a, **k): raise torch.cuda.OutOfMemoryError('tensor SECRET')
-    monkeypatch.setattr(module, 'load_model', failure)
+    monkeypatch.setattr(module.torch.cuda, 'init', init)
+    monkeypatch.setattr(module.torch.cuda, 'set_device', set_device)
+    monkeypatch.setattr(module.torch.cuda, 'reset_peak_memory_stats', reset)
+    monkeypatch.setattr(module.torch.cuda, 'max_memory_allocated', lambda d: peak(d, 123))
+    monkeypatch.setattr(module.torch.cuda, 'max_memory_reserved', lambda d: peak(d, 456))
+    monkeypatch.setattr(module, 'load_model', load)
     args = parser().parse_args(['--inputs', 'i', '--parent', 'p', '--teachers', str(teachers),
         '--model', str(checkpoint), '--output-dir', str(tmp_path / 'failed-load'),
         '--dimension', '2', '--seed', '20261003', '--diagnostic-one-step'])
@@ -230,8 +258,18 @@ def test_checkpoint_load_failure_preserves_preflight_hashes(tmp_path, monkeypatc
     assert preflight['inputs_manifest_sha256'] == inputs.manifest_sha256
     assert preflight['runtime']['model'] == model_record
     summary = json.loads((args.output_dir / 'summary.json').read_bytes())
-    assert summary['preflight_config_sha256'] == sha256_bytes(raw) and summary['oom']
-    assert summary['peak_allocated_bytes'] == 123
+    assert summary['preflight_config_sha256'] == sha256_bytes(raw)
+    assert summary['oom'] == (failure_stage == 'load')
+    assert summary['status'] == 'preflight_failure'
+    assert summary['attempted_steps'] == summary['completed_steps'] == 0
+    expected = ['init', 'set_device', 'reset', 'load']
+    assert events == expected[:expected.index(failure_stage) + 1]
+    if failure_stage == 'load':
+        assert summary['peak_allocated_bytes'] == 123
+        assert summary['peak_reserved_bytes'] == 456
+    else:
+        assert 'peak_allocated_bytes' not in summary and 'peak_reserved_bytes' not in summary
+    assert 'SECRET' not in (args.output_dir / 'summary.json').read_text()
     assert not (args.output_dir / 'config.json').exists()
 
 

@@ -266,8 +266,12 @@ def run(args):
             training_completed=False, accepted_operator=False, research_eligible=False))
         if not torch.cuda.is_available():
             raise RuntimeError('actual checkpoint training requires CUDA')
-        device = torch.device('cuda:0')
-        torch.cuda.reset_peak_memory_stats(device)
+        cuda_device = torch.device('cuda:0')
+        torch.cuda.init()
+        torch.cuda.set_device(cuda_device)
+        torch.cuda.reset_peak_memory_stats(cuda_device)
+        # Query allocator statistics only after device initialization/reset succeeds.
+        device = cuda_device
         loaded, _, _ = load_model(str(checkpoint), device_map=None, dtype='native', trust_remote_code=False)
         model = generation_adapter(loaded)
         model.hf_model.eval().requires_grad_(False)
