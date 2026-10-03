@@ -26,7 +26,16 @@ layer, span, token budget, timeout, or prior-result override exists.
 
 Checkpoint metadata-file hashes must equal the original parent's hashes. The
 strict merged loader separately verifies recovery checkpoint metadata against
-that original. Runtime package/backend controls match the original parent.
+that original. Runtime package/backend controls match the original parent and, where recorded,
+the recovery backend. Python alone selects the explicitly approved
+`recovery_registration.metadata.backend.python`, not the original Python or an
+arbitrary version. The recorded original12/recovery20 pair has Python 3.13.15 /
+3.13.14, so the current runner must use 3.13.14. Missing recovery Python or a
+current/recovery mismatch rejects before model loading. Torch, Transformers,
+xgrammar, jlens, CUDA, cuDNN, kernel policy and determinism remain strict.
+Recovery-recorded native dtype, embedding/head dtype, cache and attention fields
+must also match the original where available. Actual dtypes and attention remain
+authenticated after loading.
 Paths may differ only through the accepted `bind_relocated_tokenizer` helper:
 the actual loaded checkpoint path stays in runtime metadata while the verified
 original logical tokenizer name is restored for tokenizer identity binding.
@@ -95,7 +104,12 @@ original plan, and all 2012 per-row source/policy records. Runtime source hashes
 include all current core and jlens Python files, baseline/smoke scripts,
 `uv.lock`, this runner, grouped/logical runners and the accepted recovery helper.
 Actual checkpoint path, relocation binding, native layer authentication and GPU
-metadata remain in the configuration identity.
+metadata remain in the configuration identity. Runtime also binds
+`mixed_runtime_python` with `selected_backend_mode: recorded_recovery` and
+`current`, `original`, `recovery` versions. Actual backend Python is retained,
+not dropped from the configuration hash. Original metadata, recovery registration
+and all row source hashes remain unchanged, so this does not relabel the 1981
+original rows as recovery-runtime generations.
 
 The immutable grouped store uses persistent exclusive locking, write-once
 publication and strict canonical import validation. An identical complete resume
@@ -122,7 +136,16 @@ public-run tests pass this config through native loading to the actual
 embedding/head dtype checks, and reject wrong quantization, depth, or either
 actual dtype. These are not checkpoint weight or GPU acceptance tests.
 
-This correction does not rewrite failed GPU job36 or any completed run. It does
+The compact recorded runtime fixture
+`tests/fixtures/gpt_oss_20b/merged_runtime_metadata.json` preserves the real
+`original_metadata.bindings` / `recovery_registration.metadata` nesting from the
+read-only `effective-baseline-original12-recovery20-v1/metadata.json` artifact.
+Tests require exact recovery Python, reject missing or mismatched versions and
+non-Python backend changes, and capture public-run descriptor binding without
+GPU execution or fabricated generation. Existing genuine CPU Harmony callback
+tests continue to exercise full-row replay and channel contracts.
+
+This correction does not rewrite failed GPU jobs36/37 or any completed run. It does
 not add preflight artifacts or change the cohort, row policies, native Harmony
 analysis, gates, or full grid.
 

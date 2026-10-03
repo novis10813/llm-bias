@@ -1,0 +1,74 @@
+{
+  "original_metadata": {
+    "bindings": {
+      "backend": {
+        "attention_implementation": "eager",
+        "cuda": "12.8",
+        "cudnn": 91002,
+        "deterministic_algorithms": false,
+        "device": "cuda:0",
+        "embedding_device": "cuda:0",
+        "embedding_dtype": "torch.bfloat16",
+        "gpu_name": "NVIDIA GeForce RTX 5090",
+        "head_device": "cuda:0",
+        "head_dtype": "torch.bfloat16",
+        "jlens": "0.1.0",
+        "kernel_policy": "native_hf_default; xgrammar_auto_cuda_mask",
+        "python": "3.13.15",
+        "requested_dtype": "native",
+        "torch": "2.9.1+cu128",
+        "transformers": "5.14.1",
+        "xgrammar": "0.2.8"
+      },
+      "model": {
+        "identity_scope": "metadata_only_not_full_weights",
+        "metadata_file_sha256": {
+          "chat_template.jinja": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146",
+          "config.json": "3a2a26ded679375b7928ddeca59764df7cea83220c1961035f6d6e232659e9ce",
+          "generation_config.json": "f9970ada892d2d1f72e3ed0a6535ccebadd11897318794ca671d8c7014c957da",
+          "special_tokens_map.json": "dd5e191d20c12d2fee1da5bae14ca1db0f5f4215300af691f23cdee97120a293",
+          "tokenizer.json": "0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3",
+          "tokenizer_config.json": "9279e942392b742d633c7adbb89ebe002c98399db8926a7af5125c726f404070"
+        },
+        "resolved_path": "/mnt/train-data-1-hdd/sam/llm-bias/.cache/models/gpt-oss-20b"
+      }
+    }
+  },
+  "recovery_registration": {
+    "metadata": {
+      "backend": {
+        "cuda": "12.8",
+        "cudnn": 91002,
+        "deterministic_algorithms": false,
+        "device": "cuda:0",
+        "driver_version": "580.173.02",
+        "environment": {
+          "CUDA_VISIBLE_DEVICES": "GPU-69add541-f1e9-73c4-3b0b-ed76ca99d06b",
+          "LAB_GPU_INDICES": "3",
+          "LAB_JOB_ID": "stance-rb260930-20",
+          "LAB_RECOVERY_DRIVER_VERSION": "580.173.02"
+        },
+        "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+        "head_dtype": "torch.bfloat16",
+        "jlens": "0.1.0",
+        "kernel_policy": "native_hf_default; xgrammar_auto_cuda_mask",
+        "python": "3.13.14",
+        "torch": "2.9.1+cu128",
+        "transformers": "5.14.1",
+        "xgrammar": "0.2.8"
+      },
+      "model": {
+        "identity_scope": "metadata_only_not_full_weights",
+        "metadata_file_sha256": {
+          "chat_template.jinja": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146",
+          "config.json": "3a2a26ded679375b7928ddeca59764df7cea83220c1961035f6d6e232659e9ce",
+          "generation_config.json": "f9970ada892d2d1f72e3ed0a6535ccebadd11897318794ca671d8c7014c957da",
+          "special_tokens_map.json": "dd5e191d20c12d2fee1da5bae14ca1db0f5f4215300af691f23cdee97120a293",
+          "tokenizer.json": "0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3",
+          "tokenizer_config.json": "9279e942392b742d633c7adbb89ebe002c98399db8926a7af5125c726f404070"
+        },
+        "resolved_path": "/home/sam/Projects/lab-assets/stance-rebuild-v1-models/gpt-oss-20b"
+      }
+    }
+  }
+}

@@ -121,7 +121,7 @@ def test_metadata_relocation_and_source_inventory(tmp_path, monkeypatch):
     actual['model']['resolved_path'] = str(tmp_path)
     actual['code'] = {'source_sha256': {'llm_bias/core/model.py': 'existing'}}
     monkeypatch.setattr(runner, 'runtime_metadata', lambda p: deepcopy(actual))
-    bound = runner.bind_runtime(tmp_path, original)
+    bound = runner.bind_runtime(tmp_path, original, {'metadata': {'backend': original['backend']}})
     for name in ('run_stance_localization_harmony.py', 'run_stance_localization_grouped.py',
                  'run_stance_localization.py', 'recover_stance_baseline_truncations.py'):
         assert bound['code']['source_sha256']['scripts/' + name] == sha256_bytes(
@@ -130,7 +130,7 @@ def test_metadata_relocation_and_source_inventory(tmp_path, monkeypatch):
     relocation = bind_relocated_tokenizer(tokenizer, bound['model'], original['model'])
     assert tokenizer.name_or_path == '/original' and relocation['relocation_metadata_sha256_verified']
     original['model']['metadata_file_sha256']['config.json'] = 'foreign'
-    with pytest.raises(ValueError, match='checkpoint'): runner.bind_runtime(tmp_path, original)
+    with pytest.raises(ValueError, match='checkpoint'): runner.bind_runtime(tmp_path, original, {'metadata': {'backend': original['backend']}})
 
 
 @pytest.fixture(params=[(1024, 4096), (4096, 1024)])
@@ -278,7 +278,7 @@ def test_public_loader_uses_strict_merged_sources_and_native_no_cpu_fallback(tmp
         return parent
     monkeypatch.setattr(runner, 'load_merged_baseline', merged)
     monkeypatch.setattr(runner, 'build_localization_pairs', lambda i, p: full_table())
-    monkeypatch.setattr(runner, 'bind_runtime', lambda p, b: dict(model=dict(
+    monkeypatch.setattr(runner, 'bind_runtime', lambda p, b, r: dict(model=dict(
         metadata_file_sha256={'config.json': identity['config_sha256']})))
     monkeypatch.setattr(runner.torch.cuda, 'is_available', lambda: cuda)
     fake = SimpleNamespace(hf_model=SimpleNamespace(eval=lambda: None, config=SimpleNamespace(
@@ -434,4 +434,132 @@ def test_all_raw_metadata_hashes_remain_bound(tmp_path, monkeypatch, mutation):
     else: hashes['added_tokens.json'] = 'extra'
     monkeypatch.setattr(runner, 'runtime_metadata', lambda p: actual)
     with pytest.raises(ValueError, match='checkpoint metadata differs from parent'):
-        runner.bind_runtime(tmp_path, parent)
+        runner.bind_runtime(tmp_path, parent, {'metadata': {'backend': parent['backend']}})
+
+
+@pytest.fixture
+def recorded_runtime():
+    return json.loads((REAL_CONFIG.parent / 'merged_runtime_metadata.json').read_text())
+
+
+def current_runtime(recorded):
+    bindings = recorded['original_metadata']['bindings']
+    return dict(model=deepcopy(bindings['model']),
+                backend=deepcopy(recorded['recovery_registration']['metadata']['backend']),
+                code={'source_sha256': {}})
+
+
+def test_recorded_mixed_python_selects_exact_recovery(tmp_path, monkeypatch, recorded_runtime):
+    before = deepcopy(recorded_runtime)
+    actual = current_runtime(recorded_runtime)
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda p: deepcopy(actual))
+    bound = runner.bind_runtime(tmp_path, recorded_runtime['original_metadata']['bindings'],
+                                recorded_runtime['recovery_registration'])
+    assert bound['backend']['python'] == '3.13.14'
+    assert bound['mixed_runtime_python'] == dict(selected_backend_mode='recorded_recovery',
+        current='3.13.14', original='3.13.15', recovery='3.13.14')
+    assert recorded_runtime == before
+
+
+@pytest.mark.parametrize('mutation', ['missing_registration', 'missing_metadata', 'missing_backend',
+    'missing_python', 'empty_python', 'current_original', 'current_random', 'recovery_mismatch'])
+def test_recovery_python_binding_rejects(tmp_path, monkeypatch, recorded_runtime, mutation):
+    actual = current_runtime(recorded_runtime)
+    recovery = recorded_runtime['recovery_registration']
+    if mutation == 'missing_registration': recovery = None
+    elif mutation == 'missing_metadata': del recovery['metadata']
+    elif mutation == 'missing_backend': del recovery['metadata']['backend']
+    elif mutation == 'missing_python': del recovery['metadata']['backend']['python']
+    elif mutation == 'empty_python': recovery['metadata']['backend']['python'] = ''
+    elif mutation == 'current_original': actual['backend']['python'] = '3.13.15'
+    elif mutation == 'current_random': actual['backend']['python'] = '3.12.9'
+    else: recovery['metadata']['backend']['python'] = '3.13.13'
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda p: actual)
+    with pytest.raises(ValueError, match='[Pp]ython|python'):
+        runner.bind_runtime(tmp_path, recorded_runtime['original_metadata']['bindings'], recovery)
+
+
+@pytest.mark.parametrize('field', ['torch', 'transformers', 'xgrammar', 'jlens', 'cuda',
+    'cudnn', 'kernel_policy', 'deterministic_algorithms'])
+@pytest.mark.parametrize('source', ['recovery', 'current'])
+def test_non_python_backend_stays_strict(tmp_path, monkeypatch, recorded_runtime, field, source):
+    actual = current_runtime(recorded_runtime)
+    recovery = recorded_runtime['recovery_registration']
+    backend = actual['backend'] if source == 'current' else recovery['metadata']['backend']
+    backend[field] = 'foreign'
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda p: actual)
+    with pytest.raises(ValueError, match='backend differs: ' + field):
+        runner.bind_runtime(tmp_path, recorded_runtime['original_metadata']['bindings'], recovery)
+
+
+def test_public_run_records_selected_python_without_generation(tmp_path, monkeypatch, recorded_runtime):
+    import torch
+    (tmp_path / 'config.json').write_bytes(REAL_CONFIG.read_bytes())
+    parent = full_parent()
+    parent.metadata.update(deepcopy(recorded_runtime))
+    bindings = parent.metadata['original_metadata']['bindings']
+    bindings['template'] = {'actual_wrapper_record': asdict(runner.WrapperPolicy(use_chat_template=True, add_special_tokens=False))}
+    parent.content_sha256, parent.file_sha256 = 'merged', {'original': {}, 'recovery': {}}
+    parent.plan.to_dict = lambda: {'keys': [k.to_dict() for k in parent.plan.keys]}
+    parent.plan.identity = SimpleNamespace(schema_sha256='schema')
+    table = full_table()
+    for pair in table.pairs: pair.target_key = parent.plan.keys[0]
+    monkeypatch.setattr(runner, 'load_baseline_inputs', lambda p: SimpleNamespace(
+        members=[SimpleNamespace(ticker=k.ticker) for k in parent.plan.keys],
+        pair_for=lambda *a: None))
+    monkeypatch.setattr(runner, 'load_merged_baseline', lambda *a, **k: parent)
+    monkeypatch.setattr(runner, 'build_localization_pairs', lambda *a: table)
+    actual = current_runtime(recorded_runtime)
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda p: deepcopy(actual))
+    monkeypatch.setattr(runner.torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(runner.torch.cuda, 'get_device_name', lambda d: 'fake CUDA device')
+    monkeypatch.setattr(runner.subprocess, 'check_output', lambda *a, **k: 'fake placement')
+    layers = [object() for _ in range(24)]
+    weight = SimpleNamespace(device=torch.device('cuda:0'), dtype=torch.bfloat16, shape=(201088, 2880))
+    hf = SimpleNamespace(eval=lambda: None, config=SimpleNamespace(model_type='gpt_oss',
+        num_hidden_layers=24, _attn_implementation='eager'), model=SimpleNamespace(layers=layers),
+        parameters=lambda: [weight], get_input_embeddings=lambda: SimpleNamespace(weight=weight),
+        get_output_embeddings=lambda: SimpleNamespace(weight=weight))
+    model = SimpleNamespace(hf_model=hf, layers=layers, tokenizer=object())
+    monkeypatch.setattr(runner, 'load_model', lambda *a, **k: (model, None, 'cuda:0'))
+    monkeypatch.setattr(runner, 'generation_adapter', lambda m: m)
+    monkeypatch.setattr(runner, 'bind_relocated_tokenizer', lambda *a: {})
+    parent.generation_for = lambda k: SimpleNamespace(provenance={
+        'generation_policy': parent.records[k], 'stop_token_ids': []})
+    monkeypatch.setattr(runner, 'compile_smoke_grammar', lambda *a: object())
+    monkeypatch.setattr(runner, 'bind_rows', lambda *a: None)
+    monkeypatch.setattr(runner, 'render_decision_prompt', lambda *a, **k: SimpleNamespace(schema_sha256='schema'))
+    monkeypatch.setattr(runner, 'check_prompt', lambda *a: None)
+    monkeypatch.setattr(runner, 'callbacks', lambda *a: (None, None))
+    captured = []
+    def execute(args, desc, *rest):
+        captured.append(desc)
+        return 0
+    monkeypatch.setattr(grouped, 'execute_run', execute)
+    args = SimpleNamespace(phase='primary', inputs='inputs', parent='original12', recovery='recovery20',
+        model=tmp_path, output_dir=tmp_path / 'unused', shard_index=0, num_shards=1)
+    assert runner.run(args) == 0
+    desc = captured[0]
+    runtime = desc['bindings']['runtime']
+    assert runtime['mixed_runtime_python'] == dict(selected_backend_mode='recorded_recovery',
+        current='3.13.14', original='3.13.15', recovery='3.13.14')
+    assert runtime['backend']['python'] == '3.13.14'
+    effective = desc['bindings']['effective_parent']
+    assert effective['metadata']['original_metadata']['bindings']['backend']['python'] == '3.13.15'
+    assert len(effective['row_inventory']) == 2012
+    assert sum(r['source']['origin'] == 'recovery' for r in effective['row_inventory']) == 31
+    assert desc['layers'] == list(range(24))
+    assert not args.output_dir.exists()
+
+
+@pytest.mark.parametrize('field', ['requested_dtype', 'head_dtype', 'embedding_dtype',
+                                   'attention_implementation', 'use_cache'])
+def test_recovery_native_controls_stay_strict(tmp_path, monkeypatch, recorded_runtime, field):
+    actual = current_runtime(recorded_runtime)
+    if field == 'use_cache':
+        recorded_runtime['original_metadata']['bindings']['backend'][field] = True
+    recorded_runtime['recovery_registration']['metadata']['backend'][field] = 'foreign'
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda p: actual)
+    with pytest.raises(ValueError, match='recovery backend differs: ' + field):
+        runner.bind_runtime(tmp_path, recorded_runtime['original_metadata']['bindings'],
+                            recorded_runtime['recovery_registration'])

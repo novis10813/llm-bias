@@ -131,13 +131,33 @@ def bind_rows(parent, capability, policies):
             'parent Harmony channel policy hash differs')
 
 
-def bind_runtime(checkpoint, bindings):
+def bind_runtime(checkpoint, bindings, recovery_registration):
     metadata = runtime_metadata(checkpoint)
     logical._equal(metadata['model']['metadata_file_sha256'], bindings['model']['metadata_file_sha256'],
                    'checkpoint metadata differs from parent')
+    try:
+        recovery = recovery_registration['metadata']['backend']
+        recovery_python = recovery['python']
+        if not isinstance(recovery_python, str) or not recovery_python.strip():
+            raise ValueError('recovery backend requires recorded Python')
+    except (KeyError, TypeError) as exc:
+        raise ValueError('recovery backend requires recorded Python') from exc
+    original = bindings['backend']
     for name in ('torch', 'transformers', 'xgrammar', 'jlens', 'cuda', 'kernel_policy',
-                 'cudnn', 'deterministic_algorithms', 'python'):
-        logical._equal(metadata['backend'][name], bindings['backend'][name], 'parent backend differs: ' + name)
+                 'cudnn', 'deterministic_algorithms'):
+        logical._equal(metadata['backend'][name], original[name], 'parent backend differs: ' + name)
+        if name in recovery:
+            logical._equal(recovery[name], original[name], 'recovery backend differs: ' + name)
+    for name in ('requested_dtype', 'head_dtype', 'embedding_dtype', 'attention_implementation', 'use_cache'):
+        if name in recovery and name in original:
+            logical._equal(recovery[name], original[name], 'recovery backend differs: ' + name)
+    # Only the recorded recovery backend is approved for current Python. This
+    # exception is explicit provenance, not an arbitrary version allowlist.
+    logical._equal(metadata['backend']['python'], recovery_python, 'recovery backend differs: python')
+    metadata['mixed_runtime_python'] = dict(
+        selected_backend_mode='recorded_recovery', current=metadata['backend']['python'],
+        original=original['python'], recovery=recovery_python)
+
     for name in ('run_stance_localization_harmony.py', 'run_stance_localization_grouped.py',
                  'run_stance_localization.py', 'recover_stance_baseline_truncations.py'):
         path = ROOT / 'scripts' / name
@@ -176,7 +196,7 @@ def run(args):
     bindings, policies, inventory = validate_parent(table, parent)
     checkpoint = args.model.resolve(strict=True)
     identity = config_identity(checkpoint)
-    metadata = bind_runtime(checkpoint, bindings)
+    metadata = bind_runtime(checkpoint, bindings, parent.metadata.get('recovery_registration'))
     logical._equal(identity['config_sha256'], metadata['model']['metadata_file_sha256'].get('config.json'),
                    'config bytes changed during preflight')
     logical.shard_layers(identity['configured_layer_count'], args.shard_index, args.num_shards)
