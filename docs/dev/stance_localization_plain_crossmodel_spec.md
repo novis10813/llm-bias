@@ -18,8 +18,11 @@ in the authenticated full table, not in the primary execution partition.
 The parent must retain 512 new tokens, 180 seconds, cache enabled and plain JSON.
 Checkpoint resolved path and metadata-file hashes must equal the parent model
 binding. Backend Python, torch, transformers, xgrammar, jlens, CUDA, cuDNN,
-kernel and deterministic policies must match. Native loading is mandatory, with
-BF16 embedding/head and all floating model parameters on CUDA in BF16. Grammar,
+kernel and deterministic policies must match. The parent requested mode must be
+`bfloat16` or `native` and is preserved exactly in loading and runtime bindings.
+`bfloat16` loads with `torch.bfloat16`; `native` omits the HF dtype override.
+Both require a native BF16 checkpoint declaration, BF16 embedding/head and all
+floating model parameters on CUDA in BF16. Grammar,
 tokenizer, schema, stop IDs, wrapper, attention policy and genuine full generated
 output comparisons use the existing accepted checks. No relocation alias,
 recovery-budget substitution, CPU fallback or dtype override is provided.
@@ -28,6 +31,9 @@ recovery-budget substitution, CPU fallback or dtype override is provided.
 
 `scripts/run_stance_localization_plain_crossmodel.py` reads `config.json` text
 configuration, accepting Qwen3.5/Gemma4 model types and native BF16 declarations.
+The recorded Gemma unified route requires outer `gemma4_unified` and text
+`gemma4_unified_text`, with matching loaded outer/text identities. Its 48-layer
+text config can inherit the outer BF16 declaration.
 Qwen3.5-4B must declare 32 layers. Gemma depth is read from its actual config,
 never a 40-layer default. The config hash must agree with runtime checkpoint
 metadata. After native loading, HF text-config family/depth and the wrapper's
@@ -66,11 +72,15 @@ gradient or KV-cache artifact is written.
 
 Focused fake-model tests check config/native-wrapper depth authentication,
 closed CLI, all-layer planning, original parent policy, exact runtime bindings,
-source inventories, native loader invocation, actual grouped fake generations,
+source inventories, exact requested-mode loader invocation and runtime recording,
+actual grouped fake generations,
 failed-gate suppression, failure retention and same-run resume. The accepted
 grouped tests additionally exercise immutable record corruption, halt handling,
 cleanup and grouped equivalence. Harmony fixture cases are intentionally skipped
-by the plain-only fake grid. Tests do not load a real checkpoint.
+by the plain-only fake grid. Regression tests read the Qwen16/Gemma17 recorded
+parent bindings when installed (both request `bfloat16`) through pure parent
+validation and check a synthetic unified Gemma config. Tests do not load weights
+or use a GPU.
 
 ```bash
 PYTHONPATH=$PWD OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
@@ -92,7 +102,7 @@ CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PWD uv run --no-sync python \
   scripts/run_stance_localization_plain_crossmodel.py \
   --model /models/Qwen3.5-4B \
   --inputs /inputs/stance-approved \
-  --parent /artifacts/qwen3.5-4b/baseline-original512-native \
+  --parent /artifacts/qwen3.5-4b/baseline-original512-bfloat16 \
   --output-dir /artifacts/qwen3.5-4b/localization-plain-crossmodel-new \
   --phase primary --shard-index 0 --num-shards 1
 ```

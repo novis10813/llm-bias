@@ -45,8 +45,12 @@ def config_identity(checkpoint):
     config = json.loads(raw)
     text = config.get('text_config', config)
     family = text.get('model_type', config.get('model_type'))
-    if family not in ('qwen3_5', 'qwen3_5_text', 'gemma4', 'gemma4_text'):
+    if family not in ('qwen3_5', 'qwen3_5_text', 'gemma4', 'gemma4_text',
+                      'gemma4_unified_text'):
         raise ValueError('require Qwen3.5 or Gemma4 checkpoint config')
+    if (family == 'gemma4_unified_text' or config.get('model_type') == 'gemma4_unified'):
+        if family != 'gemma4_unified_text' or config.get('model_type') != 'gemma4_unified':
+            raise ValueError('Gemma4 unified text requires matching gemma4_unified outer config')
     count = text.get('num_hidden_layers')
     if type(count) is not int or count <= 0:
         raise ValueError('config requires a positive integer text layer count')
@@ -55,12 +59,18 @@ def config_identity(checkpoint):
     dtype = text.get('dtype', text.get('torch_dtype', config.get('dtype', config.get('torch_dtype'))))
     if dtype not in ('bfloat16', 'torch.bfloat16'):
         raise ValueError('checkpoint config must declare native BF16')
-    return dict(model_type=family, config_sha256=sha256_bytes(raw),
-                configured_layer_count=count, declared_dtype=dtype)
+    identity = dict(model_type=family, config_sha256=sha256_bytes(raw),
+                    configured_layer_count=count, declared_dtype=dtype)
+    if family == 'gemma4_unified_text':
+        identity['outer_model_type'] = config['model_type']
+    return identity
 
 
 def authenticate_layers(model, identity):
     config = model.hf_model.config
+    if identity['model_type'] == 'gemma4_unified_text':
+        logical._equal(getattr(config, 'model_type', None), identity['outer_model_type'],
+                       'native config outer family differs')
     text = config.get_text_config() if callable(getattr(config, 'get_text_config', None)) else config
     count = getattr(text, 'num_hidden_layers', None)
     logical._equal(count, identity['configured_layer_count'], 'native config depth differs')
@@ -78,7 +88,7 @@ def validate_parent(table, bindings):
             or policy.timeout_seconds != 180 or policy.use_cache is not True):
         raise ValueError('require original 512-token/180-second/cache/plainJSON parent policy')
     backend = bindings['backend']
-    if (backend['requested_dtype'] != 'native' or backend['head_dtype'] != 'torch.bfloat16'
+    if (backend['requested_dtype'] not in ('native', 'bfloat16') or backend['head_dtype'] != 'torch.bfloat16'
             or backend['embedding_dtype'] != 'torch.bfloat16'):
         raise ValueError('require native BF16 baseline parent')
     return policy
@@ -113,7 +123,9 @@ def run(args):
     logical.shard_layers(identity['configured_layer_count'], args.shard_index, args.num_shards)
     if not torch.cuda.is_available():
         raise RuntimeError('CUDA required; no CPU fallback')
-    loaded, _, device = load_model(str(checkpoint), device_map=None, dtype='native')
+    requested_dtype = bindings['backend']['requested_dtype']
+    loaded, _, device = load_model(str(checkpoint), device_map=None,
+                                  dtype='native' if requested_dtype == 'native' else torch.bfloat16)
     model = generation_adapter(loaded)
     model.hf_model.eval()
     count = authenticate_layers(model, identity)
@@ -146,7 +158,7 @@ def run(args):
             _bind_expected(expected, capability, policy, 'parent')
         prompts[key] = prompt
     metadata['backend'].update(device=str(device), head_dtype=str(head.dtype),
-        embedding_dtype=str(embedding.dtype), requested_dtype='native', use_cache=policy.use_cache,
+        embedding_dtype=str(embedding.dtype), requested_dtype=requested_dtype, use_cache=policy.use_cache,
         attention_implementation=attention, gpu_name=torch.cuda.get_device_name(embedding.device),
         physical_gpus=subprocess.check_output(['nvidia-smi', '--query-gpu=index,uuid,driver_version',
             '--format=csv,noheader'], text=True).strip(),
