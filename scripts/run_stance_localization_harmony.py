@@ -54,15 +54,25 @@ def config_identity(checkpoint):
     count = text.get('num_hidden_layers')
     if type(count) is not int or count <= 0:
         raise ValueError('config requires a positive integer text layer count')
-    dtype = text.get('dtype', text.get('torch_dtype', config.get('dtype', config.get('torch_dtype'))))
-    if not isinstance(dtype, str) or not dtype:
-        raise ValueError('checkpoint must declare its native dtype')
+    # Native quantized configs may omit floating dtype declarations entirely.
+    # Absence is provenance, not permission to infer a dtype or cast weights.
+    dtype, dtype_source = None, 'absent'
+    scopes = [('text_config', text), ('config', config)] if text is not config else [('config', config)]
+    for scope, record in scopes:
+        for name in ('dtype', 'torch_dtype'):
+            if name not in record:
+                continue
+            value = record[name]
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f'checkpoint {scope}.{name} must be a nonempty dtype string')
+            if dtype_source == 'absent':
+                dtype, dtype_source = value, f'{scope}.{name}'
     quantization = config.get('quantization_config', {})
-    if quantization.get('quant_method') != 'mxfp4':
+    if not isinstance(quantization, dict) or quantization.get('quant_method') != 'mxfp4':
         raise ValueError('require native MXFP4 checkpoint representation')
     return dict(model_type=family, config_sha256=sha256_bytes(raw),
                 configured_layer_count=count, declared_dtype=dtype,
-                quantization_config=quantization)
+                declared_dtype_source=dtype_source, quantization_config=quantization)
 
 
 def authenticate_layers(model, identity):

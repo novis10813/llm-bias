@@ -32,9 +32,15 @@ the actual loaded checkpoint path stays in runtime metadata while the verified
 original logical tokenizer name is restored for tokenizer identity binding.
 The identity scope remains metadata-only, not full checkpoint weight hashing.
 
-`config.json` must declare GPT-OSS, a positive text-layer count, its native dtype,
-and MXFP4 quantization. Layer count is not a model-slug heuristic or a fixed CLI
-default. The actual HF config must match that depth and family. The wrapper must
+`config.json` must declare GPT-OSS, a positive text-layer count, and native MXFP4
+quantization. Floating dtype declarations are optional. If neither `dtype` nor
+`torch_dtype` is present, authentication records `declared_dtype: null` and
+`declared_dtype_source: "absent"`. A present declaration must be a nonempty,
+non-whitespace string, including declarations shadowed by a higher-priority key.
+The selected declaration records its source (`config.dtype`, `config.torch_dtype`,
+or the corresponding `text_config` key). No dtype is inferred from the model
+family, parent, or Transformers defaults, and no checkpoint metadata is changed.
+Layer count is not a model-slug heuristic or a fixed CLI default. The actual HF config must match that depth and family. The wrapper must
 expose every distinct layer, in the same order and by object identity as
 `hf_model.model.layers`. All configured layers are included. A checkpoint with
 24 layers plans 289536 cells globally and 96 layer/span gates. Shards use
@@ -107,7 +113,18 @@ all effective policy/capability bindings, actual gate policy, grouped callback
 composition, failed interventions, clean aborts, cleanup, immutable resume,
 corruption rejection, native-only loader preflight and the full actual-layer grid.
 Full-shaped fake parent tests include 2012 rows, 31 recovery sources and both
-policies. These are not checkpoint or GPU acceptance tests.
+policies. The full recorded GPT-OSS-20B config fixture is copied byte-for-byte
+from `https://huggingface.co/openai/gpt-oss-20b/resolve/main/config.json`. Its SHA256
+is `3a2a26ded679375b7928ddeca59764df7cea83220c1961035f6d6e232659e9ce`, matching
+original12's `shard-0-of-1.execution_metadata.json` config hash. It has 24 layers,
+hidden size 2880, native MXFP4 quantization, and no dtype declaration. CPU-only
+public-run tests pass this config through native loading to the actual
+embedding/head dtype checks, and reject wrong quantization, depth, or either
+actual dtype. These are not checkpoint weight or GPU acceptance tests.
+
+This correction does not rewrite failed GPU job36 or any completed run. It does
+not add preflight artifacts or change the cohort, row policies, native Harmony
+analysis, gates, or full grid.
 
 ```bash
 PYTHONPATH=$PWD uv run --no-sync pytest -q tests/test_run_stance_localization_harmony.py

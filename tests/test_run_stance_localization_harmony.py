@@ -309,3 +309,129 @@ def test_four_arm_gate_uses_actual_fixed_fit_policy(native_grid):
     assert gate.zero_diagnostics['changed_token_count'] == 0
     assert g.setup['model'].hf_model.calls == 4
     clean(g.setup['model'].hf_model)
+
+
+# Exact upstream bytes match original12's recorded config metadata hash.
+REAL_CONFIG = runner.ROOT / 'tests/fixtures/gpt_oss_20b/config.json'
+REAL_CONFIG_SHA256 = '3a2a26ded679375b7928ddeca59764df7cea83220c1961035f6d6e232659e9ce'
+
+
+def test_recorded_native_config_without_dtype(tmp_path):
+    raw = REAL_CONFIG.read_bytes()
+    assert sha256_bytes(raw) == REAL_CONFIG_SHA256
+    config = json.loads(raw)
+    assert config['hidden_size'] == 2880
+    assert 'dtype' not in config and 'torch_dtype' not in config
+    (tmp_path / 'config.json').write_bytes(raw)
+    identity = runner.config_identity(tmp_path)
+    assert identity['declared_dtype'] is None
+    assert identity['declared_dtype_source'] == 'absent'
+    assert identity['config_sha256'] == REAL_CONFIG_SHA256
+    assert identity['configured_layer_count'] == 24
+    assert identity['quantization_config'] == config['quantization_config']
+    assert (tmp_path / 'config.json').read_bytes() == raw
+
+
+@pytest.mark.parametrize('scope', ['config', 'text_config'])
+@pytest.mark.parametrize('name', ['dtype', 'torch_dtype'])
+@pytest.mark.parametrize('value', [None, '', '  ', 16, False, [], {}])
+def test_declared_dtype_malformed_rejects(tmp_path, scope, name, value):
+    config = json.loads(REAL_CONFIG.read_bytes())
+    if scope == 'text_config':
+        config = {'text_config': config, 'quantization_config': config['quantization_config']}
+    record = config if scope == 'config' else config['text_config']
+    record[name] = value
+    # Even an unselected declaration must not silently hide invalid metadata.
+    if name == 'torch_dtype': record['dtype'] = 'bfloat16'
+    (tmp_path / 'config.json').write_text(json.dumps(config))
+    with pytest.raises(ValueError, match=f'{scope}.{name} must be a nonempty dtype string'):
+        runner.config_identity(tmp_path)
+
+
+@pytest.mark.parametrize('scope', ['config', 'text_config'])
+@pytest.mark.parametrize('name', ['dtype', 'torch_dtype'])
+def test_declared_dtype_source(tmp_path, scope, name):
+    config = json.loads(REAL_CONFIG.read_bytes())
+    config[name] = 'float16'
+    if scope == 'text_config':
+        config = {'text_config': config, 'quantization_config': config['quantization_config']}
+    (tmp_path / 'config.json').write_text(json.dumps(config))
+    identity = runner.config_identity(tmp_path)
+    assert identity['declared_dtype'] == 'float16'
+    assert identity['declared_dtype_source'] == f'{scope}.{name}'
+
+
+@pytest.mark.parametrize('mutation', ['none', 'quantization', 'layers', 'embedding_dtype', 'head_dtype'])
+def test_public_missing_dtype_reaches_actual_native_authentication(tmp_path, monkeypatch, mutation):
+    import torch
+    raw = REAL_CONFIG.read_bytes()
+    if mutation == 'quantization':
+        config = json.loads(raw)
+        config['quantization_config']['quant_method'] = 'foreign'
+        raw = json.dumps(config).encode()
+    (tmp_path / 'config.json').write_bytes(raw)
+    parent = full_parent()
+    parent.metadata['original_metadata']['bindings']['model'] = {}
+    backend = parent.metadata['original_metadata']['bindings']['backend']
+    backend.update(embedding_dtype='torch.bfloat16', head_dtype='torch.bfloat16',
+                   attention_implementation='eager')
+    monkeypatch.setattr(runner, 'load_baseline_inputs', lambda p: 'inputs')
+    monkeypatch.setattr(runner, 'load_merged_baseline', lambda *a, **k: parent)
+    monkeypatch.setattr(runner, 'build_localization_pairs', lambda *a: full_table())
+    monkeypatch.setattr(runner, 'bind_runtime', lambda *a: dict(model=dict(
+        metadata_file_sha256={'config.json': sha256_bytes(raw)})))
+    monkeypatch.setattr(runner.torch.cuda, 'is_available', lambda: True)
+    layers = [object() for _ in range(24)]
+    weight = lambda name: SimpleNamespace(device=torch.device('cuda:0'), shape=(201088, 2880),
+        dtype=torch.float16 if mutation == name else torch.bfloat16)
+    hf = SimpleNamespace(eval=lambda: None, config=SimpleNamespace(model_type='gpt_oss',
+        num_hidden_layers=23 if mutation == 'layers' else 24, _attn_implementation='eager'),
+        model=SimpleNamespace(layers=layers), parameters=lambda: [weight('parameter')],
+        get_input_embeddings=lambda: SimpleNamespace(weight=weight('embedding_dtype')),
+        get_output_embeddings=lambda: SimpleNamespace(weight=weight('head_dtype')))
+    model = SimpleNamespace(hf_model=hf, layers=layers, tokenizer=object())
+    calls = []
+    def load(path, **kwargs):
+        calls.append(kwargs)
+        return model, None, 'cuda:0'
+    monkeypatch.setattr(runner, 'load_model', load)
+    monkeypatch.setattr(runner, 'generation_adapter', lambda m: m)
+    monkeypatch.setattr(runner, 'bind_relocated_tokenizer', lambda *a: {})
+    class ActualDtypesAuthenticated(Exception): pass
+    # This sentinel occurs strictly after both actual embedding/head checks.
+    parent.generation_for = lambda k: SimpleNamespace(provenance={
+        'generation_policy': parent.records[k], 'stop_token_ids': []})
+    def compiled(*a): raise ActualDtypesAuthenticated()
+    monkeypatch.setattr(runner, 'compile_smoke_grammar', compiled)
+    args = SimpleNamespace(phase='primary', inputs='inputs', parent='original12', recovery='recovery20',
+        model=tmp_path, output_dir=tmp_path / 'output', shard_index=0, num_shards=1)
+    error = ActualDtypesAuthenticated if mutation == 'none' else ValueError
+    match = {'quantization': 'MXFP4', 'layers': 'depth',
+             'embedding_dtype': 'actual dtype', 'head_dtype': 'actual dtype'}.get(mutation)
+    with pytest.raises(error, match=match): runner.run(args)
+    assert calls == ([] if mutation == 'quantization' else [{'device_map': None, 'dtype': 'native'}])
+    assert not args.output_dir.exists()
+    assert (tmp_path / 'config.json').read_bytes() == raw
+
+
+@pytest.mark.parametrize('quantization', [None, [], 'mxfp4', {'quant_method': 'bf16'}])
+def test_native_quantization_config_required(tmp_path, quantization):
+    with pytest.raises(ValueError, match='native MXFP4'):
+        write_config(tmp_path, quantization_config=quantization)
+
+
+@pytest.mark.parametrize('mutation', ['changed', 'missing', 'extra'])
+def test_all_raw_metadata_hashes_remain_bound(tmp_path, monkeypatch, mutation):
+    names = ('torch', 'transformers', 'xgrammar', 'jlens', 'cuda', 'kernel_policy',
+             'cudnn', 'deterministic_algorithms', 'python')
+    parent = dict(model=dict(metadata_file_sha256={
+        'config.json': REAL_CONFIG_SHA256, 'tokenizer.json': 'tokenizer',
+        'generation_config.json': 'generation'}), backend={n: n for n in names})
+    actual = deepcopy(parent)
+    hashes = actual['model']['metadata_file_sha256']
+    if mutation == 'changed': hashes['tokenizer.json'] = 'foreign'
+    elif mutation == 'missing': del hashes['generation_config.json']
+    else: hashes['added_tokens.json'] = 'extra'
+    monkeypatch.setattr(runner, 'runtime_metadata', lambda p: actual)
+    with pytest.raises(ValueError, match='checkpoint metadata differs from parent'):
+        runner.bind_runtime(tmp_path, parent)
