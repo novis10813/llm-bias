@@ -229,3 +229,11 @@ def test_rows_generation_matches_batch_one_without_hooks(setup):
         generate_structured_rows(s['model'], s['tokenizer'], prompt.expand(2, -1), s['capability'],
                                  policy=s['policy'], rows=2)
     clean(s['root'])
+
+
+def test_no_cache_is_rejected_before_generation(setup):
+    from dataclasses import replace
+    setup['policy'] = replace(setup['policy'], use_cache=False)
+    with pytest.raises(ValueError, match='use_cache'):
+        batched(setup, 5)
+    assert setup['root'].calls == 0

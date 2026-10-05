@@ -536,8 +536,10 @@ class _UnsupportedChannelError(ValueError):
 class DecisionGrammarProcessor(LogitsProcessor):
     """Single-use batch-one matcher; synchronizes every observed continuation ID."""
     def __init__(self, capability: CompiledDecisionGrammar, *, prompt_length: int,
-                 deadline: float | None):
-        _check_capability(capability)
+                 deadline: float | None, _checked: bool = False):
+        # _checked: the caller already ran _check_capability for this call.
+        if not _checked:
+            _check_capability(capability)
         if type(prompt_length) is not int or prompt_length <= 0:
             raise ValueError('prompt_length must be a positive integer')
         self.capability = capability

@@ -27,7 +27,7 @@ Validation binds to one complete discovery run of the same parent, pair table, p
 All cells of one pair share one target prompt, so rows need no padding and share positions. Per pair:
 
 1. Batch-one donor generation with transient capture, then batch-one clean target. Both must equal the parent exactly, as in v2. Otherwise the pair halts.
-2. One `generate` call per chunk of at most `max_rows` rows (default 32, recorded in the descriptor). Row 0 is an unpatched control and rows 1.. are cells. Each row has its own grammar matcher, stop state, deadline and replacement layer/span.
+2. One `generate` call per chunk of at most `max_rows` rows (default 32, recorded in the descriptor). Row 0 is an unpatched control and rows 1.. are cells. Each row has its own grammar matcher, stop state, deadline and replacement layer/span. Matchers fill one shared bitmask in parallel (`xgrammar.BatchGrammarMatcher`) and one kernel applies it to the open rows. Batching requires `use_cache=True`, because without a cache a finished row would keep receiving its replacement while other rows decode.
 3. The control row's full output is compared with the batch-one clean target and stored as `control_match` in `records/batch_<sha>.json`. A mismatch is recorded, never repaired or retried.
 
 **R1:** Batching changes GEMM shapes, so BF16 rows may diverge from batch-one at near-tie tokens. Batched execution is v3's declared protocol, and primary ITT uses all cells. The summary also reports flips restricted to calls whose control matched (`eligible_control_matched`, `flip_control_matched`) and the overall control match rate. Comparing batched cells against stored batch-one v2 cells is a separate proposed check and is not implemented.

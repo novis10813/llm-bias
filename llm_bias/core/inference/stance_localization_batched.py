@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import time
 
 import torch
+import xgrammar as xgr
 from transformers import (
     GenerationConfig as HFGenerationConfig,
     LogitsProcessor,
@@ -35,7 +36,7 @@ from .stance_localization_execution import (
 from .stance_localization_grouped import ReplacementCell
 from .stance_transient_capture import capture_prompt_residual
 from .structured_output import (
-    CompiledDecisionGrammar, NoLegalTokenError, StructuredGenerationResult,
+    CompiledDecisionGrammar, DecisionGrammarProcessor, NoLegalTokenError, StructuredGenerationResult,
     _GenerationTimeout, _UnsupportedChannelError, _bind_model, _check_capability,
     _compact_error, _finalize_result, _hf_controls, _provenance_record,
     _tokenizer_identity, _validate_policy, generate_structured,
@@ -139,6 +140,8 @@ def row_replacements(model, *, tracker, rows):
         def transform(values):
             if not values.is_floating_point():
                 raise ValueError('residual must be floating point')
+            if min(tracker.active_positions) >= tracker.prompt_length:
+                return values  # decode forward: prompt_only replacement selects nothing
             result = None
             for row, positions, mapping, source in entries:
                 mask = tracker.select(values, scope='prompt_only', prompt_positions=positions)
@@ -192,34 +195,54 @@ class _RowState:
         self.ends[row] = time.monotonic()
 
 
-def _close_row(scores, row, pad):
-    scores[row] = -float('inf')
-    scores[row, pad] = 0.0
+def _observe_open(processors, state, input_ids):
+    """One device-to-host copy per step; each open row checks its own continuation."""
+    host = input_ids.cpu()
+    for row, processor in enumerate(processors):
+        if not state.closed(row):
+            try:
+                processor.observe(host[row:row + 1])
+                processor.check_timeout()
+            except Exception as exc:
+                state.fail(row, exc)
 
 
 class _RowsProcessor(LogitsProcessor):
-    """Batch-one grammar processor and finite guard, applied to each open row."""
+    """Batch-one grammar masking and finite guard for every open row in one pass.
 
-    def __init__(self, processors, state, pad):
-        self.processors, self.state, self.pad = processors, state, pad
+    Matchers fill one shared CPU bitmask in parallel and a single kernel applies
+    it to the open rows. Closed rows receive only the pad token.
+    """
+
+    def __init__(self, capability, processors, state, pad, device):
+        self.capability, self.processors, self.state, self.pad = capability, processors, state, pad
+        self.batch = xgr.BatchGrammarMatcher()
+        self.bitmask = xgr.allocate_token_bitmask(len(processors), capability.head_vocab_size)
+        self.blocked = torch.tensor(capability.blocked_token_ids, dtype=torch.long, device=device)
 
     def __call__(self, input_ids, scores):
-        if (scores.ndim != 2 or scores.shape[0] != len(self.processors)
-                or input_ids.shape[0] != len(self.processors)):
-            raise ValueError('logits rows do not match the declared row count')
-        for row, processor in enumerate(self.processors):
-            if self.state.closed(row):
-                _close_row(scores, row, self.pad)
-                continue
-            try:
-                masked = processor(input_ids[row:row + 1], scores[row:row + 1].clone())
-                finite = torch.isfinite(masked)
-                if not finite.any():
-                    raise NoLegalTokenError('no finite legal token after grammar masking')
-                scores[row:row + 1] = masked.masked_fill(~finite, -float('inf'))
-            except Exception as exc:
-                self.state.fail(row, exc)
-                _close_row(scores, row, self.pad)
+        rows = len(self.processors)
+        if scores.shape != (rows, self.capability.head_vocab_size) or input_ids.shape[0] != rows:
+            raise ValueError('logits rows or head do not match the declared rows and vocabulary')
+        _observe_open(self.processors, self.state, input_ids)
+        active = [row for row in range(rows) if not self.state.closed(row)]
+        if active:
+            self.batch.batch_fill_next_token_bitmask(
+                [self.processors[row].matcher for row in active], self.bitmask, indices=active)
+            xgr.apply_token_bitmask_inplace(
+                scores, self.bitmask.to(scores.device), vocab_size=self.capability.head_vocab_size,
+                indices=active, backend='cpu' if scores.device.type == 'cpu' else 'auto')
+            if self.blocked.numel():
+                scores[:, self.blocked] = -float('inf')
+            finite = torch.isfinite(scores)
+            for row in (~finite.any(dim=-1)).nonzero().flatten().tolist():
+                if row in active:
+                    self.state.fail(row, NoLegalTokenError('no finite legal token after grammar masking'))
+            scores = scores.masked_fill(~finite, -float('inf'))
+        closed = [row for row in range(rows) if self.state.closed(row)]
+        if closed:
+            scores[closed] = -float('inf')
+            scores[closed, self.pad] = 0.0
         return scores
 
 
@@ -230,18 +253,12 @@ class _RowsStop(StoppingCriteria):
         self.processors, self.state, self.prompt_length = processors, state, prompt_length
 
     def __call__(self, input_ids, scores, **kwargs):
-        done = []
+        _observe_open(self.processors, self.state, input_ids)
         for row, processor in enumerate(self.processors):
-            if not self.state.closed(row):
-                try:
-                    processor.observe(input_ids[row:row + 1])
-                    processor.check_timeout()
-                    if processor.matcher.is_terminated():
-                        self.state.finish(row, input_ids.shape[1] - self.prompt_length)
-                except Exception as exc:
-                    self.state.fail(row, exc)
-            done.append(self.state.closed(row))
-        return torch.tensor(done, dtype=torch.bool, device=input_ids.device)
+            if not self.state.closed(row) and processor.matcher.is_terminated():
+                self.state.finish(row, input_ids.shape[1] - self.prompt_length)
+        return torch.tensor([self.state.closed(row) for row in range(len(self.processors))],
+                            dtype=torch.bool, device=input_ids.device)
 
 
 def generate_structured_rows(model, tokenizer, prompt_ids, capability, *, policy, rows,
@@ -273,7 +290,8 @@ def generate_structured_rows(model, tokenizer, prompt_ids, capability, *, policy
     provenance_bytes = canonical_json_bytes(
         _provenance_record(capability, binding, policy, controls, prompt_ids.device.type))
     length = prompt_ids.shape[1]
-    processors = [capability.new_processor(prompt_length=length, deadline=start + policy.timeout_seconds)
+    processors = [DecisionGrammarProcessor(capability, prompt_length=length,
+                                           deadline=start + policy.timeout_seconds, _checked=True)
                   for _ in range(rows)]
     state = _RowState()
     batch = prompt_ids.expand(rows, -1).contiguous()
@@ -283,7 +301,8 @@ def generate_structured_rows(model, tokenizer, prompt_ids, capability, *, policy
             output = model.hf_model.generate(
                 batch, attention_mask=torch.ones_like(batch),
                 generation_config=HFGenerationConfig(**controls), **controls,
-                logits_processor=LogitsProcessorList([_RowsProcessor(processors, state, policy.pad_token_id)]),
+                logits_processor=LogitsProcessorList([_RowsProcessor(
+                    capability, processors, state, policy.pad_token_id, prompt_ids.device)]),
                 stopping_criteria=StoppingCriteriaList([_RowsStop(processors, state, length)]),
             )
         sequences = getattr(output, 'sequences', output)
@@ -382,6 +401,10 @@ def execute_batched_prompt_replacement(model, tokenizer, donor_prompt, target_pr
     _validate_policy(policy, capability.head_vocab_size)
     if policy.channel_policy != 'plain_json':
         raise ValueError('policy does not match the plain-JSON route')
+    if policy.use_cache is not True:
+        # Without a cache every step recomputes the prompt, so a closed row would
+        # keep receiving its replacement while other rows decode.
+        raise ValueError('row-batched replacement requires use_cache=True')
     _bind_prompt_records(donor_prompt, target_prompt, capability)
     weight = _input_embedding_weight(model)
     upper = min(weight.shape[0], capability.head_vocab_size)
