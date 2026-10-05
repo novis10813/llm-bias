@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -104,6 +105,33 @@ def run(args):
         raise ValueError('only fresh primary execution, no prior migration')
     if args.model_slug == 'gpt-oss-20b':
         raise NotImplementedError('GPT candidate route unsupported: strict merged Harmony replay remains blocked')
+    rt = load_runtime(args)
+    panel = build_localization_candidate_panel(model_slug=args.model_slug, actual_layer_count=rt.count)
+    shard_panel(panel.layers, args.shard_index, args.num_shards)
+    desc = descriptor(rt.table, panel, args.shard_index, args.num_shards, rt.bindings_record)
+    model, policy, capability, prompts, parent = rt.model, rt.policy, rt.capability, rt.prompts, rt.parent
+    embedding = rt.embedding
+
+    def gate(key, layer, span, config_hash):
+        prompt = prompts[key]
+        record = getattr(prompt, span + '_span')
+        return execute_prompt_noop(model, model.tokenizer,
+            torch.tensor([prompt.inference_token_ids], device=embedding.device, dtype=torch.long),
+            capability, policy=policy, layer=layer, hook_site='post',
+            zero_vector=torch.ones(embedding.shape[1], device=embedding.device, dtype=embedding.dtype),
+            prompt_positions=list(range(record.token_start, record.token_end)), config_hash=config_hash)
+
+    def group(pair, coordinates):
+        return execute_grouped_prompt_replacement(model, model.tokenizer, prompts[pair.donor_key],
+            prompts[pair.target_key], capability, policy=policy, cells=coordinates,
+            expected_donor=parent.generation_for(pair.donor_key),
+            expected_target=parent.generation_for(pair.target_key))
+
+    return execute_run(args, desc, rt.table, prompts, parent, gate, group)
+
+
+def load_runtime(args):
+    """Validated parent, authenticated CUDA BF16 model, grammar and bound prompts."""
     inputs = load_baseline_inputs(args.inputs)
     parent = load_completed_baseline(args.parent, inputs=inputs)
     table = build_localization_pairs(inputs, parent)
@@ -122,8 +150,6 @@ def run(args):
     model = generation_adapter(loaded)
     model.hf_model.eval()
     count = authenticate_layers(model, identity)
-    panel = build_localization_candidate_panel(model_slug=args.model_slug, actual_layer_count=count)
-    shard_panel(panel.layers, args.shard_index, args.num_shards)
     head = model.hf_model.get_output_embeddings().weight
     embedding = model.hf_model.get_input_embeddings().weight
     if any(torch.device(d).type != 'cuda' for d in (device, head.device, embedding.device)):
@@ -158,27 +184,12 @@ def run(args):
         physical_gpus=subprocess.check_output(['nvidia-smi', '--query-gpu=index,uuid,driver_version',
             '--format=csv,noheader'], text=True).strip(),
         cuda_visible_devices=os.environ.get('CUDA_VISIBLE_DEVICES'))
-    desc = descriptor(table, panel, args.shard_index, args.num_shards,
-        dict(runtime=metadata, template=bindings['template'], generation_policy=bindings['generation_policy'],
-             grammar=reference.provenance, model_layer_authentication=identity,
-             issuer_by_ticker=inputs.issuer_by_ticker))
-
-    def gate(key, layer, span, config_hash):
-        prompt = prompts[key]
-        record = getattr(prompt, span + '_span')
-        return execute_prompt_noop(model, model.tokenizer,
-            torch.tensor([prompt.inference_token_ids], device=embedding.device, dtype=torch.long),
-            capability, policy=policy, layer=layer, hook_site='post',
-            zero_vector=torch.ones(embedding.shape[1], device=embedding.device, dtype=embedding.dtype),
-            prompt_positions=list(range(record.token_start, record.token_end)), config_hash=config_hash)
-
-    def group(pair, coordinates):
-        return execute_grouped_prompt_replacement(model, model.tokenizer, prompts[pair.donor_key],
-            prompts[pair.target_key], capability, policy=policy, cells=coordinates,
-            expected_donor=parent.generation_for(pair.donor_key),
-            expected_target=parent.generation_for(pair.target_key))
-
-    return execute_run(args, desc, table, prompts, parent, gate, group)
+    bindings_record = dict(runtime=metadata, template=bindings['template'],
+        generation_policy=bindings['generation_policy'], grammar=reference.provenance,
+        model_layer_authentication=identity, issuer_by_ticker=inputs.issuer_by_ticker)
+    return SimpleNamespace(inputs=inputs, parent=parent, table=table, policy=policy, model=model,
+        count=count, embedding=embedding, capability=capability, prompts=prompts,
+        bindings_record=bindings_record)
 
 
 MODEL_COUNTS = {'glm4-9b-0414': 40, 'qwen3.5-4b': 32, 'gemma4-12b-it': 48, 'gpt-oss-20b': 24}

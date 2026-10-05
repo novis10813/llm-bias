@@ -696,24 +696,8 @@ def generate_structured(
                 raise ValueError('transforms must map valid integer layers to callable transforms')
     start = time.monotonic()
     controls = _hf_controls(policy, capability.stop_token_ids)
-    provenance = {
-        'backend': 'xgrammar', 'backend_version': capability.backend_version,
-        'model_binding': binding,
-        'byte_policy': capability.byte_policy,
-        'schema_sha256': capability.schema_sha256,
-        'schema_bytes_sha256': capability.schema_bytes_sha256,
-        'tokenizer_sha256': capability.tokenizer_sha256,
-        'tokenizer_info_sha256': capability.tokenizer_info_sha256,
-        'head_vocab_size': capability.head_vocab_size,
-        'stop_token_ids': list(capability.stop_token_ids),
-        'compiler_policy': dict(_COMPILER_POLICY),
-        'grammar_correction': 'xgrammar-0.2.8-minLength-json-escapes-v1',
-        'grammar_sha256': capability.grammar_sha256,
-        'mask_backend': 'cpu' if prompt_ids.device.type == 'cpu' else 'auto',
-        'generation_policy': asdict(policy), 'hf_controls': controls,
-        'generation_policy_sha256': sha256_json({'policy': asdict(policy), 'hf_controls': controls}),
-    }
-    provenance_bytes = canonical_json_bytes(provenance)
+    provenance_bytes = canonical_json_bytes(
+        _provenance_record(capability, binding, policy, controls, prompt_ids.device.type))
     failure: FailureType | None = None
     finish: FinishReason
     error = None
@@ -760,6 +744,39 @@ def generate_structured(
             failure, finish, error = 'exception', 'exception', _compact_error(exc)
         if not tokens:
             tokens = tuple(processor.generated_token_ids)
+    return _finalize_result(tokenizer, capability, decoded_vocab, policy, tokens, failure,
+                            finish, error, provenance_bytes, start)
+
+
+def _provenance_record(capability: CompiledDecisionGrammar, binding: dict[str, Any],
+                       policy: StructuredGenerationPolicy, controls: dict[str, Any],
+                       device_type: str) -> dict[str, Any]:
+    """Generation identity shared by batch-one and same-prompt row decoding."""
+    return {
+        'backend': 'xgrammar', 'backend_version': capability.backend_version,
+        'model_binding': binding,
+        'byte_policy': capability.byte_policy,
+        'schema_sha256': capability.schema_sha256,
+        'schema_bytes_sha256': capability.schema_bytes_sha256,
+        'tokenizer_sha256': capability.tokenizer_sha256,
+        'tokenizer_info_sha256': capability.tokenizer_info_sha256,
+        'head_vocab_size': capability.head_vocab_size,
+        'stop_token_ids': list(capability.stop_token_ids),
+        'compiler_policy': dict(_COMPILER_POLICY),
+        'grammar_correction': 'xgrammar-0.2.8-minLength-json-escapes-v1',
+        'grammar_sha256': capability.grammar_sha256,
+        'mask_backend': 'cpu' if device_type == 'cpu' else 'auto',
+        'generation_policy': asdict(policy), 'hf_controls': controls,
+        'generation_policy_sha256': sha256_json({'policy': asdict(policy), 'hf_controls': controls}),
+    }
+
+
+def _finalize_result(tokenizer: Any, capability: CompiledDecisionGrammar,
+                     decoded_vocab: tuple[bytes, ...], policy: StructuredGenerationPolicy,
+                     tokens: tuple[int, ...], failure: FailureType | None,
+                     finish: FinishReason, error: str | None, provenance_bytes: bytes,
+                     start: float, end: float | None = None) -> StructuredGenerationResult:
+    """Decode, strictly validate and classify one observed continuation."""
     payload_ids = list(tokens)
     while payload_ids and payload_ids[-1] in capability.stop_token_ids:
         payload_ids.pop()
@@ -816,7 +833,7 @@ def generate_structured(
         parsed.decision if failure is None else None,
         parsed.reason if failure is None else None,
         parsed.decision_complete, parsed.schema_complete, parsed.reason_valid,
-        finish, failure, time.monotonic() - start, provenance_bytes, error, decode_error,
+        finish, failure, (time.monotonic() if end is None else end) - start, provenance_bytes, error, decode_error,
     )
 
 
