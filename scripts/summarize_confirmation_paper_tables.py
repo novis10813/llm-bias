@@ -173,7 +173,8 @@ def fmt(c: dict[str, Any], pending: str) -> str:
         return pending
     marks = ("\\dagger" if c.get("operator_drift") else "") + (
         "\\ddagger" if c.get("parse_rate") is not None and c["parse_rate"] < LOW_PARSE else "")
-    return f"{c['value']:.2f}" + (f"$^{{{marks}}}$" if marks else "")
+    value = 0.0 if round(c["value"], 2) == 0 else c["value"]      # no "-0.00"
+    return f"{value:.2f}" + (f"$^{{{marks}}}$" if marks else "")
 
 
 def dose_grid_tex(models: dict[str, Any]) -> str:
