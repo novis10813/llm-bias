@@ -37,8 +37,9 @@ SUPPLEMENT: dict[str, dict[str, tuple[float, ...]]] = {
 }
 ARMS = ("dim", "ops", "evidence", "anon", "random")
 SOURCE_ARMS = ("ranking", "alpha0", "cal")
-# Fields allowed to differ from the source base metadata; everything else must be identical.
-ALLOWED_DRIFT = frozenset({"run_id", "phase", "targets", "model"})
+# Fields allowed to differ from the source base metadata; everything else must be identical. "model" and
+# "tokenizer" are checkpoint paths; config, tokenizer config, template and prompt hashes stay bound.
+ALLOWED_DRIFT = frozenset({"run_id", "phase", "targets", "model", "tokenizer"})
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
