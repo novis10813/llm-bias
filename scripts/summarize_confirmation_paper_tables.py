@@ -2,7 +2,9 @@
 
 Every cell is recomputed from stored generated rows with the confirmation-v1 ITT definitions
 (``summary.flip_stats``); the source run and the supplement run are only read. A cell whose rows are not
-all present yet is reported as pending; a direction without source-class companies is "---".
+all present yet is reported as pending; a direction without source-class companies is "---". Each cell
+carries a 95% percentile bootstrap CI over companies (``summary.bootstrap_ci``: 2000 draws, fixed seed);
+Rand and Delta resample the same companies jointly across DIM and the five random directions.
 """
 from __future__ import annotations
 
@@ -10,7 +12,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Sequence
+from statistics import fmean
+from typing import Any, Callable, Sequence
 
 from llm_bias.core.steering import summary as S
 
@@ -83,6 +86,18 @@ def cell(value: float | None, status: str | None = None, run: str | None = None,
     return {"value": value, "status": status or ("ok" if value is not None else PENDING), "run": run, **extra}
 
 
+def with_ci(c: dict[str, Any], units: Sequence[Any], statistic: Callable[[Sequence[Any]], float | None]
+            ) -> dict[str, Any]:
+    ci = S.bootstrap_ci(list(units), statistic)
+    if ci["point"] is None or abs(ci["point"] - c["value"]) > 1e-12:
+        raise ValueError("bootstrap point estimate differs from the reported cell value")
+    return {**c, "lower": ci["lower"], "upper": ci["upper"]}
+
+
+def mean_or_none(xs: Sequence[float]) -> float | None:
+    return fmean(xs) if xs else None
+
+
 def on_flip(model: Model, arm: str, op: str, alpha: float, condition: str = "balanced") -> dict[str, Any]:
     rows, run = model.rows(arm, op, alpha)
     if rows is None:
@@ -90,8 +105,11 @@ def on_flip(model: Model, arm: str, op: str, alpha: float, condition: str = "bal
     stats = S.flip_stats(model.baseline(condition, list(rows)), rows, alpha)
     if not stats["on_class_n"]:
         return cell(None, UNTESTABLE, run)
-    return cell(stats["on_flip_itt"], run=run, k=stats["on_flip"], n=stats["on_class_n"],
-                parse_rate=stats["parse_rate"])
+    source, goal = S.on_target(alpha)
+    base = model.baseline(condition, list(rows))
+    units = [float(rows[k]["decision"] == goal) for k in sorted(rows) if base[k]["decision"] == source]
+    return with_ci(cell(stats["on_flip_itt"], run=run, k=stats["on_flip"], n=stats["on_class_n"],
+                        parse_rate=stats["parse_rate"]), units, mean_or_none)
 
 
 def readout_disagreement(model: Model, alpha: float) -> dict[str, Any]:
@@ -99,20 +117,64 @@ def readout_disagreement(model: Model, alpha: float) -> dict[str, Any]:
     if rows is None:
         return cell(None, run=run)
     parsed = [r for r in rows.values() if r["decision"] in ("buy", "sell")]
-    disagree = sum((r["margin"] > 0) != (r["decision"] == "buy") for r in parsed)
-    return cell(disagree / len(parsed) if parsed else None, run=run, k=disagree, n=len(parsed))
+    units = [float((r["margin"] > 0) != (r["decision"] == "buy")) for r in parsed]
+    if not units:
+        return cell(None, UNTESTABLE, run)
+    return with_ci(cell(fmean(units), run=run, k=int(sum(units)), n=len(units)), units, mean_or_none)
 
 
-def random_max(model: Model, alpha: float) -> dict[str, Any]:
-    per_seed, runs = {}, set()
+def company_units(model: Model, alpha: float) -> tuple[list[dict[str, Any]] | None, set[str], str | None]:
+    """Per-company DIM and random-direction outcomes at ``alpha`` for joint resampling."""
+    source, goal = S.on_target(alpha)
+    dim, dim_run = model.rows("dim", "dim", alpha)
+    seeds, runs = {}, set()
     for op in RANDOM:
         rows, run = model.rows("random", op, alpha)
         if rows is None:
-            return cell(None, run=run)
-        runs.add(run)
-        per_seed[op] = S.flip_stats(model.baseline("balanced", list(rows)), rows, alpha)["any_flip_itt"]
+            return None, runs, run
+        seeds[op], _ = rows, runs.add(run)
+    base = model.baseline("balanced", list(seeds[RANDOM[0]]))
+    units = []
+    for k in sorted(base):
+        b = base[k]["decision"]
+        unit = {"source": b == source, "eligible": b in (source, goal),
+                "seeds": [(b == source and seeds[op][k]["decision"] == goal) or
+                          (b == goal and seeds[op][k]["decision"] == source) for op in RANDOM]}
+        if dim is not None:
+            unit["dim_flip"] = dim[k]["decision"] == goal
+        units.append(unit)
+    return units, runs, dim_run
+
+
+def rand_stat(units: Sequence[dict[str, Any]]) -> float | None:
+    eligible = sum(u["eligible"] for u in units)
+    if not eligible:
+        return None
+    return max(sum(u["seeds"][i] for u in units) / eligible for i in range(len(RANDOM)))
+
+
+def delta_stat(units: Sequence[dict[str, Any]]) -> float | None:
+    sources = [u["dim_flip"] for u in units if u["source"]]
+    rand = rand_stat(units)
+    return None if not sources or rand is None else fmean(sources) - rand
+
+
+def random_max(model: Model, alpha: float) -> dict[str, Any]:
+    units, runs, run = company_units(model, alpha)
+    if units is None:
+        return cell(None, run=run)
+    per_seed = {op: S.flip_stats(model.baseline("balanced", list(model.rows("random", op, alpha)[0])),
+                                 model.rows("random", op, alpha)[0], alpha)["any_flip_itt"] for op in RANDOM}
     drift = model.drift("random") if "supplement" in runs else []
-    return cell(max(per_seed.values()), run="/".join(sorted(runs)), per_seed=per_seed, operator_drift=drift)
+    return with_ci(cell(max(per_seed.values()), run="/".join(sorted(runs)), per_seed=per_seed, operator_drift=drift),
+                   units, rand_stat)
+
+
+def delta(model: Model, alpha: float, dim: dict[str, Any], rand: dict[str, Any]) -> dict[str, Any]:
+    if dim["value"] is None or rand["value"] is None:
+        return cell(None, UNTESTABLE if UNTESTABLE in (dim["status"], rand["status"]) else None)
+    units, _, _ = company_units(model, alpha)
+    return with_ci(cell(dim["value"] - rand["value"]), units, delta_stat)
 
 
 def never_flip(model: Model, alpha: float, condition: str) -> dict[str, Any]:
@@ -131,8 +193,8 @@ def never_flip(model: Model, alpha: float, condition: str) -> dict[str, Any]:
     sources = [k for k in flipped if base[k]["decision"] == source]
     if not sources:
         return cell(None, UNTESTABLE)
-    never = sum(not flipped[k] for k in sources)
-    return cell(never / len(sources), k=never, n=len(sources), doses=tested)
+    units = [float(not flipped[k]) for k in sorted(sources)]
+    return with_ci(cell(fmean(units), k=int(sum(units)), n=len(units), doses=tested), units, mean_or_none)
 
 
 def build(model: Model) -> dict[str, Any]:
@@ -150,9 +212,9 @@ def build(model: Model) -> dict[str, Any]:
         for d in DOSES:
             alpha = sign * d
             dim, rand = on_flip(model, "dim", "dim", alpha), random_max(model, alpha)
-            delta = dim["value"] - rand["value"] if dim["value"] is not None and rand["value"] is not None else None
             rows[f"{alpha:+g}"] = {
-                "dim": dim, "ro": readout_disagreement(model, alpha), "rand": rand, "delta": cell(delta),
+                "dim": dim, "ro": readout_disagreement(model, alpha), "rand": rand,
+                "delta": delta(model, alpha, dim, rand),
                 "still": on_flip(model, "evidence", f"dim_{adverse}", alpha, adverse),
                 "never": never_flip(model, alpha, adverse),
                 "ae": on_flip(model, "anon", "dim_balanced", alpha)}
@@ -173,12 +235,25 @@ def fmt(c: dict[str, Any], pending: str) -> str:
         return pending
     marks = ("\\dagger" if c.get("operator_drift") else "") + (
         "\\ddagger" if c.get("parse_rate") is not None and c["parse_rate"] < LOW_PARSE else "")
-    value = 0.0 if round(c["value"], 2) == 0 else c["value"]      # no "-0.00"
-    return f"{value:.2f}" + (f"$^{{{marks}}}$" if marks else "")
+    text = num(c["value"]) + (f"$^{{{marks}}}$" if marks else "")
+    if c.get("lower") is None:
+        return text
+    return f"\\cival{{{text}}}{{{num(c['lower'])}}}{{{num(c['upper'])}}}"
+
+
+def num(value: float) -> str:
+    return f"{0.0 if round(value, 2) == 0 else value:.2f}"      # no "-0.00"
+
+
+CI_MACRO = ("% \\cival{value}{lower}{upper}: value with its 95% bootstrap CI stacked below. Inline instead:\n"
+            "% \\renewcommand{\\cival}[3]{#1{\\tiny\\,[#2,\\,#3]}}; hide CIs: \\renewcommand{\\cival}[3]{#1}\n"
+            "\\providecommand{\\cival}[3]{\\begin{tabular}[c]{@{}c@{}}#1\\\\[-3pt]{\\tiny[#2,\\,#3]}\\end{tabular}}\n")
+CI_CAPTION = (r" Brackets: 95\% percentile bootstrap CI over companies (2{,}000 resamples); \emph{Rand} and "
+              r"$\Delta$ resample companies jointly with DIM.")
 
 
 def dose_grid_tex(models: dict[str, Any]) -> str:
-    lines = [r"\begin{table*}[!t]", r"\centering", r"\small", r"\setlength{\tabcolsep}{3.5pt}",
+    lines = [CI_MACRO + r"\begin{table*}[!t]", r"\centering", r"\small", r"\setlength{\tabcolsep}{3.5pt}",
              r"\begin{tabular}{lll ccccc c ccccc}", r"\toprule",
              r" & & & \multicolumn{11}{c}{\textbf{Dose Strength ($\alpha$) Flip Rates}} \\", r"\cmidrule(lr){4-14}",
              r"\textbf{Direction} & \textbf{Operator} & & " + " & ".join(
@@ -204,13 +279,14 @@ def dose_grid_tex(models: dict[str, Any]) -> str:
               r"unsteered Buy/Sell counts at $\alpha=0$ are listed beneath each model header. Negative doses "
               r"($\alpha < 0$) target Buy $\to$ Sell flips; positive doses ($\alpha > 0$) target Sell $\to$ Buy "
               r"flips. ``---'' indicates untestable directions or inapplicable dose signs. "
-              r"$^\ddagger$: fewer than 90\% of steered outputs parse; unparsed outputs count as not flipped.}",
+              r"$^\ddagger$: fewer than 90\% of steered outputs parse; unparsed outputs count as not flipped."
+              + CI_CAPTION + "}",
               r"\label{tab:dose_grid_flip_rates}", r"\end{table*}"]
     return "\n".join(lines) + "\n"
 
 
 def validation_tex(models: dict[str, Any]) -> str:
-    lines = [r"\begin{table*}[!t]", r"\centering", r"\small", r"\setlength{\tabcolsep}{5pt}",
+    lines = [CI_MACRO + r"\begin{table*}[!t]", r"\centering", r"\small", r"\setlength{\tabcolsep}{5pt}",
              r"\begin{tabular}{l r c c cc cc c}", r"\toprule",
              r" & & & \textbf{RO} & \multicolumn{2}{c}{\textbf{RB}} & \multicolumn{2}{c}{\textbf{CE}} & \textbf{AE} \\",
              r"\cmidrule(lr){4-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8} \cmidrule(lr){9-9}",
@@ -239,7 +315,8 @@ def validation_tex(models: dict[str, Any]) -> str:
               r"rate when the prompt's evidence opposes the target decision (\emph{Still}), and share of source-class "
               r"companies with no flip at any tested dose of that sign up to $|\alpha|$ (\emph{Never}). \textbf{AE} "
               r"(Anonymized Entity): DIM flip rate on the ten anonymous identities. $^\dagger$: random directions "
-              r"rescaled to a DIM direction re-estimated on different GPU hardware (supplement run).}",
+              r"rescaled to a DIM direction re-estimated on different GPU hardware (supplement run)."
+              + CI_CAPTION + "}",
               r"\label{tab:validation}", r"\end{table*}"]
     return "\n".join(lines) + "\n"
 
