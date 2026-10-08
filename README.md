@@ -11,6 +11,7 @@ describes the branch, task and file rules.
 | Task | Report |
 |---|---|
 | T01 layer localization | [`tasks/T01-layer-localization/`](tasks/T01-layer-localization/) |
+| T02 steering operators | [`tasks/T02-steering-operators/`](tasks/T02-steering-operators/) |
 
 [`docs/concept-cone-steering/paper-vs-experiments.md`](docs/concept-cone-steering/paper-vs-experiments.md)
 lists where the paper draft differs from the experiments.

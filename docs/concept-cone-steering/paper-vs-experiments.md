@@ -67,7 +67,7 @@
 ### P10 C8（cone 較平滑）有預先登記的正式檢定，結果不支持
 
 - **論文：**§4.2「our dose grid is too coarse to compare transition widths formally」。
-- **實驗：**operator-comparison-v2（`docs/concept-cone-steering/operator-comparison-v2/proposal.md`） 預先登記了 C8 判準（monotone-step fraction、反轉次數等），已在四模型執行，四模型都未通過（claim-to-evidence（`docs/concept-cone-steering/claim-to-evidence.md`） C8）。論文的結論方向一致，但寫成「無法正式比較」與事實不符。
+- **實驗：**operator-comparison-v2（`docs/concept-cone-steering/operator-comparison-v2/proposal.md`） 預先登記了 C8 判準（monotone-step fraction、反轉次數等），以固定前綴 margin 的逐步變化計算，已在四模型執行。整體判準四模型都未通過，只有 Gemma 與 GPT-OSS 的 sell→buy 單一方向通過（claim-to-evidence（`docs/concept-cone-steering/claim-to-evidence.md`） C8）。論文的結論方向一致，但寫成「無法正式比較」與事實不符。
 
 ### P11 Steer suffix 的 token ids 跨 tokenizer 不相同
 
