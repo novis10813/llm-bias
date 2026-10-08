@@ -153,3 +153,10 @@ def test_real_data_gives_twenty_prompts_per_company():
     for c in data["companies"]:
         splits[c["split"]] = splits.get(c["split"], 0) + 1
     assert splits == {"screen": 171, "A": 85, "B": 85, "test": 86}
+
+
+def test_decision_prefix_matches_schema_layout():
+    rendered = json.dumps({"decision": "buy", "reason": "x"}, indent=2)
+    assert rendered.startswith(dial.DECISION_PREFIX)
+    assert dial.parse_output(rendered) == {"parsed": True, "decision": "buy"}
+    assert list(dial.DECISION_SCHEMA["properties"]) == ["decision", "reason"]

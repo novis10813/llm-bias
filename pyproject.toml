@@ -18,6 +18,12 @@ dependencies = [
     "kernels>=0.15.2,<0.16.0",
 ]
 
+[project.optional-dependencies]
+dial = [
+    "flash-linear-attention>=0.5.2",
+    "xgrammar>=0.2.8",
+]
+
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"

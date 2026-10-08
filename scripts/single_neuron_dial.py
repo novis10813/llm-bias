@@ -9,7 +9,8 @@ Stages (each writes one part directory under ``artifacts/<slug>/concept-cone-ste
 - ``pool``      re-estimate the selected neuron's coefficients on A ∪ B
 - ``test``      held-out test split: Δ = 0, the coarse grid, the pooled coefficients and same-layer random neurons
 
-The intervention adds Δ to one coordinate of the down-projection input at every token position, prompt and
+Generation is greedy and constrained to ``DECISION_SCHEMA`` (xgrammar); an output that does not close the JSON
+object within the token budget is unparsed. The intervention adds Δ to one coordinate of the down-projection input at every token position, prompt and
 generated (``llm_bias.core.inference.mlp_addition``). Model weights and prompts are unchanged.
 """
 from __future__ import annotations
@@ -29,7 +30,12 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 DATA = "data/baseline/investment-dial/exploratory-v1.json"
-DECISION_PREFIX = '{"decision": "'
+# Every generation is constrained to this schema, rendered with a two-space indent (the model's own unconstrained
+# layout). The gradient objective is read where the decision value starts in that layout.
+DECISION_SCHEMA = {"type": "object", "properties": {"decision": {"type": "string", "enum": ["buy", "sell"]},
+                                                    "reason": {"type": "string"}},
+                   "required": ["decision", "reason"], "additionalProperties": False}
+DECISION_PREFIX = '{\n  "decision": "'
 TARGETS = (-0.3, 0.0, 0.3)
 COARSE_GRID = (-32.0, -16.0, -8.0, -4.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)
 REFINE_ROUNDS = 2
@@ -349,10 +355,19 @@ class Runner:
         self.hf.requires_grad_(False)
         self.tokenizer.padding_side = "left"
         self.pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.tokenizer.eos_token_id
+        import xgrammar as xgr
+
+        vocab = self.hf.get_output_embeddings().weight.shape[0]
+        stops = self.hf.generation_config.eos_token_id
+        stops = list(stops) if isinstance(stops, (list, tuple)) else [stops]
+        info = xgr.TokenizerInfo.from_huggingface(self.tokenizer, vocab_size=vocab, stop_token_ids=stops)
+        self.grammar = xgr.GrammarCompiler(info).compile_json_schema(
+            json.dumps(DECISION_SCHEMA), any_whitespace=False, indent=2)
         cfg = Path(args.model) / "config.json"
         self.identity = {"model": args.model, "config_sha256": file_sha256(cfg),
                          "chat_template_sha256": hashlib.sha256((self.tokenizer.chat_template or "").encode()).hexdigest(),
                          "torch": torch.__version__, "transformers": transformers.__version__,
+                         "xgrammar": _version("xgrammar"), "flash_linear_attention": _version("flash-linear-attention"),
                          "dtype": str(next(self.hf.parameters()).dtype),
                          "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
                          "n_layers": len(self.model.layers)}
@@ -367,7 +382,9 @@ class Runner:
 
     def generate(self, trials: Sequence[Mapping[str, Any]], ids: Sequence[Sequence[int]],
                  coordinate: tuple[int, int] | None, delta: float) -> list[dict[str, Any]]:
-        """Greedy generation in fixed batches (trial order, left padding) under one intervention."""
+        """Greedy schema-constrained generation in fixed batches (trial order, left padding) under one intervention."""
+        import xgrammar as xgr
+
         from llm_bias.core.inference.mlp_addition import mlp_addition
 
         torch = self.torch
@@ -382,7 +399,8 @@ class Runner:
                 input_ids = torch.tensor([[self.pad_id] * (width - len(x)) + list(x) for x in batch], device=self.device)
                 mask = torch.tensor([[0] * (width - len(x)) + [1] * len(x) for x in batch], device=self.device)
                 seqs = self.hf.generate(input_ids=input_ids, attention_mask=mask, do_sample=False,
-                                        max_new_tokens=self.args.max_new_tokens, pad_token_id=self.pad_id)
+                                        max_new_tokens=self.args.max_new_tokens, pad_token_id=self.pad_id,
+                                        logits_processor=[xgr.contrib.hf.LogitsProcessor(self.grammar)])
                 for trial, seq in zip(trials[start:start + self.args.batch_size], seqs[:, width:].tolist()):
                     stop = next((i for i, t in enumerate(seq) if t in eos), None)
                     gen = seq if stop is None else seq[:stop]
@@ -420,6 +438,14 @@ class Runner:
 # stages
 
 
+def _version(package: str) -> str | None:
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return None
+
+
 def load_data(path: str) -> dict:
     return json.loads(Path(path).read_text())
 
@@ -433,6 +459,7 @@ def start(args: argparse.Namespace, stage: str, extra: Mapping[str, Any]) -> tup
             "argv": sys.argv, "data": args.data, "data_sha256": file_sha256(args.data),
             "targets": list(TARGETS), "coarse_grid": list(COARSE_GRID), "refine_rounds": REFINE_ROUNDS,
             "min_rate": MIN_RATE, "draws": DRAWS, "seed": SEED, "decision_prefix": DECISION_PREFIX,
+            "decision_schema": DECISION_SCHEMA, "schema_render": {"any_whitespace": False, "indent": 2},
             "batch_size": getattr(args, "batch_size", None), "max_new_tokens": getattr(args, "max_new_tokens", None),
             "started": time.strftime("%Y-%m-%dT%H:%M:%S%z")} | dict(extra)
     return out, meta
