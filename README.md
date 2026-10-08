@@ -1,15 +1,19 @@
 # Concept-cone steering
 
 Residual-stream steering experiments that test whether directions built from
-company-level buy/sell preference differences (DIM and multi-dimensional concept
-cones) flip a decoder LLM's investment decision under greedy generation.
+company-level buy/sell preference differences (DIM, single neurons and
+multi-dimensional concept cones) flip a decoder LLM's investment decision under
+greedy generation.
 
-Research notes, versioned protocols, status, and figures live in
-[`docs/concept-cone-steering/`](docs/concept-cone-steering/). Start with
-[`claim-to-evidence.md`](docs/concept-cone-steering/claim-to-evidence.md).
+Each finished task has a report in [`tasks/`](tasks/). [`AGENTS.md`](AGENTS.md)
+describes the branch, task and file rules.
 
-Earlier research lines were removed from the working tree; they are preserved
-at git tag `pre-cleanup`.
+| Task | Report |
+|---|---|
+| T01 layer localization | [`tasks/T01-layer-localization/`](tasks/T01-layer-localization/) |
+
+[`docs/concept-cone-steering/paper-vs-experiments.md`](docs/concept-cone-steering/paper-vs-experiments.md)
+lists where the paper draft differs from the experiments.
 
 ## Setup
 
