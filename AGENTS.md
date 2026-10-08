@@ -147,3 +147,4 @@ runs are checked separately as smoke runs.
 | T02 steering operators | `task/T02-steering-operators` | Report in `tasks/T02-steering-operators/` |
 | T03 control limits | `task/T03-control-limits` | Report in `tasks/T03-control-limits/` |
 | T04 stance rebuild | `task/T04-stance-rebuild` | Code in `tasks/T04-stance-rebuild/`; no report |
+| T05 single-neuron dial | `task/T05-single-neuron-dial` | Stopped: no runs, no report |
