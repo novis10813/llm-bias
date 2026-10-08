@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "decision": {"type": "string", "enum": ["buy", "sell"]},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "required": ["decision", "reason"],
+  "additionalProperties": false
+}

@@ -66,3 +66,64 @@ def test_invalid(layer, neuron, delta):
     with pytest.raises(ValueError):
         with mlp_addition(model, layer, neuron, delta):
             pass
+
+
+@pytest.mark.parametrize('selector', [lambda x: [1], lambda x: torch.tensor([False, True, False])])
+def test_selector_edits_real_native_coordinate(selector):
+    model, module = fixture()
+    x = torch.tensor([[[1., 2., 3.], [4., 5., 6.], [7., 8., 9.]]], dtype=torch.float64)
+    seen = []
+    with mlp_addition(model, 0, 1, 2., selector=selector):
+        handle = module.register_forward_pre_hook(lambda m, a: seen.append(a[0]))
+        try:
+            actual = module(x)
+        finally:
+            handle.remove()
+    expected = x.clone()
+    expected[:, 1, 1] += 2.
+    assert torch.equal(seen[0], expected)
+    assert torch.equal(actual - module(x), torch.tensor([[[0., 0.], [4., 2.], [0., 0.]]]))
+    assert not module._forward_pre_hooks
+
+
+@pytest.mark.parametrize('selector,delta', [(lambda x: [], 2.), (lambda x: [1], 0.),
+                                           (lambda x: torch.zeros(3, dtype=torch.bool), 2.)])
+def test_selector_empty_and_zero_preserve_identity(selector, delta):
+    model, module = fixture()
+    x = torch.ones(1, 3, 3, dtype=torch.float64)
+    seen = []
+    with mlp_addition(model, 0, 1, delta, selector=selector):
+        handle = module.register_forward_pre_hook(lambda m, a: seen.append(a[0]))
+        try:
+            module(x)
+        finally:
+            handle.remove()
+    assert seen[0] is x
+
+
+@pytest.mark.parametrize('selection', [[True], [-1], [3], [1, 1], [1.], torch.tensor([1]),
+                                       torch.tensor([[True, False, True]]), torch.tensor([True])])
+def test_invalid_selector_even_at_zero(selection):
+    model, module = fixture()
+    with pytest.raises(ValueError):
+        with mlp_addition(model, 0, 1, 0., selector=lambda x: selection):
+            module(torch.ones(1, 3, 3, dtype=torch.float64))
+    assert not module._forward_pre_hooks
+
+
+def test_invalid_high_neuron_even_at_zero():
+    model, module = fixture()
+    with pytest.raises(ValueError):
+        with mlp_addition(model, 0, 3, 0., selector=lambda x: []):
+            module(torch.ones(1, 3, 3, dtype=torch.float64))
+    assert not module._forward_pre_hooks
+
+
+def test_selector_exception_cleanup():
+    model, module = fixture()
+    def fail(values):
+        raise RuntimeError('selector failed')
+    with pytest.raises(RuntimeError, match='selector failed'):
+        with mlp_addition(model, 0, 1, 1., selector=fail):
+            module(torch.ones(1, 3, 3, dtype=torch.float64))
+    assert not module._forward_pre_hooks

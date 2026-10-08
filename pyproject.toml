@@ -16,6 +16,7 @@ dependencies = [
     "accelerate>=1.10.1",
     "seaborn>=0.13.2",
     "kernels>=0.15.2,<0.16.0",
+    "xgrammar==0.2.8",
 ]
 
 [build-system]

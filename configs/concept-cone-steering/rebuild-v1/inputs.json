@@ -1,0 +1,133 @@
+{
+  "issuer_policy": {
+    "groups": [
+      {
+        "expected_company_prefix": "Fox Corporation",
+        "group_id": "issuer:fox-corporation",
+        "tickers": [
+          "FOX",
+          "FOXA"
+        ]
+      },
+      {
+        "expected_company_prefix": "Alphabet Inc.",
+        "group_id": "issuer:alphabet-inc",
+        "tickers": [
+          "GOOG",
+          "GOOGL"
+        ]
+      },
+      {
+        "expected_company_prefix": "News Corp",
+        "group_id": "issuer:news-corp",
+        "tickers": [
+          "NWS",
+          "NWSA"
+        ]
+      }
+    ],
+    "prefix": "issuer:"
+  },
+  "items": [
+    {
+      "content_sha256": "27e9756ba41683d49321a2c15f969473707c5e9d7b904f34775d85053916b66b",
+      "item_id": "F24-P1",
+      "numerical_review": "Machine factual review: FactSet pp.1,5,9; Q3 2024 5.4% blended year-over-year earnings growth, combining actual and estimated results, not final realized company growth.",
+      "polarity": "+",
+      "review_id": "factset-20241115-machine-factual-v1",
+      "source": "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_111524.pdf",
+      "source_quality_review": "Machine review of original FactSet PDF bytes and attributed paraphrase; aggregate context only, no matched persuasive strength, investment ground truth or human reason annotation. Informational source, not investment advice.",
+      "source_sha256": "677776cd01ddf02efcfb5fb4b437c336baa825f0dd41f3cdf9f3b1b829078486",
+      "strength": "single_aggregate_factor",
+      "text": "As of November 15, 2024, FactSet reported a blended year-over-year earnings growth rate of 5.4% for the S&P 500 in Q3 2024; blended combines reported results with estimates for companies that had not yet reported."
+    },
+    {
+      "content_sha256": "6ca38463454062b2a56663c5bdccbd94b6e10e27be73a19c9792c3b7536dafea",
+      "item_id": "F24-P2",
+      "numerical_review": "Machine factual review: FactSet pp.5,8,10; Q3 2024 5.5% blended year-over-year revenue growth versus September 30, 2024 estimate 4.7%; index aggregate, not individual-company growth.",
+      "polarity": "+",
+      "review_id": "factset-20241115-machine-factual-v1",
+      "source": "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_111524.pdf",
+      "source_quality_review": "Machine review of original FactSet PDF bytes and attributed paraphrase; aggregate context only, no matched persuasive strength, investment ground truth or human reason annotation. Informational source, not investment advice.",
+      "source_sha256": "677776cd01ddf02efcfb5fb4b437c336baa825f0dd41f3cdf9f3b1b829078486",
+      "strength": "single_aggregate_factor",
+      "text": "As of November 15, 2024, FactSet reported a blended year-over-year revenue growth rate of 5.5% for the S&P 500 in Q3 2024, compared with an estimated growth rate of 4.7% on September 30, 2024."
+    },
+    {
+      "content_sha256": "add2b53e8c00acc5b8e3557d4af3ca76052d4a5aec4264b898915d52df053e49",
+      "item_id": "F24-N1",
+      "numerical_review": "Machine factual review: FactSet pp.1,6,12; forward 12-month P/E 22.0 versus five-year 19.6 and ten-year 18.1; valuation factor, not proof of overvaluation.",
+      "polarity": "-",
+      "review_id": "factset-20241115-machine-factual-v1",
+      "source": "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_111524.pdf",
+      "source_quality_review": "Machine review of original FactSet PDF bytes and attributed paraphrase; aggregate context only, no matched persuasive strength, investment ground truth or human reason annotation. Informational source, not investment advice.",
+      "source_sha256": "677776cd01ddf02efcfb5fb4b437c336baa825f0dd41f3cdf9f3b1b829078486",
+      "strength": "single_aggregate_factor",
+      "text": "As of November 15, 2024, FactSet reported an S&P 500 forward 12-month P/E ratio of 22.0, above its five-year average of 19.6 and ten-year average of 18.1."
+    },
+    {
+      "content_sha256": "b64fddd9f56ac4d963e06eecd000626a554c0d88212b9bd0745b58584005f23e",
+      "item_id": "F24-N2",
+      "numerical_review": "Machine factual review: FactSet p.12; 54/80 guidance issuers, estimate or range midpoint below mean analyst estimate the day before issuance; not necessarily a downward revision of prior company guidance.",
+      "polarity": "-",
+      "review_id": "factset-20241115-machine-factual-v1",
+      "source": "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_111524.pdf",
+      "source_quality_review": "Machine review of original FactSet PDF bytes and attributed paraphrase; aggregate context only, no matched persuasive strength, investment ground truth or human reason annotation. Informational source, not investment advice.",
+      "source_sha256": "677776cd01ddf02efcfb5fb4b437c336baa825f0dd41f3cdf9f3b1b829078486",
+      "strength": "single_aggregate_factor",
+      "text": "As of November 15, 2024, FactSet reported that 54 of the 80 S&P 500 companies issuing EPS guidance for Q4 2024 had provided an EPS estimate, or the midpoint of an estimate range, below the mean analyst EPS estimate from the day before the guidance was issued; FactSet classified these as negative guidance."
+    }
+  ],
+  "order_contrasts": [
+    {
+      "condition1": "+-",
+      "condition2": "-+",
+      "trial_id": "factset-20241115-a"
+    }
+  ],
+  "pairing": {
+    "++": [
+      "F24-P1",
+      "F24-P2"
+    ],
+    "+-": [
+      "F24-P1",
+      "F24-N1"
+    ],
+    "-+": [
+      "F24-N1",
+      "F24-P1"
+    ],
+    "--": [
+      "F24-N1",
+      "F24-N2"
+    ]
+  },
+  "population": {
+    "expected_issuers": 500,
+    "expected_tickers": 503,
+    "source_sha256": "27c454d250ce513fda2016b43e7009ccbe0f5381e6c7648d3efe0d418c501a38"
+  },
+  "provenance": {
+    "acquisition_time_is_approximate": true,
+    "acquisition_time_utc": "2026-09-30T15:05:00Z",
+    "report_date": "2024-11-15",
+    "review_id": "factset-20241115-machine-factual-v1",
+    "source_byte_size": 1080178,
+    "source_pdf_sha256": "677776cd01ddf02efcfb5fb4b437c336baa825f0dd41f3cdf9f3b1b829078486",
+    "source_url": "https://advantage.factset.com/hubfs/Website/Resources%20Section/Research%20Desk/Earnings%20Insight/EarningsInsight_111524.pdf"
+  },
+  "roles": {
+    "issuer_counts": {
+      "calibration": 25,
+      "evaluation": 100,
+      "fit": 300,
+      "validation": 75
+    },
+    "seed": 20260930
+  },
+  "schema_version": 1,
+  "trials": [
+    "factset-20241115-a"
+  ]
+}
