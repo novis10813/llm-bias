@@ -16,8 +16,14 @@ report per task. These rules keep `main` clean while experiments stay reproducib
 
 Task numbers are two digits and never reused: `T01`, `T02`, ...
 
-Tasks run one at a time: `task/T<NN+1>` branches from `main` after `T<NN>` is merged, so it
-starts with everything earlier tasks changed.
+Tasks may run in parallel. Each task branches from the current `main` and works in its own git
+worktree (`git worktree add ../llm-bias-T<NN> task/T<NN>-<name>`), so tasks never share a working
+tree. Parallel tasks must not change the same code; when one needs another's change, it waits for
+that task to reach `main`.
+
+Files every task touches (the task tables in `README.md` and this file, and
+`docs/concept-cone-steering/paper-vs-experiments.md`) are changed only in step 4, after the latest
+`main` has been merged in.
 
 Branches named `research/*`, `implement/*` and the remote branches without a prefix predate
 these rules. They are history, not tasks.
@@ -39,7 +45,8 @@ these rules. They are history, not tasks.
    the tag on the same commit.
 3. Branch `clean/T<NN>-<name>` from `task/T<NN>-<name>`. Move, rewrite or delete files until
    only what passes the file rule is left, and open a PR to `task/T<NN>-<name>`.
-4. After that PR is merged, open a PR from `task/T<NN>-<name>` to `main`.
+4. After that PR is merged, merge the latest `main` into `task/T<NN>-<name>` (a merge, never a
+   rebase), update the shared files, and open a PR from `task/T<NN>-<name>` to `main`.
 5. Keep the `task/` branch and its tags after the merge. Files deleted in step 3 stay
    reachable through them.
 
