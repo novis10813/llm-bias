@@ -2,7 +2,7 @@
 
 **用途：**逐項記錄論文稿（2026-10-08 版，"The Invisible Hand"）與實際協議、程式、artifact 不一致之處。論文內容不在此修改；改稿時以本檔為清單。
 
-**核對基礎：**`confirmation-v1-20260925-full-01`、`confirmation-v1-supp-20261006-full-01`、`phase2b-v2-427-01`、`audit-v1-20260925`、`confirmation-v1-freeze-20260925`（後三者 2026-10-08 自 idlab2 取回，sha256 與 idlab、idlab1 的副本一致）；summarizer 為 branch `research/confirmation-v1-supplement` 的 `scripts/summarize_confirmation_paper_tables.py`。路徑皆相對於 `artifacts/<slug>/`。
+**核對基礎：**`confirmation-v1-20260925-full-01`、`confirmation-v1-supp-20261006-full-01`、`phase2b-v2-427-01`、`audit-v1-20260925`、`confirmation-v1-freeze-20260925`（後三者 2026-10-08 自 idlab2 取回，sha256 與 idlab、idlab1 的副本一致）；summarizer 為 branch `research/confirmation-v1-supplement` 的 `scripts/summarize_confirmation_paper_tables.py`。路徑皆相對於 `artifacts/<slug>/`。文中引用的 `docs/` 文件已在 T01 clean 時從 `main` 刪除，以 `git show 8324e06:<path>` 讀取。
 
 **分組：**P01–P05、P20 屬 T01（layer localization），P06–P12 屬 T02（steering operators），P13–P17 屬 T03（control limits），P18–P19 跨 task。
 
@@ -17,23 +17,23 @@
 ### P02 Stage 1 只用了 pos 與 neg 兩個條件
 
 - **論文：**§3「For layer localization, we also vary the prompt using positive-only, negative-only, mixed, and zero-evidence combinations.」Appendix A 的 conditions 表把 positive、negative、mixed、zero 都標為「Layer localization」。
-- **實驗：**Stage 1（[phase2-v2 協議](../balanced-evidence-gap/details/proposal-phase2-v2.md)）只用同公司的 `pos`（P1,P2）↔ `neg`（N1,N2）。`mixed2` 與 `zero` 只在 confirmation 的 `evidence`、`anon` arm 跑過，論文沒有報告這兩個條件的結果。
+- **實驗：**Stage 1（phase2-v2 協議（`docs/balanced-evidence-gap/details/proposal-phase2-v2.md`））只用同公司的 `pos`（P1,P2）↔ `neg`（N1,N2）。`mixed2` 與 `zero` 只在 confirmation 的 `evidence`、`anon` arm 跑過，論文沒有報告這兩個條件的結果。
 - **影響：**conditions 表的「Used for」欄應為：positive／negative 用於 localization 與 opposing evidence，mixed／zero 未報告。
 
 ### P03 GPT-OSS 的注入層在 medium reasoning 下選出
 
 - **論文：**Appendix A「GPT-OSS uses low reasoning effort」，正文未區分 Stage 1 與 Stage 2。Appendix G 只寫「used a different reasoning setting and readout」。
-- **實驗：**[confirmation-v1 協議](confirmation-v1/proposal.md)的模型登錄表註明 L14 是在 `medium` reasoning、固定前綴 readout 下選出；所有 steering 用 `low`。
+- **實驗：**confirmation-v1 協議（`docs/concept-cone-steering/confirmation-v1/proposal.md`）的模型登錄表註明 L14 是在 `medium` reasoning、固定前綴 readout 下選出；所有 steering 用 `low`。
 
 ### P04 Stage 1 不是預先登記的協議
 
 - **論文：**Appendix H「Pre-commitment: the protocols were committed before the corresponding runs.」
-- **實驗：**phase2-v2 協議標為 development（非 protocol-final），選層規則沒有事前固定；Gemma 與 GLM 的 Phase 2A gate 未通過，以 override 續跑（[C2 v2-427 狀態](c2-v2-427/status.md)）。
+- **實驗：**phase2-v2 協議標為 development（非 protocol-final），選層規則沒有事前固定；Gemma 與 GLM 的 Phase 2A gate 未通過，以 override 續跑（C2 v2-427 狀態（`docs/concept-cone-steering/c2-v2-427/status.md`））。
 
 ### P05 Appendix G 的 readout 不是 realized-path margin
 
 - **論文：**Appendix G「The readout is the realized-path margin (Appendix C)」，Appendix C 定義為「read at the step of the model's own greedy generation」。
-- **實驗：**[C2 v3 協議](c2-v3-steering-prompt/proposal.md)的 primary readout 是 teacher-forced clean-path margin：把 target 公司自己的 α0 生成 token 接在 prompt 後，在決策值 token 前讀 margin。patched forward 讀的是 target 的 α0 路徑，不是 patched 模型自己生成的路徑。
+- **實驗：**C2 v3 協議（`docs/concept-cone-steering/c2-v3-steering-prompt/proposal.md`）的 primary readout 是 teacher-forced clean-path margin：把 target 公司自己的 α0 生成 token 接在 prompt 後，在決策值 token 前讀 margin。patched forward 讀的是 target 的 α0 路徑，不是 patched 模型自己生成的路徑。
 
 ### P20 GPT-OSS 的 70% band 不是連續的 1–8 層
 
@@ -67,7 +67,7 @@
 ### P10 C8（cone 較平滑）有預先登記的正式檢定，結果不支持
 
 - **論文：**§4.2「our dose grid is too coarse to compare transition widths formally」。
-- **實驗：**[operator-comparison-v2](operator-comparison-v2/proposal.md) 預先登記了 C8 判準（monotone-step fraction、反轉次數等），已在四模型執行，四模型都未通過（[claim-to-evidence](claim-to-evidence.md) C8）。論文的結論方向一致，但寫成「無法正式比較」與事實不符。
+- **實驗：**operator-comparison-v2（`docs/concept-cone-steering/operator-comparison-v2/proposal.md`） 預先登記了 C8 判準（monotone-step fraction、反轉次數等），已在四模型執行，四模型都未通過（claim-to-evidence（`docs/concept-cone-steering/claim-to-evidence.md`） C8）。論文的結論方向一致，但寫成「無法正式比較」與事實不符。
 
 ### P11 Steer suffix 的 token ids 跨 tokenizer 不相同
 
@@ -77,7 +77,7 @@
 ### P12 預先登記的 C5 判定未報告
 
 - **論文：**§5.2 以描述方式比較 DIM 與 random。
-- **實驗：**C5 判準要求 ±α_50 與 ±α_hi 各點 Gain 的 bootstrap 下界 > 0，且 DIM 高於 jitter 與自身 off-target。Gemma −0.25 下界 −0.0258、−64 下界 0，未通過（[claim-to-evidence](claim-to-evidence.md) C5）。jitter、shuffle 兩個對照有跑但論文未提。
+- **實驗：**C5 判準要求 ±α_50 與 ±α_hi 各點 Gain 的 bootstrap 下界 > 0，且 DIM 高於 jitter 與自身 off-target。Gemma −0.25 下界 −0.0258、−64 下界 0，未通過（claim-to-evidence（`docs/concept-cone-steering/claim-to-evidence.md`） C5）。jitter、shuffle 兩個對照有跑但論文未提。
 
 ## T03 control limits
 
