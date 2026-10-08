@@ -14,6 +14,7 @@ describes the branch, task and file rules.
 | T02 steering operators | [`tasks/T02-steering-operators/`](tasks/T02-steering-operators/) |
 | T03 control limits | [`tasks/T03-control-limits/`](tasks/T03-control-limits/) |
 | T04 stance rebuild | [`tasks/T04-stance-rebuild/`](tasks/T04-stance-rebuild/) (code only, no report) |
+| T05 single-neuron dial | Stopped, no report |
 
 The T01–T03 READMEs list where the paper draft differs from their experiments (P01–P20).
 
