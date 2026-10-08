@@ -21,6 +21,7 @@ artifacts/*
 .worktrees/
 
 # Local research inputs and exports
+data/concept-cone-steering/rebuild-v1/
 *.csv
 graphify-out/
 

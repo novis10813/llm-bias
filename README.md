@@ -13,8 +13,9 @@ describes the branch, task and file rules.
 | T01 layer localization | [`tasks/T01-layer-localization/`](tasks/T01-layer-localization/) |
 | T02 steering operators | [`tasks/T02-steering-operators/`](tasks/T02-steering-operators/) |
 | T03 control limits | [`tasks/T03-control-limits/`](tasks/T03-control-limits/) |
+| T04 stance rebuild | [`tasks/T04-stance-rebuild/`](tasks/T04-stance-rebuild/) (code only, no report) |
 
-Each task README lists where the paper draft differs from its experiments (P01–P20).
+The T01–T03 READMEs list where the paper draft differs from their experiments (P01–P20).
 
 ## Setup
 
