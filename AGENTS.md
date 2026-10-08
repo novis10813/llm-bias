@@ -146,4 +146,4 @@ runs are checked separately as smoke runs.
 | T01 layer localization | `task/T01-layer-localization` | Report in `tasks/T01-layer-localization/` |
 | T02 steering operators | `task/T02-steering-operators` | Report in `tasks/T02-steering-operators/` |
 | T03 control limits | `task/T03-control-limits` | Report in `tasks/T03-control-limits/` |
-| T04 stance rebuild | `task/T04-stance-rebuild` | Planned: continues `research/stance-rebuild-v1-20260930` |
+| T04 stance rebuild | `task/T04-stance-rebuild` | Code in `tasks/T04-stance-rebuild/`; no report |
