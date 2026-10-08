@@ -1,50 +1,127 @@
-# Repository guidance
+# AGENTS.md
 
-本 repo 只做一條研究線：**concept-cone steering**。它在 decoder LLM 的 residual stream
-注入由公司好惡差值建構的方向（DIM 或多維 cone），觀察投資 buy/sell 判定是否翻轉。
-研究內容、結論與狀態都在 [`docs/concept-cone-steering/`](docs/concept-cone-steering/)。
-任務涉及研究主張或實驗結果時，先讀 `claim-to-evidence.md`；只改 code、測試或環境時
-不必讀。各版本的 `status.md`／`proposal.md` 只在該版本相關時才讀。
+This repo studies concept-cone steering: directions built from company-level buy/sell
+preference differences (DIM, single neurons, multi-dimensional cones) are added to a decoder
+LLM's residual stream to test whether its generated investment decision flips. It holds one
+report per task. These rules keep `main` clean while experiments stay reproducible.
 
-其他舊研究線已移出工作樹，保存在 git tag `pre-cleanup`；除非使用者要求，不從該 tag 取回。
+## Branches
+
+| Branch | Purpose | Rules |
+|---|---|---|
+| `task/T<NN>-<name>` | one per task; experiments and trial and error | Anything goes, but never rebase, force-push or delete it |
+| `clean/T<NN>-<name>` | branched from `task/T<NN>-<name>` when the task ends; holds only what passes the file rule | Opened as a PR to `task/T<NN>-<name>`. Deleted once that PR is merged |
+| `chore/<name>` | changes outside any task: refactors, documentation, tooling, these rules | Short-lived. Opened as a PR to `main` and deleted once merged. A refactor must not change steering or evaluation results |
+| `main` | runnable code and every finished task | Every new task branches from it. Receives a task only by merging its `task/` branch after the `clean/` PR |
+
+Task numbers are two digits and never reused: `T01`, `T02`, ...
+
+Tasks run one at a time: `task/T<NN+1>` branches from `main` after `T<NN>` is merged, so it
+starts with everything earlier tasks changed.
+
+Branches named `research/*`, `implement/*` and the remote branches without a prefix predate
+these rules. They are history, not tasks.
+
+## Workflow per task
+
+1. Branch `task/T<NN>-<name>` from `main`. Commit the task's `PROTOCOL.md` before any GPU run
+   whose results go into the report. Run GPU jobs with `lab run`, which executes the pushed
+   commit.
+2. For every run whose results go into the report:
+   - copy its run directory from the lab host to
+     `artifacts/<model-slug>/concept-cone-steering/runs/<run-id>/`, check the sha256 of every
+     file against the host copy, then delete the host copy;
+   - tag the commit it ran with an annotated tag `exp/T<NN>-<run-id>`. The tag message records
+     what the report leaves out: model slug, job id, the repo-relative paths of the run's files
+     under `artifacts/`, and their sha256. No host names: `lab show <job id>` gives the host.
+
+   A tag never points to a different commit. Its message may be corrected by re-creating
+   the tag on the same commit.
+3. Branch `clean/T<NN>-<name>` from `task/T<NN>-<name>`. Move, rewrite or delete files until
+   only what passes the file rule is left, and open a PR to `task/T<NN>-<name>`.
+4. After that PR is merged, open a PR from `task/T<NN>-<name>` to `main`.
+5. Keep the `task/` branch and its tags after the merge. Files deleted in step 3 stay
+   reachable through them.
+
+## File rule
+
+A file goes to `main` only if it is needed to:
+
+- **run** a steering experiment: model loading, hooks and interventions, operators, prompts,
+  parsing, entry points, environment setup;
+- **reproduce** a reported number or figure: protocols, experiment configs, eval data,
+  analysis scripts;
+- **understand** the repo: `README.md`, this file, task READMEs.
+
+Everything else (debugging, abandoned attempts, superseded scripts and figures) is deleted on
+the `clean/` branch. It stays in the `task/` branch's history and tags.
 
 ## Layout
 
-- `scripts/`：實驗入口，每支獨立用 `uv run python scripts/<name>.py` 執行。
-  - `probe_concept_cone.py`、`probe_dim_steering.py`、`probe_operator_comparison.py`：steering 主實驗。
-  - `reparse_concept_cone_decisions.py`、`summarize_concept_cone_decisions.py`：決策解析與彙整。
-  - `plot_*.py`：`docs/concept-cone-steering/*/figures/` 的圖。
-  - `balanced_evidence_gap*.py`、`downloads/run_*.sh`：產生 steering 用的
-    `balanced-evidence-gap-phase2/runs/phase2b-*/pairs/directions.json`（上游）。
-  - `entity_to_dial_heldout_transfer.py`：產生 200 家 construction cohort（上游）。
-- `llm_bias/core/`：模型載入（經 `jlens.from_hf` 包裝）、residual hook／intervention、
-  generation、continuation scoring、run manifest 與 artifact path。
-- `llm_bias/entity_to_dial/`、`llm_bias/balanced_evidence_gap/`：上游 prompt template、
-  span 與 direction 產生邏輯；steering scripts 直接 import 其中的 template 與 margin 函式。
-- `docs/balanced-evidence-gap/details/`、`docs/entity-to-dial/details/`：上游協議，已凍結。
-  其中指向已刪除文件的連結是歷史引用，不要修。
-- `data/`（輸入）、`artifacts/<model-slug>/...`（run 輸出）、`.cache/`（模型）都不進 git。
-- `third_party/jacobian-lens` 是 `jlens` 的 editable workspace member（不進 git），
-  依 `README.md` clone 後再 `uv sync`。
+```
+llm_bias/core/                                  shared code: models, hooks, steering, parsing, provenance
+llm_bias/entity_to_dial/ llm_bias/balanced_evidence_gap/   upstream prompt and direction code: frozen
+scripts/                                        entry points (run as `uv run python scripts/<name>.py`)
+analysis/                                       analysis tools used by two or more tasks
+tests/                                          unit tests with fake models and temporary directories
+tasks/T<NN>-<name>/
+  PROTOCOL.md                                   pre-registered design, committed before the runs
+  REPORT.md                                     results only
+  README.md                                     how to reproduce: commands, configs, code changes
+  configs/                                      experiment configs (dose grids, seeds, splits)
+  data/                                         compact eval data behind every reported number
+  figures/                                      figures used in REPORT.md
+  *.py                                          analysis used only by this task
+```
 
-## 研究規則
+- A change that can alter steering or evaluation results goes behind a new argument or config
+  key whose default keeps the original behaviour, so every earlier result still reproduces
+  from `main`. Changes that only affect logging or which files are kept need no switch.
+- New operators and runners go in new modules or scripts, not in edits to the ones earlier
+  tasks ran.
+- A task's analysis script moves to `analysis/` only when a second task needs it. The same PR
+  updates the commands in earlier tasks' READMEs.
 
-- 固定答案 token 的 margin（`log p(buy) − log p(sell)`）只代表讀出改變；宣稱「翻轉決策」
-  必須附真實 greedy generation 的 decision-flip 率與 parse rate。
-- 不保存 raw activations、residuals、gradients 或 KV cache；只輸出 compact 統計與 provenance。
-- 已完成的 run、數值與凍結協議不回頭改寫。設計（direction 來源、主要指標、controls、gate）
-  改變時，在 `docs/concept-cone-steering/` 開新的版本資料夾（`proposal.md` + `status.md`），
-  不把新結果回填到舊版本。
-- 新 run 寫到 `artifacts/<model-slug>/concept-cone-steering/runs/<run-id>/`，不覆蓋舊 run。
+## Research rules
+
+- A fixed-answer margin (`log p(buy) − log p(sell)`) only shows a readout change. A claim that
+  steering flips a decision needs the decision-flip rate and parse rate of real greedy
+  generations.
+- Do not save raw activations, residuals, gradients or KV caches. Save compact statistics and
+  provenance only.
+- Finished runs, their numbers and committed protocols are never rewritten. A change of
+  direction source, primary metric, controls or gate is a new task.
+- A new run writes to a new `<run-id>` and never overwrites an earlier run.
+
+## Reports
+
+- `REPORT.md` presents results: setup, numbers, figures, comparisons, limitations.
+- No artifact paths, hashes, host names or job logs in reports. Those go in the `exp/` tag
+  messages.
+- Every number and figure in a report must be regenerable from `data/` with a command in the
+  task's `README.md`, and `data/` must be regenerable from the tagged runs under `artifacts/`.
+  Numbers quoted from other sources (papers, other repos) name their source instead.
+
+## Data and artifacts
+
+Models, datasets, run outputs and job logs are never committed.
+
+- Run outputs and job logs are kept on this machine, in `artifacts/` at the repo root
+  (git-ignored), and referenced from `exp/` tag messages. `git clean -x` deletes `artifacts/`;
+  do not run it.
+- Models (`.cache/models/<slug>`) and datasets are inputs and can be re-downloaded. They may
+  stay on the lab hosts as a cache.
+- `third_party/jacobian-lens` is the editable `jlens` workspace member. Clone it as described
+  in `README.md`, then `uv sync`. It is not committed.
 
 ## Working rules
 
-- 只改任務範圍內的東西；開始前看 `git status`。
-- 新共用邏輯放 `llm_bias/core/`；一次性實驗邏輯留在 script 裡即可，不要預先抽象化。
-- 文件裡的命令、path 與狀態必須對得上 code 與 artifact；不確定就標 proposed。
-- 寫文件前先想讀者要用它做什麼決定：`status.md` 只放目前結論、關鍵數字與 artifact
-  路徑，協議細節連到 `proposal.md`，不重述。回覆使用者也一樣，先給結論，再給必要的證據。
-- 用 `uv sync` 建環境、`uv add` 加套件。
+- Change only what the task needs. Check `git status` before starting.
+- Shared logic goes in `llm_bias/core/`. One-off experiment logic stays in its script. Do not
+  abstract ahead of need.
+- Commands, paths and states in documents must match the code and artifacts. Mark anything
+  unverified as proposed.
+- Set up the environment with `uv sync` and add packages with `uv add`.
 
 ## Verification
 
@@ -53,4 +130,14 @@ uv lock --check
 uv run pytest -q
 ```
 
-Unit test 用 fake model 與 temporary directory，不載入真 checkpoint；GPU run 另外當 smoke 執行。
+Unit tests use fake models and temporary directories and never load a real checkpoint. GPU
+runs are checked separately as smoke runs.
+
+## Tasks
+
+| Task | Branch | Status |
+|---|---|---|
+| T01 layer localization | `task/T01-layer-localization` | Planned: report from existing runs |
+| T02 steering operators | `task/T02-steering-operators` | Planned: report from existing runs |
+| T03 control limits | `task/T03-control-limits` | Planned: report from existing runs |
+| T04 stance rebuild | `task/T04-stance-rebuild` | Planned: continues `research/stance-rebuild-v1-20260930` |
