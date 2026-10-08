@@ -283,7 +283,7 @@ def test_compiler_import_never_loads_model_frameworks():
 
 def test_approved_config_contains_exact_reviewed_text_and_explicit_limitations():
     config = json.loads(CONFIG.read_bytes())
-    review = (ROOT / "docs/concept-cone-steering/rebuild-v1/evidence-review.md").read_text()
+    review = (ROOT / "tasks/T04-stance-rebuild/evidence-review.md").read_text()
     reviewed = {line.split("|")[1].strip().split(" / ")[0]: line.split("|")[2].strip()
                 for line in review.splitlines() if line.startswith("| F24-")}
     assert {item["item_id"]: item["text"] for item in config["items"]} == reviewed
