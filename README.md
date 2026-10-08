@@ -12,9 +12,9 @@ describes the branch, task and file rules.
 |---|---|
 | T01 layer localization | [`tasks/T01-layer-localization/`](tasks/T01-layer-localization/) |
 | T02 steering operators | [`tasks/T02-steering-operators/`](tasks/T02-steering-operators/) |
+| T03 control limits | [`tasks/T03-control-limits/`](tasks/T03-control-limits/) |
 
-[`docs/concept-cone-steering/paper-vs-experiments.md`](docs/concept-cone-steering/paper-vs-experiments.md)
-lists where the paper draft differs from the experiments.
+Each task README lists where the paper draft differs from its experiments (P01–P20).
 
 ## Setup
 
