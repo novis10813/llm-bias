@@ -1,0 +1,4983 @@
+{
+ "gemma4-12b-it": {
+  "anon_baseline": {
+   "buy": 0,
+   "collapsed": 0,
+   "n": 10,
+   "parse_rate": 1.0,
+   "parsed": 10,
+   "path_class": {
+    "fenced": 10
+   },
+   "realized_ok": 10,
+   "sell": 10,
+   "truncated": 0
+  },
+  "c5": {
+   "c5_holds": false,
+   "decisive_points": 4,
+   "points": [
+    {
+     "alpha": 0.25,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": 0.4883720930232558,
+     "jitter_max_any_itt": 0.0297029702970297,
+     "lower": 0.0912496655070913,
+     "on_class_n": 43,
+     "point": 0.2606493207460281,
+     "supports": true,
+     "upper": 0.3774752475247525,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": -0.25,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": 0.43103448275862066,
+     "jitter_max_any_itt": 0.0297029702970297,
+     "lower": -0.02577993648421445,
+     "on_class_n": 58,
+     "point": 0.08449982929327415,
+     "supports": false,
+     "upper": 0.19783645031169783,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": 64.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": 1.0,
+     "jitter_max_any_itt": 0.0297029702970297,
+     "lower": 1.0,
+     "on_class_n": 43,
+     "point": 1.0,
+     "supports": true,
+     "upper": 1.0,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": -64.0,
+     "dim_off_itt": 0.7674418604651163,
+     "dim_on_itt": 0.0,
+     "jitter_max_any_itt": 0.0297029702970297,
+     "lower": 0.0,
+     "on_class_n": 58,
+     "point": 0.0,
+     "supports": false,
+     "upper": 0.0,
+     "valid_draws": 2000
+    }
+   ]
+  },
+  "c7_contrasts": [
+   {
+    "adverse": "neg",
+    "adverse_blocked": 43,
+    "adverse_collapsed": 0,
+    "comparable_n": 43,
+    "descriptive_only": false,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "neg",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 0,
+    "descriptive_only": true,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 58,
+    "adverse_collapsed": 0,
+    "comparable_n": 58,
+    "descriptive_only": false,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 101,
+    "adverse_collapsed": 0,
+    "comparable_n": 101,
+    "descriptive_only": false,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 101
+   }
+  ],
+  "opposing": {
+   "+1": [
+    {
+     "alpha": 0.25,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 64.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    }
+   ],
+   "-1": [
+    {
+     "alpha": -64.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -0.25,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    }
+   ]
+  },
+  "random_seeds": {
+   "+1": {
+    "+0.25": [
+     {
+      "any_flip_itt": 0.1782178217821782,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.039603960396039604,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0891089108910891,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.22772277227722773,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.2079207920792079,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "+16": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.06930693069306931,
+      "parse_rate": 0.297029702970297,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+2": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.4158415841584158,
+      "parse_rate": 0.9900990099009901,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.42574257425742573,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.40594059405940597,
+      "parse_rate": 0.9900990099009901,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.38613861386138615,
+      "parse_rate": 0.9306930693069307,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+4": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.42574257425742573,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.36633663366336633,
+      "parse_rate": 0.8415841584158416,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+8": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0297029702970297,
+      "parse_rate": 0.039603960396039604,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.04950495049504951,
+      "parse_rate": 0.10891089108910891,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ]
+   },
+   "-1": {
+    "-0.25": [
+     {
+      "any_flip_itt": 0.2871287128712871,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.039603960396039604,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.1188118811881188,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.10891089108910891,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.3465346534653465,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "-16": [
+     {
+      "any_flip_itt": 0.297029702970297,
+      "parse_rate": 0.8118811881188119,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.15841584158415842,
+      "parse_rate": 0.40594059405940597,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-2": [
+     {
+      "any_flip_itt": 0.019801980198019802,
+      "parse_rate": 0.8514851485148515,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.40594059405940597,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.40594059405940597,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.42574257425742573,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0891089108910891,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-4": [
+     {
+      "any_flip_itt": 0.07920792079207921,
+      "parse_rate": 0.8316831683168316,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.38613861386138615,
+      "parse_rate": 0.9207920792079208,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-8": [
+     {
+      "any_flip_itt": 0.07920792079207921,
+      "parse_rate": 0.7326732673267327,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ]
+   }
+  },
+  "readout": {
+   "by_path_class": {
+    "brace_newline": {
+     "fixed_divergent": 0,
+     "parsed": 167
+    },
+    "fenced": {
+     "fixed_divergent": 175,
+     "parsed": 9757
+    },
+    "thought": {
+     "fixed_divergent": 27,
+     "parsed": 1401
+    }
+   },
+   "fixed_divergent_abs_margin_median": 1.0925636291503906,
+   "fixed_prefix_divergent": 202,
+   "parsed": 11325,
+   "realized_divergent": 56,
+   "realized_n": 11325,
+   "rows": 14090
+  },
+  "readout_all_arms": {
+   "by_path_class": {
+    "brace_newline": {
+     "fixed_divergent": 0,
+     "parsed": 228
+    },
+    "fenced": {
+     "fixed_divergent": 260,
+     "parsed": 11804
+    },
+    "thought": {
+     "fixed_divergent": 38,
+     "parsed": 1753
+    }
+   },
+   "fixed_divergent_abs_margin_median": 1.0442943572998047,
+   "fixed_prefix_divergent": 298,
+   "parsed": 13785,
+   "realized_divergent": 80,
+   "realized_n": 13785,
+   "rows": 17680
+  },
+  "validation": {
+   "+1": {
+    "+0.25": {
+     "ae": {
+      "k": 4,
+      "lower": 0.1,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.7,
+      "value": 0.4
+     },
+     "delta": {
+      "lower": 0.0912496655070913,
+      "run": null,
+      "status": "ok",
+      "upper": 0.3774752475247525,
+      "value": 0.2606493207460281
+     },
+     "dim": {
+      "k": 21,
+      "lower": 0.3488372093023256,
+      "n": 43,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.6511627906976745,
+      "value": 0.4883720930232558
+     },
+     "never": {
+      "doses": [
+       0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.18811881188118812,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.1782178217821782,
+       "random_s1": 0.039603960396039604,
+       "random_s2": 0.0891089108910891,
+       "random_s3": 0.22772277227722773,
+       "random_s4": 0.2079207920792079
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.31683168316831684,
+      "value": 0.22772277227722773
+     },
+     "ro": {
+      "k": 4,
+      "lower": 0.009900990099009901,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.07920792079207921,
+      "value": 0.039603960396039604
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+16": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.8712871287128713,
+      "run": null,
+      "status": "ok",
+      "upper": 0.9702970297029703,
+      "value": 0.9306930693069306
+     },
+     "dim": {
+      "k": 43,
+      "lower": 1.0,
+      "n": 43,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       2.0,
+       4.0,
+       8.0,
+       16.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0297029702970297,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.06930693069306931,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.12871287128712872,
+      "value": 0.06930693069306931
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+2": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.4752475247524752,
+      "run": null,
+      "status": "ok",
+      "upper": 0.6633663366336633,
+      "value": 0.5742574257425743
+     },
+     "dim": {
+      "k": 43,
+      "lower": 1.0,
+      "n": 43,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       2.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.33663366336633666,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.4158415841584158,
+       "random_s2": 0.42574257425742573,
+       "random_s3": 0.40594059405940597,
+       "random_s4": 0.38613861386138615
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.5247524752475248,
+      "value": 0.42574257425742573
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+4": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.4752475247524752,
+      "run": null,
+      "status": "ok",
+      "upper": 0.6633663366336633,
+      "value": 0.5742574257425743
+     },
+     "dim": {
+      "k": 43,
+      "lower": 1.0,
+      "n": 43,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       2.0,
+       4.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.33663366336633666,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.42574257425742573,
+       "random_s3": 0.0,
+       "random_s4": 0.36633663366336633
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.5247524752475248,
+      "value": 0.42574257425742573
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+8": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.900990099009901,
+      "run": null,
+      "status": "ok",
+      "upper": 0.9801980198019802,
+      "value": 0.9504950495049505
+     },
+     "dim": {
+      "k": 43,
+      "lower": 1.0,
+      "n": 43,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       2.0,
+       4.0,
+       8.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.019801980198019802,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0297029702970297,
+       "random_s4": 0.04950495049504951
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.09900990099009901,
+      "value": 0.04950495049504951
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    }
+   },
+   "-1": {
+    "-0.25": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "lower": -0.02577993648421445,
+      "run": null,
+      "status": "ok",
+      "upper": 0.19783645031169783,
+      "value": 0.08449982929327415
+     },
+     "dim": {
+      "k": 25,
+      "lower": 0.29310344827586204,
+      "n": 58,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.5689655172413793,
+      "value": 0.43103448275862066
+     },
+     "never": {
+      "doses": [
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.25742574257425743,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.2871287128712871,
+       "random_s1": 0.039603960396039604,
+       "random_s2": 0.1188118811881188,
+       "random_s3": 0.10891089108910891,
+       "random_s4": 0.3465346534653465
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.43564356435643564,
+      "value": 0.3465346534653465
+     },
+     "ro": {
+      "k": 6,
+      "lower": 0.019801980198019802,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.10891089108910891,
+      "value": 0.0594059405940594
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-16": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "lower": 0.6138613861386139,
+      "run": null,
+      "status": "ok",
+      "upper": 0.7920792079207921,
+      "value": 0.7029702970297029
+     },
+     "dim": {
+      "k": 58,
+      "lower": 1.0,
+      "n": 58,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -16.0,
+       -8.0,
+       -4.0,
+       -2.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.2079207920792079,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.297029702970297,
+       "random_s1": 0.15841584158415842,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.38613861386138615,
+      "value": 0.297029702970297
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-2": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "lower": 0.4752475247524752,
+      "run": null,
+      "status": "ok",
+      "upper": 0.6633663366336633,
+      "value": 0.5742574257425743
+     },
+     "dim": {
+      "k": 58,
+      "lower": 1.0,
+      "n": 58,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -2.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.33663366336633666,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.019801980198019802,
+       "random_s1": 0.40594059405940597,
+       "random_s2": 0.40594059405940597,
+       "random_s3": 0.42574257425742573,
+       "random_s4": 0.0891089108910891
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.5247524752475248,
+      "value": 0.42574257425742573
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-4": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "lower": 0.5148514851485149,
+      "run": null,
+      "status": "ok",
+      "upper": 0.7029702970297029,
+      "value": 0.6138613861386139
+     },
+     "dim": {
+      "k": 58,
+      "lower": 1.0,
+      "n": 58,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -4.0,
+       -2.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.297029702970297,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.07920792079207921,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.38613861386138615,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.48514851485148514,
+      "value": 0.38613861386138615
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-8": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "lower": 0.8613861386138614,
+      "run": null,
+      "status": "ok",
+      "upper": 0.9702970297029703,
+      "value": 0.9207920792079208
+     },
+     "dim": {
+      "k": 58,
+      "lower": 1.0,
+      "n": 58,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -8.0,
+       -4.0,
+       -2.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0297029702970297,
+      "operator_drift": [
+       "random/random_s0/dose",
+       "random/random_s1/dose",
+       "random/random_s2/dose",
+       "random/random_s3/dose",
+       "random/random_s4/dose"
+      ],
+      "per_seed": {
+       "random_s0": 0.07920792079207921,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.13861386138613863,
+      "value": 0.07920792079207921
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    }
+   }
+  }
+ },
+ "glm4-9b-0414": {
+  "anon_baseline": {
+   "buy": 10,
+   "collapsed": 0,
+   "n": 10,
+   "parse_rate": 1.0,
+   "parsed": 10,
+   "path_class": {
+    "brace_newline": 10
+   },
+   "realized_ok": 10,
+   "sell": 0,
+   "truncated": 0
+  },
+  "c5": {
+   "c5_holds": true,
+   "decisive_points": 2,
+   "points": [
+    {
+     "alpha": 8.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": null,
+     "jitter_max_any_itt": 0,
+     "lower": null,
+     "on_class_n": 0,
+     "point": null,
+     "supports": false,
+     "upper": null,
+     "valid_draws": 0
+    },
+    {
+     "alpha": -8.0,
+     "dim_off_itt": null,
+     "dim_on_itt": 1.0,
+     "jitter_max_any_itt": 0,
+     "lower": 0.7128712871287128,
+     "on_class_n": 101,
+     "point": 0.801980198019802,
+     "supports": true,
+     "upper": 0.8811881188118812,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": 64.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": null,
+     "jitter_max_any_itt": 0,
+     "lower": null,
+     "on_class_n": 0,
+     "point": null,
+     "supports": false,
+     "upper": null,
+     "valid_draws": 0
+    },
+    {
+     "alpha": -64.0,
+     "dim_off_itt": null,
+     "dim_on_itt": 1.0,
+     "jitter_max_any_itt": 0,
+     "lower": 1.0,
+     "on_class_n": 101,
+     "point": 1.0,
+     "supports": true,
+     "upper": 1.0,
+     "valid_draws": 2000
+    }
+   ]
+  },
+  "c7_contrasts": [
+   {
+    "adverse": "neg",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 0,
+    "descriptive_only": true,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "neg",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 0,
+    "descriptive_only": true,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 101,
+    "descriptive_only": false,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 101,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 101,
+    "descriptive_only": false,
+    "direction": "buy->sell",
+    "equal_dose": 20,
+    "higher_dose_under_adverse": 33,
+    "lower_dose_under_adverse": 48,
+    "reference": "mixed2",
+    "reference_blocked": 0
+   }
+  ],
+  "opposing": {
+   "+1": [
+    {
+     "alpha": 1.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 64.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    }
+   ],
+   "-1": [
+    {
+     "alpha": -64.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.7425742574257426,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -1.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -0.25,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "supplement"
+    }
+   ]
+  },
+  "random_seeds": {
+   "-1": {
+    "-0.25": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-16": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.18811881188118812,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-2": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-4": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.009900990099009901,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-8": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.19801980198019803,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ]
+   }
+  },
+  "readout": {
+   "by_path_class": {
+    "brace_newline": {
+     "fixed_divergent": 296,
+     "parsed": 13651
+    },
+    "direct_json": {
+     "fixed_divergent": 0,
+     "parsed": 260
+    }
+   },
+   "fixed_divergent_abs_margin_median": 0.36379337310791016,
+   "fixed_prefix_divergent": 296,
+   "parsed": 13911,
+   "realized_divergent": 79,
+   "realized_n": 13911,
+   "rows": 14115
+  },
+  "readout_all_arms": {
+   "by_path_class": {
+    "brace_newline": {
+     "fixed_divergent": 324,
+     "parsed": 15819
+    },
+    "direct_json": {
+     "fixed_divergent": 0,
+     "parsed": 260
+    }
+   },
+   "fixed_divergent_abs_margin_median": 0.35642528533935547,
+   "fixed_prefix_divergent": 324,
+   "parsed": 16079,
+   "realized_divergent": 85,
+   "realized_n": 16079,
+   "rows": 16695
+  },
+  "validation": {
+   "+1": {
+    "+0.25": {
+     "ae": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "dim": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "never": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "still": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     }
+    },
+    "+16": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       1.0,
+       2.0,
+       4.0,
+       8.0,
+       16.0
+      ],
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     }
+    },
+    "+2": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       1.0,
+       2.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+4": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       1.0,
+       2.0,
+       4.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+8": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       1.0,
+       2.0,
+       4.0,
+       8.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.019801980198019802,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.06930693069306931,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.1188118811881188,
+      "value": 0.06930693069306931
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    }
+   },
+   "-1": {
+    "-0.25": {
+     "ae": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "delta": {
+      "lower": 0.0,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "dim": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "never": {
+      "doses": [
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-16": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.7326732673267327,
+      "run": null,
+      "status": "ok",
+      "upper": 0.8910891089108911,
+      "value": 0.8118811881188119
+     },
+     "dim": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -16.0,
+       -8.0,
+       -4.0,
+       -2.0,
+       -1.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.10891089108910891,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.18811881188118812,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.26732673267326734,
+      "value": 0.18811881188118812
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-2": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.7029702970297029,
+      "run": null,
+      "status": "ok",
+      "upper": 0.8613861386138614,
+      "value": 0.7821782178217822
+     },
+     "dim": {
+      "k": 79,
+      "lower": 0.7029702970297029,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.8613861386138614,
+      "value": 0.7821782178217822
+     },
+     "never": {
+      "doses": [
+       -2.0,
+       -1.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 48,
+      "lower": 0.37623762376237624,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.5742574257425742,
+      "value": 0.4752475247524752
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-4": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.9702970297029703,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 0.9900990099009901
+     },
+     "dim": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -4.0,
+       -2.0,
+       -1.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.009900990099009901,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0297029702970297,
+      "value": 0.009900990099009901
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-8": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.7128712871287128,
+      "run": null,
+      "status": "ok",
+      "upper": 0.8811881188118812,
+      "value": 0.801980198019802
+     },
+     "dim": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -8.0,
+       -4.0,
+       -2.0,
+       -1.0,
+       -0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.1188118811881188,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.19801980198019803,
+       "random_s4": 0.0
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.2871287128712871,
+      "value": 0.19801980198019803
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    }
+   }
+  }
+ },
+ "gpt-oss-20b": {
+  "anon_baseline": {
+   "buy": 1,
+   "collapsed": 0,
+   "n": 10,
+   "parse_rate": 1.0,
+   "parsed": 10,
+   "path_class": {
+    "harmony_final": 10
+   },
+   "realized_ok": 10,
+   "sell": 9,
+   "truncated": 0
+  },
+  "c5": {
+   "c5_holds": true,
+   "decisive_points": 4,
+   "points": [
+    {
+     "alpha": 4.0,
+     "dim_off_itt": 0.045454545454545456,
+     "dim_on_itt": 0.9122807017543859,
+     "jitter_max_any_itt": 0.0891089108910891,
+     "lower": 0.35007072135785006,
+     "on_class_n": 57,
+     "point": 0.4766371373979503,
+     "supports": true,
+     "upper": 0.5542982869715543,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": -4.0,
+     "dim_off_itt": 0.08771929824561403,
+     "dim_on_itt": 0.7727272727272727,
+     "jitter_max_any_itt": 0.0891089108910891,
+     "lower": 0.18899889988998902,
+     "on_class_n": 44,
+     "point": 0.36678667866786674,
+     "supports": true,
+     "upper": 0.47575526783447575,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": 16.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": 1.0,
+     "jitter_max_any_itt": 0.0891089108910891,
+     "lower": 0.3465346534653465,
+     "on_class_n": 57,
+     "point": 0.4554455445544554,
+     "supports": true,
+     "upper": 0.5148514851485149,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": -16.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": 1.0,
+     "jitter_max_any_itt": 0.0891089108910891,
+     "lower": 0.3366336633663366,
+     "on_class_n": 44,
+     "point": 0.4356435643564357,
+     "supports": true,
+     "upper": 0.5148514851485149,
+     "valid_draws": 2000
+    }
+   ]
+  },
+  "c7_contrasts": [
+   {
+    "adverse": "neg",
+    "adverse_blocked": 45,
+    "adverse_collapsed": 12,
+    "comparable_n": 57,
+    "descriptive_only": false,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "neg",
+    "adverse_blocked": 67,
+    "adverse_collapsed": 24,
+    "comparable_n": 91,
+    "descriptive_only": false,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 1,
+    "adverse_collapsed": 43,
+    "comparable_n": 44,
+    "descriptive_only": false,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 10,
+    "comparable_n": 10,
+    "descriptive_only": false,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 1
+   }
+  ],
+  "opposing": {
+   "+1": [
+    {
+     "alpha": 0.125,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 0.25,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "supplement"
+    },
+    {
+     "alpha": 0.5,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 0.7227722772277227,
+     "run": "source"
+    }
+   ],
+   "-1": [
+    {
+     "alpha": -32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 0.019801980198019802,
+     "run": "source"
+    },
+    {
+     "alpha": -16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -0.5,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -0.25,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "supplement"
+    },
+    {
+     "alpha": -0.125,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    }
+   ]
+  },
+  "random_seeds": {
+   "+1": {
+    "+0.25": [
+     {
+      "any_flip_itt": 0.0891089108910891,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.06930693069306931,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.04950495049504951,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.019801980198019802,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0891089108910891,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+16": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.4158415841584158,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.5346534653465347,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.5445544554455446,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.48514851485148514,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "+2": [
+     {
+      "any_flip_itt": 0.19801980198019803,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.2376237623762376,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.12871287128712872,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.25742574257425743,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.26732673267326734,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+4": [
+     {
+      "any_flip_itt": 0.43564356435643564,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.33663366336633666,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.3069306930693069,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.42574257425742573,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.3465346534653465,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "+8": [
+     {
+      "any_flip_itt": 0.44554455445544555,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.4158415841584158,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.4752475247524752,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.48514851485148514,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.46534653465346537,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ]
+   },
+   "-1": {
+    "-0.25": [
+     {
+      "any_flip_itt": 0.06930693069306931,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.12871287128712872,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0594059405940594,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.06930693069306931,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.09900990099009901,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-16": [
+     {
+      "any_flip_itt": 0.5445544554455446,
+      "parse_rate": 0.9702970297029703,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.5544554455445545,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.5643564356435643,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.4158415841584158,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "-2": [
+     {
+      "any_flip_itt": 0.2079207920792079,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.2376237623762376,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.31683168316831684,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.1485148514851485,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.297029702970297,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "-4": [
+     {
+      "any_flip_itt": 0.37623762376237624,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.32673267326732675,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.40594059405940597,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.27722772277227725,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.37623762376237624,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "-8": [
+     {
+      "any_flip_itt": 0.5643564356435643,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.49504950495049505,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.504950495049505,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.3564356435643564,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.594059405940594,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ]
+   }
+  },
+  "readout": {
+   "by_path_class": {
+    "harmony_final": {
+     "fixed_divergent": 2841,
+     "parsed": 12519
+    }
+   },
+   "fixed_divergent_abs_margin_median": 2.793210983276367,
+   "fixed_prefix_divergent": 2841,
+   "parsed": 12519,
+   "realized_divergent": 0,
+   "realized_n": 12519,
+   "rows": 14085
+  },
+  "readout_all_arms": {
+   "by_path_class": {
+    "harmony_final": {
+     "fixed_divergent": 3578,
+     "parsed": 14845
+    }
+   },
+   "fixed_divergent_abs_margin_median": 2.6799545288085938,
+   "fixed_prefix_divergent": 3578,
+   "parsed": 14845,
+   "realized_divergent": 0,
+   "realized_n": 14845,
+   "rows": 16665
+  },
+  "validation": {
+   "+1": {
+    "+0.25": {
+     "ae": {
+      "k": 1,
+      "lower": 0.0,
+      "n": 9,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.3333333333333333,
+      "value": 0.1111111111111111
+     },
+     "delta": {
+      "lower": -0.09423011266643906,
+      "run": null,
+      "status": "ok",
+      "upper": 0.06277649041499894,
+      "value": -0.0013896126454750746
+     },
+     "dim": {
+      "k": 5,
+      "lower": 0.017543859649122806,
+      "n": 57,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.17543859649122806,
+      "value": 0.08771929824561403
+     },
+     "never": {
+      "doses": [
+       0.125,
+       0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0594059405940594,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0891089108910891,
+       "random_s1": 0.06930693069306931,
+       "random_s2": 0.04950495049504951,
+       "random_s3": 0.019801980198019802,
+       "random_s4": 0.0891089108910891
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.15841584158415842,
+      "value": 0.0891089108910891
+     },
+     "ro": {
+      "k": 45,
+      "lower": 0.3465346534653465,
+      "n": 101,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.5346534653465347,
+      "value": 0.44554455445544555
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+16": {
+     "ae": {
+      "k": 9,
+      "lower": 1.0,
+      "n": 9,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.3465346534653465,
+      "run": null,
+      "status": "ok",
+      "upper": 0.5148514851485149,
+      "value": 0.4554455445544554
+     },
+     "dim": {
+      "k": 57,
+      "lower": 1.0,
+      "n": 57,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.125,
+       0.25,
+       0.5,
+       2.0,
+       4.0,
+       8.0,
+       16.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.48514851485148514,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.4158415841584158,
+       "random_s2": 0.5346534653465347,
+       "random_s3": 0.5445544554455446,
+       "random_s4": 0.48514851485148514
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.6534653465346535,
+      "value": 0.5445544554455446
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+2": {
+     "ae": {
+      "k": 1,
+      "lower": 0.0,
+      "n": 9,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.3333333333333333,
+      "value": 0.1111111111111111
+     },
+     "delta": {
+      "lower": 0.17326732673267325,
+      "run": null,
+      "status": "ok",
+      "upper": 0.4403423393186776,
+      "value": 0.32916449539690806
+     },
+     "dim": {
+      "k": 34,
+      "lower": 0.47368421052631576,
+      "n": 57,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.7192982456140351,
+      "value": 0.5964912280701754
+     },
+     "never": {
+      "doses": [
+       0.125,
+       0.25,
+       0.5,
+       2.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.21782178217821782,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.19801980198019803,
+       "random_s1": 0.2376237623762376,
+       "random_s2": 0.12871287128712872,
+       "random_s3": 0.25742574257425743,
+       "random_s4": 0.26732673267326734
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.36633663366336633,
+      "value": 0.26732673267326734
+     },
+     "ro": {
+      "k": 69,
+      "lower": 0.594059405940594,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.7722772277227723,
+      "value": 0.6831683168316832
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+4": {
+     "ae": {
+      "k": 9,
+      "lower": 1.0,
+      "n": 9,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.35007072135785006,
+      "run": null,
+      "status": "ok",
+      "upper": 0.5542982869715543,
+      "value": 0.4766371373979503
+     },
+     "dim": {
+      "k": 52,
+      "lower": 0.8421052631578947,
+      "n": 57,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.9824561403508771,
+      "value": 0.9122807017543859
+     },
+     "never": {
+      "doses": [
+       0.125,
+       0.25,
+       0.5,
+       2.0,
+       4.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.37623762376237624,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.43564356435643564,
+       "random_s1": 0.33663366336633666,
+       "random_s2": 0.3069306930693069,
+       "random_s3": 0.42574257425742573,
+       "random_s4": 0.3465346534653465
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.5346534653465347,
+      "value": 0.43564356435643564
+     },
+     "ro": {
+      "k": 4,
+      "lower": 0.009900990099009901,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.07920792079207921,
+      "value": 0.039603960396039604
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+8": {
+     "ae": {
+      "k": 9,
+      "lower": 1.0,
+      "n": 9,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.39603960396039606,
+      "run": null,
+      "status": "ok",
+      "upper": 0.5445544554455446,
+      "value": 0.5148514851485149
+     },
+     "dim": {
+      "k": 57,
+      "lower": 1.0,
+      "n": 57,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.125,
+       0.25,
+       0.5,
+       2.0,
+       4.0,
+       8.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.45544554455445546,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.44554455445544555,
+       "random_s1": 0.4158415841584158,
+       "random_s2": 0.4752475247524752,
+       "random_s3": 0.48514851485148514,
+       "random_s4": 0.46534653465346537
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.6039603960396039,
+      "value": 0.48514851485148514
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    }
+   },
+   "-1": {
+    "-0.25": {
+     "ae": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 1,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "delta": {
+      "lower": -0.1107967939651108,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0741422979507253,
+      "value": -0.015076507650765084
+     },
+     "dim": {
+      "k": 5,
+      "lower": 0.022727272727272728,
+      "n": 44,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.20454545454545456,
+      "value": 0.11363636363636363
+     },
+     "never": {
+      "doses": [
+       -0.25,
+       -0.125
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.07920792079207921,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.06930693069306931,
+       "random_s1": 0.12871287128712872,
+       "random_s2": 0.0594059405940594,
+       "random_s3": 0.06930693069306931,
+       "random_s4": 0.09900990099009901
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.19801980198019803,
+      "value": 0.12871287128712872
+     },
+     "ro": {
+      "k": 48,
+      "lower": 0.37623762376237624,
+      "n": 101,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.5742574257425742,
+      "value": 0.4752475247524752
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-16": {
+     "ae": {
+      "k": 1,
+      "lower": 1.0,
+      "n": 1,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.3366336633663366,
+      "run": null,
+      "status": "ok",
+      "upper": 0.5148514851485149,
+      "value": 0.4356435643564357
+     },
+     "dim": {
+      "k": 44,
+      "lower": 1.0,
+      "n": 44,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -16.0,
+       -8.0,
+       -4.0,
+       -2.0,
+       -0.5,
+       -0.25,
+       -0.125
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.48514851485148514,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.5445544554455446,
+       "random_s1": 0.5544554455445545,
+       "random_s2": 0.5643564356435643,
+       "random_s3": 0.4158415841584158,
+       "random_s4": 0.0
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.6633663366336634,
+      "value": 0.5643564356435643
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-2": {
+     "ae": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 1,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "delta": {
+      "lower": -0.07153465346534649,
+      "run": null,
+      "status": "ok",
+      "upper": 0.2611098319134239,
+      "value": 0.11498649864986499
+     },
+     "dim": {
+      "k": 19,
+      "lower": 0.29545454545454547,
+      "n": 44,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.5681818181818182,
+      "value": 0.4318181818181818
+     },
+     "never": {
+      "doses": [
+       -2.0,
+       -0.5,
+       -0.25,
+       -0.125
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.26732673267326734,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.2079207920792079,
+       "random_s1": 0.2376237623762376,
+       "random_s2": 0.31683168316831684,
+       "random_s3": 0.1485148514851485,
+       "random_s4": 0.297029702970297
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.4158415841584158,
+      "value": 0.31683168316831684
+     },
+     "ro": {
+      "k": 32,
+      "lower": 0.22772277227722773,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.40594059405940597,
+      "value": 0.31683168316831684
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-4": {
+     "ae": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 1,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "delta": {
+      "lower": 0.18899889988998902,
+      "run": null,
+      "status": "ok",
+      "upper": 0.47575526783447575,
+      "value": 0.36678667866786674
+     },
+     "dim": {
+      "k": 34,
+      "lower": 0.6363636363636364,
+      "n": 44,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.8863636363636364,
+      "value": 0.7727272727272727
+     },
+     "never": {
+      "doses": [
+       -4.0,
+       -2.0,
+       -0.5,
+       -0.25,
+       -0.125
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.36633663366336633,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.37623762376237624,
+       "random_s1": 0.32673267326732675,
+       "random_s2": 0.40594059405940597,
+       "random_s3": 0.27722772277227725,
+       "random_s4": 0.37623762376237624
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.504950495049505,
+      "value": 0.40594059405940597
+     },
+     "ro": {
+      "k": 15,
+      "lower": 0.0891089108910891,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.22772277227722773,
+      "value": 0.1485148514851485
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "-8": {
+     "ae": {
+      "k": 1,
+      "lower": 1.0,
+      "n": 1,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.306930693069307,
+      "run": null,
+      "status": "ok",
+      "upper": 0.4752475247524752,
+      "value": 0.40594059405940597
+     },
+     "dim": {
+      "k": 44,
+      "lower": 1.0,
+      "n": 44,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       -8.0,
+       -4.0,
+       -2.0,
+       -0.5,
+       -0.25,
+       -0.125
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.5247524752475248,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.5643564356435643,
+       "random_s1": 0.49504950495049505,
+       "random_s2": 0.504950495049505,
+       "random_s3": 0.3564356435643564,
+       "random_s4": 0.594059405940594
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.693069306930693,
+      "value": 0.594059405940594
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    }
+   }
+  }
+ },
+ "qwen3.5-4b": {
+  "anon_baseline": {
+   "buy": 0,
+   "collapsed": 0,
+   "n": 10,
+   "parse_rate": 1.0,
+   "parsed": 10,
+   "path_class": {
+    "direct_json": 10
+   },
+   "realized_ok": 10,
+   "sell": 10,
+   "truncated": 0
+  },
+  "c5": {
+   "c5_holds": true,
+   "decisive_points": 2,
+   "points": [
+    {
+     "alpha": 4.0,
+     "dim_off_itt": null,
+     "dim_on_itt": 1.0,
+     "jitter_max_any_itt": 0,
+     "lower": 1.0,
+     "on_class_n": 101,
+     "point": 1.0,
+     "supports": true,
+     "upper": 1.0,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": -4.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": null,
+     "jitter_max_any_itt": 0,
+     "lower": null,
+     "on_class_n": 0,
+     "point": null,
+     "supports": false,
+     "upper": null,
+     "valid_draws": 0
+    },
+    {
+     "alpha": 32.0,
+     "dim_off_itt": null,
+     "dim_on_itt": 0.9801980198019802,
+     "jitter_max_any_itt": 0,
+     "lower": 0.9504950495049505,
+     "on_class_n": 101,
+     "point": 0.9801980198019802,
+     "supports": true,
+     "upper": 1.0,
+     "valid_draws": 2000
+    },
+    {
+     "alpha": -32.0,
+     "dim_off_itt": 0.0,
+     "dim_on_itt": null,
+     "jitter_max_any_itt": 0,
+     "lower": null,
+     "on_class_n": 0,
+     "point": null,
+     "supports": false,
+     "upper": null,
+     "valid_draws": 0
+    }
+   ]
+  },
+  "c7_contrasts": [
+   {
+    "adverse": "neg",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 101,
+    "descriptive_only": false,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 101,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "neg",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 98,
+    "descriptive_only": false,
+    "direction": "sell->buy",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 98,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 0,
+    "descriptive_only": true,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 0,
+    "lower_dose_under_adverse": 0,
+    "reference": "balanced",
+    "reference_blocked": 0
+   },
+   {
+    "adverse": "pos",
+    "adverse_blocked": 0,
+    "adverse_collapsed": 0,
+    "comparable_n": 3,
+    "descriptive_only": true,
+    "direction": "buy->sell",
+    "equal_dose": 0,
+    "higher_dose_under_adverse": 3,
+    "lower_dose_under_adverse": 0,
+    "reference": "mixed2",
+    "reference_blocked": 0
+   }
+  ],
+  "opposing": {
+   "+1": [
+    {
+     "alpha": 0.25,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "supplement"
+    },
+    {
+     "alpha": 1.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.8811881188118812,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": 32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 0.0,
+     "run": "source"
+    },
+    {
+     "alpha": 64.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 0.0,
+     "run": "source"
+    }
+   ],
+   "-1": [
+    {
+     "alpha": -64.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -32.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.5247524752475248,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -16.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -8.0,
+     "on_class_n": 101,
+     "on_flip_itt": 1.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -4.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.6237623762376238,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -2.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.009900990099009901,
+     "parse_rate": 1.0,
+     "run": "source"
+    },
+    {
+     "alpha": -1.0,
+     "on_class_n": 101,
+     "on_flip_itt": 0.0,
+     "parse_rate": 1.0,
+     "run": "source"
+    }
+   ]
+  },
+  "random_seeds": {
+   "+1": {
+    "+0.25": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+16": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.9801980198019802,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 0.9306930693069307,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.06930693069306931,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.04950495049504951,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+2": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ],
+    "+4": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "source",
+      "seed": "random_s4"
+     }
+    ],
+    "+8": [
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s0"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s1"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s2"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s3"
+     },
+     {
+      "any_flip_itt": 0.0,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "seed": "random_s4"
+     }
+    ]
+   }
+  },
+  "readout": {
+   "by_path_class": {
+    "brace_newline": {
+     "fixed_divergent": 142,
+     "parsed": 3320
+    },
+    "direct_json": {
+     "fixed_divergent": 16,
+     "parsed": 8437
+    }
+   },
+   "fixed_divergent_abs_margin_median": 0.18801498413085938,
+   "fixed_prefix_divergent": 158,
+   "parsed": 11757,
+   "realized_divergent": 62,
+   "realized_n": 11757,
+   "rows": 14119
+  },
+  "readout_all_arms": {
+   "by_path_class": {
+    "brace_newline": {
+     "fixed_divergent": 143,
+     "parsed": 3479
+    },
+    "direct_json": {
+     "fixed_divergent": 16,
+     "parsed": 9771
+    }
+   },
+   "fixed_divergent_abs_margin_median": 0.18488121032714844,
+   "fixed_prefix_divergent": 159,
+   "parsed": 13250,
+   "realized_divergent": 64,
+   "realized_n": 13250,
+   "rows": 16699
+  },
+  "validation": {
+   "+1": {
+    "+0.25": {
+     "ae": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "delta": {
+      "lower": 0.0,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "dim": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "never": {
+      "doses": [
+       0.25
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+16": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 0.8811881188118812,
+      "run": null,
+      "status": "ok",
+      "upper": 0.9702970297029703,
+      "value": 0.9306930693069306
+     },
+     "dim": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       1.0,
+       2.0,
+       4.0,
+       8.0,
+       16.0
+      ],
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "rand": {
+      "lower": 0.0297029702970297,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.06930693069306931,
+       "random_s3": 0.04950495049504951,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.1188118811881188,
+      "value": 0.06930693069306931
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     }
+    },
+    "+2": {
+     "ae": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "delta": {
+      "lower": 0.04950495049504951,
+      "run": null,
+      "status": "ok",
+      "upper": 0.16831683168316833,
+      "value": 0.10891089108910891
+     },
+     "dim": {
+      "k": 11,
+      "lower": 0.04950495049504951,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.16831683168316833,
+      "value": 0.10891089108910891
+     },
+     "never": {
+      "doses": [
+       0.25,
+       1.0,
+       2.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 1,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0297029702970297,
+      "value": 0.009900990099009901
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+4": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 1.0,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "dim": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       1.0,
+       2.0,
+       4.0
+      ],
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     }
+    },
+    "+8": {
+     "ae": {
+      "k": 10,
+      "lower": 1.0,
+      "n": 10,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "delta": {
+      "lower": 1.0,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "dim": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     },
+     "never": {
+      "doses": [
+       0.25,
+       1.0,
+       2.0,
+       4.0,
+       8.0
+      ],
+      "k": 12,
+      "lower": 0.0594059405940594,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 0.18811881188118812,
+      "value": 0.1188118811881188
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "supplement",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 89,
+      "lower": 0.8118811881188119,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.9405940594059405,
+      "value": 0.8811881188118812
+     }
+    }
+   },
+   "-1": {
+    "-0.25": {
+     "ae": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "dim": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "never": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "still": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     }
+    },
+    "-16": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       -16.0,
+       -8.0,
+       -4.0,
+       -2.0,
+       -1.0
+      ],
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     }
+    },
+    "-2": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       -2.0,
+       -1.0
+      ],
+      "k": 100,
+      "lower": 0.9702970297029703,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 1.0,
+      "value": 0.9900990099009901
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 1,
+      "lower": 0.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0297029702970297,
+      "value": 0.009900990099009901
+     }
+    },
+    "-4": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       -4.0,
+       -2.0,
+       -1.0
+      ],
+      "k": 38,
+      "lower": 0.27722772277227725,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 0.4752475247524752,
+      "value": 0.37623762376237624
+     },
+     "rand": {
+      "lower": 0.0,
+      "operator_drift": [],
+      "per_seed": {
+       "random_s0": 0.0,
+       "random_s1": 0.0,
+       "random_s2": 0.0,
+       "random_s3": 0.0,
+       "random_s4": 0.0
+      },
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 63,
+      "lower": 0.5247524752475248,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.7227722772277227,
+      "value": 0.6237623762376238
+     }
+    },
+    "-8": {
+     "ae": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "delta": {
+      "run": null,
+      "status": "untestable",
+      "value": null
+     },
+     "dim": {
+      "run": "source",
+      "status": "untestable",
+      "value": null
+     },
+     "never": {
+      "doses": [
+       -8.0,
+       -4.0,
+       -2.0,
+       -1.0
+      ],
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": null,
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "rand": {
+      "run": null,
+      "status": "pending",
+      "value": null
+     },
+     "ro": {
+      "k": 0,
+      "lower": 0.0,
+      "n": 101,
+      "run": "source",
+      "status": "ok",
+      "upper": 0.0,
+      "value": 0.0
+     },
+     "still": {
+      "k": 101,
+      "lower": 1.0,
+      "n": 101,
+      "parse_rate": 1.0,
+      "run": "source",
+      "status": "ok",
+      "upper": 1.0,
+      "value": 1.0
+     }
+    }
+   }
+  }
+ }
+}
