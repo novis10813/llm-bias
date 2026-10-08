@@ -1,0 +1,151 @@
+{
+ "gemma4-12b-it": {
+  "overlap_companies": 89,
+  "subsets": {
+   "all": {
+    "band": [
+     26,
+     27,
+     28,
+     29,
+     30,
+     31,
+     32
+    ],
+    "n_directions": 854,
+    "peak": 27,
+    "peak_T": 0.1902787871406897
+   },
+   "eval_overlap_only": {
+    "band": [
+     26,
+     27,
+     28,
+     29,
+     30,
+     31,
+     32
+    ],
+    "n_directions": 178,
+    "peak": 27,
+    "peak_T": 0.1914255608686264
+   },
+   "excluding_eval": {
+    "band": [
+     26,
+     27,
+     28,
+     29,
+     30,
+     31,
+     32
+    ],
+    "n_directions": 676,
+    "peak": 27,
+    "peak_T": 0.18997682601114418
+   }
+  }
+ },
+ "glm4-9b-0414": {
+  "overlap_companies": 89,
+  "subsets": {
+   "all": {
+    "band": [
+     19
+    ],
+    "n_directions": 854,
+    "peak": 19,
+    "peak_T": 0.45922473576451345
+   },
+   "eval_overlap_only": {
+    "band": [
+     19
+    ],
+    "n_directions": 178,
+    "peak": 19,
+    "peak_T": 0.45787217870725927
+   },
+   "excluding_eval": {
+    "band": [
+     19
+    ],
+    "n_directions": 676,
+    "peak": 19,
+    "peak_T": 0.4595808824452697
+   }
+  }
+ },
+ "gpt-oss-20b": {
+  "overlap_companies": 89,
+  "subsets": {
+   "all": {
+    "band": [
+     13,
+     14,
+     15
+    ],
+    "n_directions": 854,
+    "peak": 14,
+    "peak_T": 0.5323401226079696
+   },
+   "eval_overlap_only": {
+    "band": [
+     13,
+     14,
+     15
+    ],
+    "n_directions": 178,
+    "peak": 14,
+    "peak_T": 0.5326205439512408
+   },
+   "excluding_eval": {
+    "band": [
+     13,
+     14,
+     15
+    ],
+    "n_directions": 676,
+    "peak": 14,
+    "peak_T": 0.5322662838519011
+   }
+  }
+ },
+ "qwen3.5-4b": {
+  "overlap_companies": 89,
+  "subsets": {
+   "all": {
+    "band": [
+     15,
+     16,
+     17,
+     18
+    ],
+    "n_directions": 854,
+    "peak": 16,
+    "peak_T": 0.4076357972621977
+   },
+   "eval_overlap_only": {
+    "band": [
+     15,
+     16,
+     17,
+     18
+    ],
+    "n_directions": 178,
+    "peak": 16,
+    "peak_T": 0.40962694113658066
+   },
+   "excluding_eval": {
+    "band": [
+     15,
+     16,
+     17,
+     18
+    ],
+    "n_directions": 676,
+    "peak": 16,
+    "peak_T": 0.40711150198166485
+   }
+  }
+ }
+}
