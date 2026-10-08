@@ -21,9 +21,8 @@ worktree (`git worktree add ../llm-bias-T<NN> task/T<NN>-<name>`), so tasks neve
 tree. Parallel tasks must not change the same code; when one needs another's change, it waits for
 that task to reach `main`.
 
-Files every task touches (the task tables in `README.md` and this file, and
-`docs/concept-cone-steering/paper-vs-experiments.md`) are changed only in step 4, after the latest
-`main` has been merged in.
+Files every task touches (the task tables in `README.md` and this file) are changed only in step 4,
+after the latest `main` has been merged in.
 
 Branches named `research/*`, `implement/*` and the remote branches without a prefix predate
 these rules. They are history, not tasks.
@@ -146,5 +145,5 @@ runs are checked separately as smoke runs.
 |---|---|---|
 | T01 layer localization | `task/T01-layer-localization` | Report in `tasks/T01-layer-localization/` |
 | T02 steering operators | `task/T02-steering-operators` | Report in `tasks/T02-steering-operators/` |
-| T03 control limits | `task/T03-control-limits` | Planned: report from existing runs |
+| T03 control limits | `task/T03-control-limits` | Report in `tasks/T03-control-limits/` |
 | T04 stance rebuild | `task/T04-stance-rebuild` | Planned: continues `research/stance-rebuild-v1-20260930` |
