@@ -137,7 +137,7 @@ runs are checked separately as smoke runs.
 
 | Task | Branch | Status |
 |---|---|---|
-| T01 layer localization | `task/T01-layer-localization` | Planned: report from existing runs |
-| T02 steering operators | `task/T02-steering-operators` | Planned: report from existing runs |
+| T01 layer localization | `task/T01-layer-localization` | Report in `tasks/T01-layer-localization/` |
+| T02 steering operators | `task/T02-steering-operators` | Report in `tasks/T02-steering-operators/` |
 | T03 control limits | `task/T03-control-limits` | Planned: report from existing runs |
 | T04 stance rebuild | `task/T04-stance-rebuild` | Planned: continues `research/stance-rebuild-v1-20260930` |
