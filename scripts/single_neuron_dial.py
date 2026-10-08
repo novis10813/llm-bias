@@ -727,6 +727,30 @@ def stage_smoke(args: argparse.Namespace) -> None:
     margin, _ = runner.gradients(trials[0], list(range(len(runner.model.layers))))
     report["all_layer_gradient_seconds"] = time.time() - t0
     report["max_memory_gb_after_grad"] = torch.cuda.max_memory_allocated() / 2**30
+    # throughput: the same first prompts with and without the schema processor, at several batch sizes
+    import xgrammar as xgr
+    timing = []
+    for bs in args.profile_batches:
+        batch = ids[:bs]
+        width = max(len(x) for x in batch)
+        input_ids = torch.tensor([[runner.pad_id] * (width - len(x)) + list(x) for x in batch], device=runner.device)
+        mask = torch.tensor([[0] * (width - len(x)) + [1] * len(x) for x in batch], device=runner.device)
+        for constrained in (False, True):
+            procs = [xgr.contrib.hf.LogitsProcessor(runner.grammar)] if constrained else []
+            torch.cuda.synchronize()
+            t1 = time.time()
+            with torch.no_grad():
+                seqs = runner.hf.generate(input_ids=input_ids, attention_mask=mask, do_sample=False,
+                                          max_new_tokens=args.max_new_tokens, pad_token_id=runner.pad_id,
+                                          logits_processor=procs)
+            torch.cuda.synchronize()
+            steps = seqs.shape[1] - width
+            timing.append({"batch": len(batch), "constrained": constrained, "seconds": time.time() - t1,
+                           "steps": steps, "ms_per_step": 1000 * (time.time() - t1) / steps,
+                           "prompts_per_second": len(batch) / (time.time() - t1),
+                           "max_memory_gb": torch.cuda.max_memory_allocated() / 2**30})
+            print(timing[-1], flush=True)
+    report["timing"] = timing
     write_json(out / "smoke.json", report)
     print(json.dumps({k: v for k, v in report.items() if k != "texts"}, indent=1))
 
@@ -749,6 +773,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     p = sub.add_parser("smoke"); common(p)
     p.add_argument("--layer", type=int, default=15); p.add_argument("--neuron", type=int, default=8490)
+    p.add_argument("--profile-batches", type=int, nargs="*", default=[16, 32, 64])
     p = sub.add_parser("screen"); common(p); p.add_argument("--top-n", type=int, default=1000)
     p = sub.add_parser("calibrate"); common(p)
     p.add_argument("--candidates", required=True); p.add_argument("--ranks", default=None)
